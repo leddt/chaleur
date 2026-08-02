@@ -1,0 +1,359 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://view/board.gd" id="1_board"]
+[ext_resource type="Script" path="res://view/track_view.gd" id="2_track"]
+[ext_resource type="Script" path="res://view/card_hand.gd" id="3_hand"]
+
+[node name="Board" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_board")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.12, 0.14, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 6
+
+[node name="Root" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="VBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="HeaderTop" type="HBoxContainer" parent="Margin/Root/Header"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PhaseLabel" type="Label" parent="Margin/Root/Header/HeaderTop"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+text = "Phase"
+autowrap_mode = 3
+
+[node name="LobbyButton" type="Button" parent="Margin/Root/Header/HeaderTop"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Lobby"
+
+[node name="MenuButton" type="Button" parent="Margin/Root/Header/HeaderTop"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Menu"
+
+[node name="HeaderPlayers" type="HBoxContainer" parent="Margin/Root/Header"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PlayersLegend" type="Label" parent="Margin/Root/Header/HeaderPlayers"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.65, 0.7, 0.75, 1)
+text = "Joueurs (… prêt / ✓ validé / ▶ actif)"
+
+[node name="PlayersHud" type="HBoxContainer" parent="Margin/Root/Header/HeaderPlayers"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="MainRow" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="TableCol" type="VBoxContainer" parent="Margin/Root/MainRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="TrackView" type="Control" parent="Margin/Root/MainRow/TableCol"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("2_track")
+
+[node name="EventLog" type="RichTextLabel" parent="Margin/Root/MainRow/TableCol"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+size_flags_vertical = 0
+bbcode_enabled = true
+scroll_following = true
+fit_content = false
+text = "Messages de log ici…"
+
+[node name="Sidebar" type="VBoxContainer" parent="Margin/Root/MainRow"]
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 3
+custom_minimum_size = Vector2(248, 0)
+custom_maximum_size = Vector2(248, 16384)
+theme_override_constants/separation = 8
+
+[node name="CornerDistLabel" type="Label" parent="Margin/Root/MainRow/Sidebar"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+text = "Distance au prochain virage: —"
+
+[node name="HeatGearRow" type="HBoxContainer" parent="Margin/Root/MainRow/Sidebar"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HeatPanel" type="PanelContainer" parent="Margin/Root/MainRow/Sidebar/HeatGearRow"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+
+[node name="HeatInner" type="VBoxContainer" parent="Margin/Root/MainRow/Sidebar/HeatGearRow/HeatPanel"]
+layout_mode = 2
+alignment = 1
+
+[node name="HeatTitle" type="Label" parent="Margin/Root/MainRow/Sidebar/HeatGearRow/HeatPanel/HeatInner"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Heat"
+horizontal_alignment = 1
+
+[node name="HeatValue" type="Label" parent="Margin/Root/MainRow/Sidebar/HeatGearRow/HeatPanel/HeatInner"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "0"
+horizontal_alignment = 1
+
+[node name="GearCol" type="VBoxContainer" parent="Margin/Root/MainRow/Sidebar/HeatGearRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Gear1Button" type="Button" parent="Margin/Root/MainRow/Sidebar/HeatGearRow/GearCol"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Gear 1"
+
+[node name="Gear2Button" type="Button" parent="Margin/Root/MainRow/Sidebar/HeatGearRow/GearCol"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Gear 2"
+
+[node name="Gear3Button" type="Button" parent="Margin/Root/MainRow/Sidebar/HeatGearRow/GearCol"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Gear 3"
+
+[node name="Gear4Button" type="Button" parent="Margin/Root/MainRow/Sidebar/HeatGearRow/GearCol"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+text = "Gear 4"
+
+[node name="PilesRow" type="HBoxContainer" parent="Margin/Root/MainRow/Sidebar"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DrawPanel" type="PanelContainer" parent="Margin/Root/MainRow/Sidebar/PilesRow"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DrawInner" type="VBoxContainer" parent="Margin/Root/MainRow/Sidebar/PilesRow/DrawPanel"]
+layout_mode = 2
+alignment = 1
+
+[node name="DrawTitle" type="Label" parent="Margin/Root/MainRow/Sidebar/PilesRow/DrawPanel/DrawInner"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Pioche"
+horizontal_alignment = 1
+
+[node name="DrawValue" type="Label" parent="Margin/Root/MainRow/Sidebar/PilesRow/DrawPanel/DrawInner"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "0"
+horizontal_alignment = 1
+
+[node name="DiscardPanel" type="PanelContainer" parent="Margin/Root/MainRow/Sidebar/PilesRow"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DiscardInner" type="VBoxContainer" parent="Margin/Root/MainRow/Sidebar/PilesRow/DiscardPanel"]
+layout_mode = 2
+alignment = 1
+
+[node name="DiscardTitle" type="Label" parent="Margin/Root/MainRow/Sidebar/PilesRow/DiscardPanel/DiscardInner"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Défausse"
+horizontal_alignment = 1
+
+[node name="DiscardValue" type="Label" parent="Margin/Root/MainRow/Sidebar/PilesRow/DiscardPanel/DiscardInner"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "0"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="Margin/Root/MainRow/Sidebar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 13
+text = "Status"
+
+[node name="ActionBox" type="VBoxContainer" parent="Margin/Root/MainRow/Sidebar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="CardHand" type="GridContainer" parent="Margin/Root/MainRow/Sidebar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+columns = 4
+script = ExtResource("3_hand")
+
+[node name="PassOverlay" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.06, 0.08, 0.92)
+
+[node name="PassCenter" type="VBoxContainer" parent="PassOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -80.0
+offset_right = 220.0
+offset_bottom = 80.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 16
+
+[node name="PassLabel" type="Label" parent="PassOverlay/PassCenter"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Passez l'appareil"
+horizontal_alignment = 1
+
+[node name="PassContinueButton" type="Button" parent="PassOverlay/PassCenter"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "C'est bon — afficher ma main"
+
+[node name="FinishOverlay" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.06, 0.08, 0.92)
+
+[node name="FinishCenter" type="VBoxContainer" parent="FinishOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -100.0
+offset_right = 200.0
+offset_bottom = 100.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="FinishLabel" type="Label" parent="FinishOverlay/FinishCenter"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Classement"
+horizontal_alignment = 1
+
+[node name="RematchButton" type="Button" parent="FinishOverlay/FinishCenter"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Rejouer"
+
+[node name="FinishLobbyButton" type="Button" parent="FinishOverlay/FinishCenter"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Retour lobby"
+
+[node name="FinishMenuButton" type="Button" parent="FinishOverlay/FinishCenter"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Menu (quitter réseau)"
+
+[node name="RevealBanner" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 20
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -260.0
+offset_top = 56.0
+offset_right = 260.0
+offset_bottom = 104.0
+grow_horizontal = 2
+
+[node name="RevealLabel" type="Label" parent="RevealBanner"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Révélation"
+horizontal_alignment = 1
+vertical_alignment = 1

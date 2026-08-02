@@ -1,0 +1,112 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://view/track_editor.gd" id="1_script"]
+
+[node name="TrackEditor" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.09, 0.11, 1)
+
+[node name="Root" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 6
+
+[node name="TopBar" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Root/TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Éditeur de piste"
+
+[node name="StatusLabel" type="Label" parent="Root/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "…"
+autowrap_mode = 3
+
+[node name="BackButton" type="Button" parent="Root/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Menu"
+
+[node name="Toolbar" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PrevSpaceButton" type="Button" parent="Root/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "◀ Case"
+
+[node name="SpaceSpin" type="SpinBox" parent="Root/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+max_value = 68.0
+rounded = true
+
+[node name="NextSpaceButton" type="Button" parent="Root/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Case ▶"
+
+[node name="SpotLabel" type="Label" parent="Root/Toolbar"]
+layout_mode = 2
+text = "Spot"
+
+[node name="SpotSpin" type="SpinBox" parent="Root/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+max_value = 1.0
+rounded = true
+
+[node name="ReloadButton" type="Button" parent="Root/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Recharger"
+
+[node name="SaveButton" type="Button" parent="Root/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Sauver"
+
+[node name="InfoLabel" type="Label" parent="Root"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Info"
+autowrap_mode = 3
+
+[node name="Hint" type="Label" parent="Root"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+text = "Clic-glisser un spot (rouge=0 ligne de course, bleu=1 extérieur). Molette / ← → : case. 1/2 : spot. Ctrl+S : sauver."
+autowrap_mode = 3
+
+[node name="Canvas" type="Control" parent="Root"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 0

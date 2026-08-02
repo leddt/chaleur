@@ -1,0 +1,6 @@
+# Export binaries
+/build/
+
+# Local-only docs / rules (keep on disk, never commit)
+/docs/
+*.pdf

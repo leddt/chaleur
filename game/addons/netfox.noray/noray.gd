@@ -1,0 +1,192 @@
+extends Node
+class_name _Noray
+
+## A noray client for Godot.
+## See: https://github.com/foxssake/noray
+
+const _ProtocolHandler := preload("res://addons/netfox.noray/protocol-handler.gd")
+const _Logger := preload("res://addons/netfox.internals/logger.gd")
+
+var _peer: StreamPeerTCP = StreamPeerTCP.new()
+var _protocol = _ProtocolHandler.new()
+var _address: String = ""
+var _oid: String = ""
+var _pid: String = ""
+var _local_port: int = -1
+
+static var _logger = _Logger._for_noray("Noray")
+
+var oid: String:
+	get:
+		return _oid
+	set(v):
+		push_error("Trying to set read-only variable oid")
+
+var pid: String:
+	get:
+		return _pid
+	set(v):
+		push_error("Trying to set read-only variable pid")
+
+var local_port: int:
+	get:
+		return _local_port
+	set(v):
+		push_error("Trying to set read-only variable local_port")
+
+signal on_command(command: String, data: String)
+signal on_connect_to_host()
+signal on_disconnect_from_host()
+signal on_oid(oid: String)
+signal on_pid(pid: String)
+signal on_connect_nat(address: String, port: int)
+signal on_connect_relay(address: String, port: int)
+
+
+func _enter_tree() -> void:
+	_protocol.on_command.connect(func(cmd, data): on_command.emit(cmd, data))
+	on_command.connect(_handle_commands)
+
+
+func connect_to_host(address: String, port: int = 8890) -> Error:
+	# Always tear down before reconnect — stale TCP / ids break the next session.
+	disconnect_from_host()
+
+	_logger.info("Trying to connect to noray at %s:%s", [address, port])
+
+	var resolved := IP.resolve_hostname(address, IP.TYPE_IPV4)
+	if resolved.is_empty():
+		resolved = address
+	_logger.debug("Resolved noray host to %s", [resolved])
+
+	_peer = StreamPeerTCP.new()
+	var err = _peer.connect_to_host(resolved, port)
+	if err != Error.OK:
+		return err
+
+	_peer.set_no_delay(true)
+	_protocol.reset()
+
+	while _peer.get_status() < 2:
+		_peer.poll()
+		await get_tree().process_frame
+
+	if _peer.get_status() == _peer.STATUS_CONNECTED:
+		_address = resolved
+		_logger.info("Connected to noray at %s:%s", [resolved, port])
+		on_connect_to_host.emit()
+		return OK
+
+	_logger.error(
+		"Connection failed to noray at %s:%s, connection status %s",
+		[resolved, port, _peer.get_status()]
+	)
+	disconnect_from_host()
+	return ERR_CONNECTION_ERROR
+
+
+func is_connected_to_host() -> bool:
+	return _peer != null and _peer.get_status() == _peer.STATUS_CONNECTED
+
+
+func disconnect_from_host() -> void:
+	if is_connected_to_host():
+		on_disconnect_from_host.emit()
+	if _peer != null:
+		_peer.disconnect_from_host()
+	_peer = StreamPeerTCP.new()
+	_protocol.reset()
+	_address = ""
+	_oid = ""
+	_pid = ""
+	_local_port = -1
+
+
+func register_host() -> Error:
+	return _put_command("register-host")
+
+
+func register_remote(registrar_port: int = 8809, timeout: float = 8, interval: float = 0.1) -> Error:
+	if not is_connected_to_host():
+		return ERR_CONNECTION_ERROR
+	if not pid:
+		return ERR_UNAUTHORIZED
+
+	var result = ERR_TIMEOUT
+	var udp = PacketPeerUDP.new()
+	udp.bind(0)
+	udp.set_dest_address(_address, registrar_port)
+	_logger.debug("Bound UDP to port %s", [udp.get_local_port()])
+
+	var packet = pid.to_utf8_buffer()
+	while timeout > 0:
+		udp.put_packet(packet)
+		while udp.get_available_packet_count() > 0:
+			var recv = udp.get_packet().get_string_from_utf8()
+			if recv == "OK":
+				_local_port = udp.get_local_port()
+				_logger.info("Registered local port %s to remote", [_local_port])
+				result = OK
+				timeout = 0
+				break
+			_logger.error("Failed to register local port!")
+			result = FAILED
+			timeout = 0
+			break
+		await get_tree().create_timer(interval).timeout
+		timeout -= interval
+
+	udp.close()
+	return result
+
+
+func connect_nat(host_oid: String) -> Error:
+	return _put_command("connect", host_oid)
+
+
+func connect_relay(host_oid: String) -> Error:
+	return _put_command("connect-relay", host_oid)
+
+
+func _process(_delta: float) -> void:
+	if not is_connected_to_host():
+		return
+	_peer.poll()
+	var available = _peer.get_available_bytes()
+	if available <= 0:
+		return
+	_protocol.ingest(_peer.get_utf8_string(available))
+
+
+func _put_command(command: String, data = null) -> Error:
+	if not is_connected_to_host():
+		return ERR_CONNECTION_ERROR
+	if data != null:
+		_peer.put_data(("%s %s\n" % [command, data]).to_utf8_buffer())
+	else:
+		_peer.put_data((command + "\n").to_utf8_buffer())
+	return OK
+
+
+func _handle_commands(command: String, data: String) -> void:
+	if command == "set-oid":
+		_oid = data
+		on_oid.emit(oid)
+		_logger.debug("Saved OID: %s", [oid])
+	elif command == "set-pid":
+		_pid = data
+		on_pid.emit(pid)
+		_logger.debug("Saved PID: %s", [pid])
+	elif command == "connect":
+		var parts = data.split(":")
+		var host = parts[0]
+		var port = parts[1].to_int()
+		_logger.debug("Received connect command to %s:%s", [host, port])
+		on_connect_nat.emit(host, port)
+	elif command == "connect-relay":
+		var host = _address
+		var port = data.to_int()
+		_logger.debug("Received connect relay command to %s:%s", [host, port])
+		on_connect_relay.emit(host, port)
+	else:
+		_logger.trace("Received command %s %s", [command, data])

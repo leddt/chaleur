@@ -1,6 +1,7 @@
 extends Node
 
 const DEFAULT_PORT := 7777
+const DEFAULT_NORAY_PORT := 8890
 const MAX_CLIENTS := 6
 
 signal host_started(port: int)
@@ -26,6 +27,19 @@ var lan_ips: PackedStringArray = []
 var _upnp: UPNP
 var _http: HTTPRequest
 var _public_ip_http_fallback: bool = false
+
+## Active noray session (Game ID = Noray.oid when hosting online).
+var using_noray: bool = false
+var game_id: String = ""
+var noray_host: String = ""
+var noray_port: int = DEFAULT_NORAY_PORT
+var connection_status: String = ""
+
+var _noray_signals_connected: bool = false
+var _noray_client_connecting: bool = false
+var _noray_join_oid: String = ""
+## Bumped on every leave so in-flight host_noray / join_noray awaits abort.
+var _session: int = 0
 
 
 func _ready() -> void:
@@ -69,6 +83,8 @@ func external_ip() -> String:
 
 
 func join_address_hint() -> String:
+	if using_noray:
+		return share_code()
 	var ext := external_ip()
 	if not ext.is_empty():
 		return "%s:%d" % [ext, _port]
@@ -77,8 +93,38 @@ func join_address_hint() -> String:
 	return "?:%d" % _port
 
 
-## Host-facing multi-line share text: external first, then LAN.
+## Shareable code: `relayHost:oid` (pasteable by clients).
+func share_code() -> String:
+	if not using_noray or game_id.is_empty() or noray_host.is_empty():
+		return ""
+	return "%s:%s" % [noray_host, game_id]
+
+
+## Parse `host:oid` (oid = last `:` segment). Returns {host, oid} or empty.
+static func parse_share_code(code: String) -> Dictionary:
+	var text := code.strip_edges()
+	var idx := text.rfind(":")
+	if idx <= 0 or idx >= text.length() - 1:
+		return {}
+	var host := text.substr(0, idx).strip_edges()
+	var oid := text.substr(idx + 1).strip_edges()
+	if host.is_empty() or oid.is_empty():
+		return {}
+	return {"host": host, "oid": oid}
+
+
+## Host-facing share text (Game ID online, or IP:port for LAN direct).
 func host_share_text() -> String:
+	if using_noray:
+		var code := share_code()
+		var lines: PackedStringArray = [
+			"Hôte en ligne",
+			"Game ID: %s" % (code if not code.is_empty() else "…"),
+		]
+		if not connection_status.is_empty():
+			lines.append(connection_status)
+		return "\n".join(lines)
+
 	var lines: PackedStringArray = ["Hôte — port UDP %d" % _port]
 	var ext := external_ip()
 	if not ext.is_empty():
@@ -120,8 +166,119 @@ func _lan_priority(ip: String) -> int:
 	return 3
 
 
+## Host via noray (NAT punch, then relay). Share [member game_id] with friends.
+func host_noray(server: String, server_port: int = DEFAULT_NORAY_PORT) -> Error:
+	leave()
+	var session := _session
+	using_noray = true
+	noray_host = server.strip_edges()
+	noray_port = server_port
+	connection_status = "Connexion à noray…"
+	lobby_changed.emit()
+
+	var err := await _noray_bootstrap(noray_host, noray_port)
+	if not _session_alive(session):
+		return ERR_BUSY
+	if err != OK:
+		leave()
+		return err
+
+	game_id = Noray.oid
+	_port = Noray.local_port
+	_ensure_noray_signals()
+
+	var peer := ENetMultiplayerPeer.new()
+	err = peer.create_server(Noray.local_port, MAX_CLIENTS)
+	if err != OK:
+		net_error.emit(
+			"Impossible d'héberger (port local %d: %s)" % [Noray.local_port, error_string(err)]
+		)
+		leave()
+		return err
+
+	if not _session_alive(session):
+		peer.close()
+		return ERR_BUSY
+
+	multiplayer.multiplayer_peer = peer
+	Game.set_mode(Game.Mode.HOST)
+	lobby.clear()
+	lobby[1] = {"name": local_display_name, "ready": false, "seat": 0}
+	connection_status = "En attente de joueurs — partage le Game ID"
+	host_started.emit(_port)
+	_broadcast_lobby()
+	lobby_changed.emit()
+	return OK
+
+
+## Join a noray game by OID (Game ID). Tries NAT, then relay after a short delay.
+func join_noray(server: String, oid: String, server_port: int = DEFAULT_NORAY_PORT) -> Error:
+	leave()
+	var session := _session
+	using_noray = true
+	noray_host = server.strip_edges()
+	noray_port = server_port
+	_noray_join_oid = oid.strip_edges()
+	game_id = _noray_join_oid
+	_noray_client_connecting = true
+	connection_status = "Connexion à noray…"
+	lobby_changed.emit()
+
+	if _noray_join_oid.is_empty():
+		net_error.emit("Game ID manquant")
+		leave()
+		return ERR_INVALID_PARAMETER
+
+	var err := await _noray_bootstrap(noray_host, noray_port)
+	if not _session_alive(session):
+		return ERR_BUSY
+	if err != OK:
+		leave()
+		return err
+
+	_port = Noray.local_port
+	_ensure_noray_signals()
+	Game.set_mode(Game.Mode.CLIENT)
+	lobby.clear()
+	join_started.emit(game_id, _port)
+
+	err = Noray.connect_nat(_noray_join_oid)
+	if err != OK:
+		net_error.emit("Échec demande NAT (%s)" % error_string(err))
+		leave()
+		return err
+
+	connection_status = "Punch NAT…"
+	lobby_changed.emit()
+	await get_tree().create_timer(3.0).timeout
+	if not _session_alive(session):
+		return ERR_BUSY
+	if _noray_client_connecting and not has_peer():
+		connection_status = "Relay via noray…"
+		lobby_changed.emit()
+		Noray.connect_relay(_noray_join_oid)
+
+	# Wait until ENet connects or timeout
+	var wait := 12.0
+	while wait > 0.0 and _session_alive(session) and _noray_client_connecting and not has_peer():
+		await get_tree().process_frame
+		wait -= get_process_delta_time()
+
+	if not _session_alive(session):
+		return ERR_BUSY
+	if not has_peer():
+		net_error.emit("Connexion échouée — Game ID invalide ou serveur injoignable")
+		leave()
+		return ERR_TIMEOUT
+
+	connection_status = "Connecté"
+	lobby_changed.emit()
+	return OK
+
+
 func host(port: int = DEFAULT_PORT) -> Error:
 	leave()
+	using_noray = false
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, MAX_CLIENTS)
 	if err != OK:
@@ -144,6 +301,7 @@ func host(port: int = DEFAULT_PORT) -> Error:
 
 func join(address: String, port: int = DEFAULT_PORT) -> Error:
 	leave()
+	using_noray = false
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(address, port)
 	if err != OK:
@@ -164,7 +322,21 @@ func join(address: String, port: int = DEFAULT_PORT) -> Error:
 
 
 func leave() -> void:
+	_session += 1
 	_clear_upnp()
+	_noray_client_connecting = false
+	_noray_join_oid = ""
+	game_id = ""
+	connection_status = ""
+	if _noray_signals_connected:
+		if Noray.on_connect_nat.is_connected(_on_noray_connect_nat):
+			Noray.on_connect_nat.disconnect(_on_noray_connect_nat)
+		if Noray.on_connect_relay.is_connected(_on_noray_connect_relay):
+			Noray.on_connect_relay.disconnect(_on_noray_connect_relay)
+		_noray_signals_connected = false
+	# Always reset Noray — even if TCP already dropped, clear oid/pid/local_port.
+	Noray.disconnect_from_host()
+	using_noray = false
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
@@ -172,6 +344,134 @@ func leave() -> void:
 	if Game.mode == Game.Mode.HOST or Game.mode == Game.Mode.CLIENT:
 		Game.set_mode(Game.Mode.NONE)
 	left.emit()
+	lobby_changed.emit()
+
+
+func _session_alive(session: int) -> bool:
+	return session == _session
+
+
+func _noray_bootstrap(server: String, server_port: int) -> Error:
+	if server.is_empty():
+		net_error.emit("Adresse du serveur noray manquante")
+		return ERR_INVALID_PARAMETER
+
+	var session := _session
+	var err: Error = await Noray.connect_to_host(server, server_port)
+	if not _session_alive(session):
+		return ERR_BUSY
+	if err != OK:
+		net_error.emit("Impossible de joindre noray à %s:%d" % [server, server_port])
+		return err
+
+	err = Noray.register_host()
+	if err != OK:
+		net_error.emit("Échec register-host (%s)" % error_string(err))
+		return err
+
+	var wait := 5.0
+	while wait > 0.0 and (Noray.oid.is_empty() or Noray.pid.is_empty()):
+		if not _session_alive(session):
+			return ERR_BUSY
+		if not Noray.is_connected_to_host():
+			net_error.emit("Déconnecté de noray pendant l'enregistrement")
+			return ERR_CONNECTION_ERROR
+		await get_tree().process_frame
+		wait -= get_process_delta_time()
+	if not _session_alive(session):
+		return ERR_BUSY
+	if Noray.oid.is_empty() or Noray.pid.is_empty():
+		net_error.emit("Timeout — pas d'ID reçu de noray")
+		return ERR_TIMEOUT
+
+	connection_status = "Enregistrement UDP…"
+	lobby_changed.emit()
+	err = await Noray.register_remote()
+	if not _session_alive(session):
+		return ERR_BUSY
+	if err != OK:
+		net_error.emit("Échec register-remote (%s)" % error_string(err))
+		return err
+	return OK
+
+
+func _ensure_noray_signals() -> void:
+	if _noray_signals_connected:
+		return
+	Noray.on_connect_nat.connect(_on_noray_connect_nat)
+	Noray.on_connect_relay.connect(_on_noray_connect_relay)
+	_noray_signals_connected = true
+
+
+func _on_noray_connect_nat(address: String, port: int) -> void:
+	_handle_noray_peer_connect(address, port, false)
+
+
+func _on_noray_connect_relay(address: String, port: int) -> void:
+	_handle_noray_peer_connect(address, port, true)
+
+
+func _handle_noray_peer_connect(address: String, port: int, via_relay: bool) -> void:
+	if not using_noray:
+		return
+	var session := _session
+	if Game.mode == Game.Mode.HOST:
+		await _noray_host_handshake(address, port)
+		return
+	if Game.mode == Game.Mode.CLIENT:
+		if has_peer():
+			return
+		await _noray_client_handshake(address, port, via_relay, session)
+
+
+func _noray_host_handshake(address: String, port: int) -> void:
+	if not has_peer() or not using_noray:
+		return
+	var peer := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if peer == null or peer.host == null:
+		return
+	await PacketHandshake.over_enet(peer.host, address, port)
+
+
+func _noray_client_handshake(address: String, port: int, via_relay: bool, session: int) -> void:
+	if not _session_alive(session) or has_peer() or not _noray_client_connecting:
+		return
+
+	var udp := PacketPeerUDP.new()
+	var bind_err := udp.bind(Noray.local_port)
+	if bind_err != OK:
+		# Port may still be held briefly after a previous session.
+		net_error.emit("Bind UDP local échoué (%s)" % error_string(bind_err))
+		return
+	udp.set_dest_address(address, port)
+	var hs := await PacketHandshake.over_packet_peer(udp)
+	udp.close()
+	if not _session_alive(session):
+		return
+	if hs != OK and hs != ERR_BUSY:
+		# NAT may fail; relay attempt can still succeed later.
+		if not via_relay:
+			return
+		net_error.emit("Handshake relay échoué")
+		return
+
+	if not _session_alive(session) or has_peer() or not _noray_client_connecting:
+		return
+
+	var peer := ENetMultiplayerPeer.new()
+	var err := peer.create_client(address, port, 0, 0, 0, Noray.local_port)
+	if err != OK:
+		if via_relay:
+			net_error.emit("create_client échoué (%s)" % error_string(err))
+		return
+
+	if not _session_alive(session):
+		peer.close()
+		return
+
+	multiplayer.multiplayer_peer = peer
+	_noray_client_connecting = false
+	connection_status = "Relay" if via_relay else "P2P"
 	lobby_changed.emit()
 
 
@@ -385,9 +685,12 @@ func _on_connected_to_server() -> void:
 
 
 func _on_connection_failed() -> void:
-	net_error.emit(
-		"Connexion échouée — vérifie l'IP, le port UDP %d, le firewall et que l'hôte est lancé" % _port
-	)
+	if using_noray:
+		net_error.emit("Connexion ENet échouée — réessaie ou vérifie le Game ID")
+	else:
+		net_error.emit(
+			"Connexion échouée — vérifie l'IP, le port UDP %d, le firewall et que l'hôte est lancé" % _port
+		)
 	leave()
 
 

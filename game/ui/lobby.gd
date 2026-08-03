@@ -6,11 +6,22 @@ const SETTINGS_PATH := "user://chaleur_settings.cfg"
 
 @onready var _status: Label = %StatusLabel
 @onready var _name: LineEdit = %NameEdit
+@onready var _noray_host: LineEdit = %NorayHostEdit
 @onready var _host_port: LineEdit = %HostPortEdit
+@onready var _host_internet: Button = %HostInternetButton
+@onready var _host_direct: Button = %HostDirectButton
+@onready var _host_hint: Label = %HostHint
+@onready var _game_id: LineEdit = %GameIdEdit
 @onready var _address: LineEdit = %AddressEdit
 @onready var _join_port: LineEdit = %JoinPortEdit
+@onready var _join_internet: Button = %JoinInternetButton
+@onready var _join_direct: Button = %JoinDirectButton
+@onready var _join_hint: Label = %JoinHint
 @onready var _players: ItemList = %PlayersList
 @onready var _upnp: Label = %UpnpLabel
+@onready var _share_row: HBoxContainer = %ShareRow
+@onready var _share_code: LineEdit = %ShareCodeEdit
+@onready var _copy_share: Button = %CopyShareButton
 @onready var _choice_panel: VBoxContainer = %ChoicePanel
 @onready var _host_panel: VBoxContainer = %HostPanel
 @onready var _join_panel: VBoxContainer = %JoinPanel
@@ -29,9 +40,13 @@ const SETTINGS_PATH := "user://chaleur_settings.cfg"
 var _step: Step = Step.CHOICE
 var _track_ids: Array[String] = []
 var _syncing_race_ui: bool = false
+var _busy: bool = false
+var _host_mode_group: ButtonGroup
+var _join_mode_group: ButtonGroup
 
 
 func _ready() -> void:
+	_setup_mode_toggles()
 	_setup_track_options()
 	_load_settings()
 	%HostButton.pressed.connect(_on_choose_host)
@@ -44,10 +59,15 @@ func _ready() -> void:
 	_start_button.pressed.connect(_on_start_pressed)
 	%LeaveButton.pressed.connect(_on_leave_pressed)
 	_back_button.pressed.connect(_on_back_pressed)
+	_copy_share.pressed.connect(_on_copy_share)
 	_name.text_changed.connect(_on_name_changed)
+	_noray_host.text_changed.connect(_on_noray_host_changed)
 	_host_port.text_changed.connect(_on_ports_changed)
 	_join_port.text_changed.connect(_on_ports_changed)
 	_address.text_changed.connect(_on_address_changed)
+	_game_id.text_changed.connect(_on_game_id_changed)
+	_host_mode_group.pressed.connect(_on_host_mode_changed)
+	_join_mode_group.pressed.connect(_on_join_mode_changed)
 	_track_option.item_selected.connect(_on_track_selected)
 	_laps_spin.value_changed.connect(_on_laps_changed)
 
@@ -66,6 +86,15 @@ func _ready() -> void:
 	_refresh_players()
 	_refresh_ready_button()
 	_refresh_track_preview()
+
+
+func _setup_mode_toggles() -> void:
+	_host_mode_group = ButtonGroup.new()
+	_host_internet.button_group = _host_mode_group
+	_host_direct.button_group = _host_mode_group
+	_join_mode_group = ButtonGroup.new()
+	_join_internet.button_group = _join_mode_group
+	_join_direct.button_group = _join_mode_group
 
 
 func _setup_track_options() -> void:
@@ -96,6 +125,45 @@ func _set_step(step: Step) -> void:
 		_apply_race_controls_editable(is_host)
 		_refresh_ready_button()
 		_refresh_race_display()
+		_refresh_share_row()
+	elif step == Step.HOST_SETUP:
+		_apply_host_mode_visibility()
+	elif step == Step.JOIN_SETUP:
+		_game_id.text = ""
+		_apply_join_mode_visibility()
+	else:
+		_share_row.visible = false
+
+
+func _host_internet_mode() -> bool:
+	return _host_internet.button_pressed
+
+
+func _join_internet_mode() -> bool:
+	return _join_internet.button_pressed
+
+
+func _apply_host_mode_visibility() -> void:
+	var internet := _host_internet_mode()
+	_noray_host.visible = internet
+	_host_port.visible = not internet
+	_host_hint.text = (
+		"Adresse du serveur relay"
+		if internet
+		else "Port UDP à ouvrir / utiliser (LAN ou UPnP)"
+	)
+
+
+func _apply_join_mode_visibility() -> void:
+	var internet := _join_internet_mode()
+	_game_id.visible = internet
+	_address.visible = not internet
+	_join_port.visible = not internet
+	_join_hint.text = (
+		"Colle le Game ID (serveur:code)"
+		if internet
+		else "Adresse et port de l'hôte"
+	)
 
 
 func _load_settings() -> void:
@@ -111,6 +179,14 @@ func _load_settings() -> void:
 	var saved_address := str(cfg.get_value("net", "address", "127.0.0.1")).strip_edges()
 	if not saved_address.is_empty():
 		_address.text = saved_address
+	var saved_noray := str(cfg.get_value("net", "noray_host", "")).strip_edges()
+	_noray_host.text = saved_noray
+	_game_id.text = ""
+	var prefer_direct := bool(cfg.get_value("net", "lan_direct", false))
+	_host_internet.button_pressed = not prefer_direct
+	_host_direct.button_pressed = prefer_direct
+	_join_internet.button_pressed = not prefer_direct
+	_join_direct.button_pressed = prefer_direct
 	var saved_track := str(cfg.get_value("race", "track_id", "track1"))
 	_select_track_id(saved_track)
 	var saved_laps := int(cfg.get_value("race", "laps", 1))
@@ -119,9 +195,8 @@ func _load_settings() -> void:
 
 func _save_settings() -> void:
 	var cfg := ConfigFile.new()
-	cfg.load(SETTINGS_PATH) # ignore missing file
-	var name_text := _name.text.strip_edges()
-	cfg.set_value("player", "name", name_text)
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("player", "name", _name.text.strip_edges())
 	var port_text := _host_port.text.strip_edges()
 	if port_text.is_empty():
 		port_text = _join_port.text.strip_edges()
@@ -129,6 +204,13 @@ func _save_settings() -> void:
 		port_text = str(Net.DEFAULT_PORT)
 	cfg.set_value("net", "port", port_text)
 	cfg.set_value("net", "address", _address.text.strip_edges())
+	cfg.set_value("net", "noray_host", _noray_host.text.strip_edges())
+	# Drop legacy persisted Game ID keys if present.
+	if cfg.has_section_key("net", "share_code"):
+		cfg.erase_section_key("net", "share_code")
+	if cfg.has_section_key("net", "game_id"):
+		cfg.erase_section_key("net", "game_id")
+	cfg.set_value("net", "lan_direct", not _host_internet_mode())
 	cfg.set_value("race", "track_id", _selected_track_id())
 	cfg.set_value("race", "laps", int(_laps_spin.value))
 	cfg.save(SETTINGS_PATH)
@@ -208,6 +290,13 @@ func _refresh_track_preview() -> void:
 	_refresh_track_preview_for(_selected_track_id())
 
 
+func _refresh_share_row() -> void:
+	var show_share := Game.mode == Game.Mode.HOST and Net.using_noray
+	_share_row.visible = show_share
+	if show_share:
+		_share_code.text = Net.share_code()
+
+
 func _on_track_selected(_index: int) -> void:
 	if _syncing_race_ui:
 		return
@@ -229,8 +318,25 @@ func _on_name_changed(_new_text: String) -> void:
 	_save_settings()
 
 
+func _on_noray_host_changed(_new_text: String) -> void:
+	_save_settings()
+
+
+func _on_game_id_changed(_new_text: String) -> void:
+	pass
+
+
+func _on_host_mode_changed(_button: BaseButton) -> void:
+	_apply_host_mode_visibility()
+	_save_settings()
+
+
+func _on_join_mode_changed(_button: BaseButton) -> void:
+	_apply_join_mode_visibility()
+	_save_settings()
+
+
 func _on_ports_changed(_new_text: String) -> void:
-	# Keep host/join port fields mirrored for convenience.
 	if _step == Step.HOST_SETUP:
 		_join_port.text = _host_port.text
 	elif _step == Step.JOIN_SETUP:
@@ -252,12 +358,23 @@ func _refresh_status() -> void:
 					_status.text = "Configurer la connexion"
 				_:
 					_status.text = "Hors ligne — héberge ou rejoins une partie"
-		Game.Mode.HOST:
-			_status.text = Net.host_share_text()
-			_upnp.text = Net.upnp_status if not Net.upnp_status.is_empty() else "UPnP en cours…"
-		Game.Mode.CLIENT:
-			_status.text = "En lobby — en attente que l'hôte démarre"
 			_upnp.text = ""
+		Game.Mode.HOST:
+			if Net.using_noray:
+				_status.text = ""
+				_upnp.text = Net.connection_status
+			else:
+				_status.text = Net.host_share_text()
+				_upnp.text = Net.upnp_status if not Net.upnp_status.is_empty() else "UPnP en cours…"
+			_refresh_share_row()
+		Game.Mode.CLIENT:
+			_share_row.visible = false
+			if Net.using_noray:
+				_status.text = "En lobby — %s" % Net.share_code()
+				_upnp.text = Net.connection_status
+			else:
+				_status.text = "En lobby — en attente que l'hôte démarre"
+				_upnp.text = ""
 		_:
 			_status.text = "Mode: %s" % str(Game.mode)
 
@@ -279,8 +396,6 @@ func _refresh_players() -> void:
 			int(info.get("seat", -1)),
 			you,
 		])
-	if Game.mode == Game.Mode.HOST and not Net.upnp_status.is_empty():
-		_upnp.text = Net.upnp_status
 	_refresh_ready_button()
 
 
@@ -326,28 +441,93 @@ func _on_setup_cancel() -> void:
 
 
 func _on_host_confirm() -> void:
+	if _busy:
+		return
 	_apply_display_name("Host")
 	Net.race_track_id = _selected_track_id()
 	Net.race_laps = int(_laps_spin.value)
-	var err := Net.host(_port_from(_host_port))
-	if err != OK:
-		_status.text = "Échec host — port peut-être déjà utilisé"
+	_busy = true
+	if not _host_internet_mode():
+		var err := Net.host(_port_from(_host_port))
+		_busy = false
+		if err != OK:
+			_status.text = "Échec host — port peut-être déjà utilisé"
+			return
+		_save_settings()
+		return
+
+	var server := _noray_host.text.strip_edges()
+	if server.is_empty():
+		_busy = false
+		_status.text = "Indique l'adresse du serveur relay"
+		return
+	_status.text = "Connexion au relay…"
+	var nerr: Error = await Net.host_noray(server, Net.DEFAULT_NORAY_PORT)
+	_busy = false
+	if nerr != OK:
+		_refresh_status()
 		return
 	_save_settings()
 
 
 func _on_join_confirm() -> void:
-	_apply_display_name("Client")
-	var address := _address.text.strip_edges()
-	if address.is_empty():
-		address = "127.0.0.1"
-	var port := _port_from(_join_port)
-	var err := Net.join(address, port)
-	if err != OK:
-		_status.text = "Échec join"
+	if _busy:
 		return
-	_status.text = "Connexion à %s:%d…" % [address, port]
+	_apply_display_name("Client")
+	_busy = true
+	if not _join_internet_mode():
+		var address := _address.text.strip_edges()
+		if address.is_empty():
+			address = "127.0.0.1"
+		var port := _port_from(_join_port)
+		var err := Net.join(address, port)
+		_busy = false
+		if err != OK:
+			_status.text = "Échec join"
+			return
+		_status.text = "Connexion à %s:%d…" % [address, port]
+		_save_settings()
+		return
+
+	var parsed := Net.parse_share_code(_game_id.text)
+	if parsed.is_empty():
+		_busy = false
+		_status.text = "Game ID invalide — format attendu: serveur:code"
+		return
+	var relay_host := str(parsed["host"])
+	_maybe_remember_relay_host(relay_host)
+	_status.text = "Connexion via relay…"
+	var nerr: Error = await Net.join_noray(
+		relay_host,
+		str(parsed["oid"]),
+		Net.DEFAULT_NORAY_PORT
+	)
+	_busy = false
+	if nerr != OK:
+		_refresh_status()
+		return
 	_save_settings()
+
+
+## Persist relay host from a pasted Game ID only if none is saved yet.
+func _maybe_remember_relay_host(host: String) -> void:
+	host = host.strip_edges()
+	if host.is_empty():
+		return
+	if not _noray_host.text.strip_edges().is_empty():
+		return
+	_noray_host.text = host
+	_save_settings()
+
+
+func _on_copy_share() -> void:
+	var code := Net.share_code()
+	if code.is_empty():
+		code = _share_code.text.strip_edges()
+	if code.is_empty():
+		return
+	DisplayServer.clipboard_set(code)
+	_upnp.text = "Game ID copié"
 
 
 func _on_ready_pressed() -> void:
@@ -387,6 +567,7 @@ func _on_join_started(_address: String, _port: int) -> void:
 
 
 func _on_left() -> void:
+	_busy = false
 	if _step == Step.SESSION:
 		_set_step(Step.CHOICE)
 	_refresh_status()
@@ -398,6 +579,7 @@ func _on_lobby_changed() -> void:
 	_refresh_status()
 	if _step == Step.SESSION:
 		_refresh_race_display()
+		_refresh_share_row()
 
 
 func _on_race_started() -> void:
@@ -405,4 +587,5 @@ func _on_race_started() -> void:
 
 
 func _on_net_error(message: String) -> void:
+	_busy = false
 	_status.text = message

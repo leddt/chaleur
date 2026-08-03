@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://dsdgnuifhavei"]
 
-[ext_resource type="Script" path="res://ui/main_menu.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://r7x1rr6nlhna" path="res://ui/main_menu.gd" id="1_script"]
 
-[node name="MainMenu" type="Control"]
+[node name="MainMenu" type="Control" unique_id=5412142]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,7 +11,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=1689490056]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,7 +20,7 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.12, 0.14, 0.18, 1)
 
-[node name="Center" type="VBoxContainer" parent="."]
+[node name="Center" type="VBoxContainer" parent="." unique_id=1222500939]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -35,32 +35,32 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 12
 
-[node name="Title" type="Label" parent="Center"]
+[node name="Title" type="Label" parent="Center" unique_id=220981205]
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Chaleur"
 horizontal_alignment = 1
 
-[node name="Subtitle" type="Label" parent="Center"]
+[node name="Subtitle" type="Label" parent="Center" unique_id=1182482910]
 layout_mode = 2
 text = "pédale su'l'coin d'la yeule"
 horizontal_alignment = 1
 
-[node name="PlayButton" type="Button" parent="Center"]
+[node name="PlayButton" type="Button" parent="Center" unique_id=834526898]
 layout_mode = 2
 text = "Partie locale (2J)"
 
-[node name="LobbyButton" type="Button" parent="Center"]
+[node name="LobbyButton" type="Button" parent="Center" unique_id=1713875081]
 layout_mode = 2
 text = "Lobby réseau"
 
-[node name="TrackEditorButton" type="Button" parent="Center"]
+[node name="TrackEditorButton" type="Button" parent="Center" unique_id=500398355]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 text = "Éditeur de piste"
 
-[node name="QuitButton" type="Button" parent="Center"]
+[node name="QuitButton" type="Button" parent="Center" unique_id=1417786205]
 layout_mode = 2
 text = "Quitter"
 

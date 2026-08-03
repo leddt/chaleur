@@ -19,6 +19,8 @@ config/icon="res://icon.png"
 
 Game="*res://autoload/game.gd"
 Net="*res://net/net.gd"
+Noray="*res://addons/netfox.noray/noray.gd"
+PacketHandshake="*res://addons/netfox.noray/packet-handshake.gd"
 
 [display]
 

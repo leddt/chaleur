@@ -1,0 +1,214 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version label used in artifact names (e.g. v0.1.0)"
+        required: true
+        default: "dev"
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: "4.7.1"
+  GODOT_TAG: "4.7.1-stable"
+  GODOT_TEMPLATE_DIR: "4.7.1.stable"
+  GAME_DIR: game
+  EXPORT_NAME: Chaleur
+
+jobs:
+  build-and-release:
+    name: Export and publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version name
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cache Godot editor + templates
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            .godot-ci/${{ env.GODOT_VERSION }}
+            ~/.local/share/godot/export_templates/${{ env.GODOT_TEMPLATE_DIR }}
+          key: godot-${{ runner.os }}-${{ env.GODOT_TAG }}-v1
+
+      - name: Install Godot and export templates
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT_DIR="${GITHUB_WORKSPACE}/.godot-ci/${GODOT_VERSION}"
+          TEMPLATE_DIR="${HOME}/.local/share/godot/export_templates/${GODOT_TEMPLATE_DIR}"
+          mkdir -p "$GODOT_DIR" "$TEMPLATE_DIR"
+
+          curl -L --retry 5 --retry-delay 5 \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip" \
+            -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d "$GODOT_DIR"
+          EDITOR_BIN="$(find "$GODOT_DIR" -maxdepth 1 -type f -name 'Godot_v*_linux.x86_64' | head -n 1)"
+          mv "$EDITOR_BIN" "$GODOT_DIR/godot"
+          chmod +x "$GODOT_DIR/godot"
+
+          curl -L --retry 5 --retry-delay 5 \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_export_templates.tpz" \
+            -o /tmp/godot_templates.tpz
+          TMP_DIR="$(mktemp -d)"
+          unzip -q /tmp/godot_templates.tpz -d "$TMP_DIR"
+          if [[ -d "$TMP_DIR/templates" ]]; then
+            cp -a "$TMP_DIR/templates/." "$TEMPLATE_DIR/"
+          else
+            cp -a "$TMP_DIR/." "$TEMPLATE_DIR/"
+          fi
+          echo "${GODOT_TEMPLATE_DIR}" > "$TEMPLATE_DIR/version.txt"
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zip imagemagick
+
+      - name: Prepare build directories
+        run: |
+          mkdir -p build/linux build/windows dist
+
+      - name: Import project assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT_BIN="${GITHUB_WORKSPACE}/.godot-ci/${GODOT_VERSION}/godot"
+          chmod +x "$GODOT_BIN"
+          "$GODOT_BIN" --headless --path "$GAME_DIR" --import
+
+      - name: Export Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT_BIN="${GITHUB_WORKSPACE}/.godot-ci/${GODOT_VERSION}/godot"
+          "$GODOT_BIN" --headless --path "$GAME_DIR" --export-release "Linux" ../build/linux/${EXPORT_NAME}.x86_64
+          test -x "build/linux/${EXPORT_NAME}.x86_64"
+          chmod +x "build/linux/${EXPORT_NAME}.x86_64"
+
+      - name: Export Windows
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT_BIN="${GITHUB_WORKSPACE}/.godot-ci/${GODOT_VERSION}/godot"
+          "$GODOT_BIN" --headless --path "$GAME_DIR" --export-release "Windows" ../build/windows/${EXPORT_NAME}.exe
+          test -f "build/windows/${EXPORT_NAME}.exe"
+
+      - name: Package Linux tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.name }}"
+          STAGE="dist/linux-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          cp "build/linux/${EXPORT_NAME}.x86_64" "$STAGE/"
+          cp "${GAME_DIR}/icon.png" "$STAGE/" || true
+          tar -C "$STAGE" -czf "dist/${EXPORT_NAME}-${VER}-linux-x86_64.tar.gz" .
+
+      - name: Package Windows zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.name }}"
+          STAGE="dist/windows-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          cp "build/windows/${EXPORT_NAME}.exe" "$STAGE/"
+          # Godot may emit a companion console wrapper; include anything in the folder.
+          find build/windows -maxdepth 1 -type f ! -name '*.exe' -exec cp {} "$STAGE/" \; || true
+          cp "${GAME_DIR}/icon.png" "$STAGE/" || true
+          (
+            cd "$STAGE"
+            zip -qr "../${EXPORT_NAME}-${VER}-windows-x86_64.zip" .
+          )
+
+      - name: Build AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ steps.ver.outputs.name }}"
+          APPDIR="dist/AppDir"
+          rm -rf "$APPDIR"
+          mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/256x256/apps" "$APPDIR/usr/share/applications"
+
+          cp "build/linux/${EXPORT_NAME}.x86_64" "$APPDIR/usr/bin/${EXPORT_NAME}"
+          chmod +x "$APPDIR/usr/bin/${EXPORT_NAME}"
+
+          magick "${GAME_DIR}/icon.png" -resize 256x256 \
+            "$APPDIR/usr/share/icons/hicolor/256x256/apps/chaleur.png"
+          cp "$APPDIR/usr/share/icons/hicolor/256x256/apps/chaleur.png" "$APPDIR/chaleur.png"
+
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Name=Chaleur' \
+            "Comment=Chaleur: pedale su'l'coin d'la yeule" \
+            'Exec=Chaleur' \
+            'Icon=chaleur' \
+            'Type=Application' \
+            'Categories=Game;' \
+            'Terminal=false' \
+            > "$APPDIR/chaleur.desktop"
+          cp "$APPDIR/chaleur.desktop" "$APPDIR/usr/share/applications/chaleur.desktop"
+
+          cat > "$APPDIR/AppRun" <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "${HERE}/usr/bin/Chaleur" "$@"
+          EOF
+          chmod +x "$APPDIR/AppRun"
+
+          curl -L --retry 5 \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
+            -o /tmp/appimagetool.AppImage
+          chmod +x /tmp/appimagetool.AppImage
+
+          export ARCH=x86_64
+          /tmp/appimagetool.AppImage --appimage-extract-and-run "$APPDIR" \
+            "dist/${EXPORT_NAME}-${VER}-x86_64.AppImage"
+          chmod +x "dist/${EXPORT_NAME}-${VER}-x86_64.AppImage"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaleur-${{ steps.ver.outputs.name }}
+          path: |
+            dist/${{ env.EXPORT_NAME }}-${{ steps.ver.outputs.name }}-linux-x86_64.tar.gz
+            dist/${{ env.EXPORT_NAME }}-${{ steps.ver.outputs.name }}-windows-x86_64.zip
+            dist/${{ env.EXPORT_NAME }}-${{ steps.ver.outputs.name }}-x86_64.AppImage
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Chaleur ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+          files: |
+            dist/${{ env.EXPORT_NAME }}-${{ steps.ver.outputs.name }}-linux-x86_64.tar.gz
+            dist/${{ env.EXPORT_NAME }}-${{ steps.ver.outputs.name }}-windows-x86_64.zip
+            dist/${{ env.EXPORT_NAME }}-${{ steps.ver.outputs.name }}-x86_64.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

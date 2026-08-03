@@ -82,7 +82,7 @@ jobs:
       - name: Install packaging tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq zip imagemagick
+          sudo apt-get install -y -qq zip
 
       - name: Prepare build directories
         run: |
@@ -154,9 +154,9 @@ jobs:
           cp "build/linux/${EXPORT_NAME}.x86_64" "$APPDIR/usr/bin/${EXPORT_NAME}"
           chmod +x "$APPDIR/usr/bin/${EXPORT_NAME}"
 
-          magick "${GAME_DIR}/icon.png" -resize 256x256 \
-            "$APPDIR/usr/share/icons/hicolor/256x256/apps/chaleur.png"
-          cp "$APPDIR/usr/share/icons/hicolor/256x256/apps/chaleur.png" "$APPDIR/chaleur.png"
+          # Keep source icon as-is (no ImageMagick dependency on the runner).
+          cp "${GAME_DIR}/icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/chaleur.png"
+          cp "${GAME_DIR}/icon.png" "$APPDIR/chaleur.png"
 
           printf '%s\n' \
             '[Desktop Entry]' \
@@ -170,12 +170,12 @@ jobs:
             > "$APPDIR/chaleur.desktop"
           cp "$APPDIR/chaleur.desktop" "$APPDIR/usr/share/applications/chaleur.desktop"
 
-          cat > "$APPDIR/AppRun" <<'EOF'
-          #!/bin/bash
-          set -euo pipefail
-          HERE="$(dirname "$(readlink -f "$0")")"
-          exec "${HERE}/usr/bin/Chaleur" "$@"
-          EOF
+          printf '%s\n' \
+            '#!/bin/bash' \
+            'set -euo pipefail' \
+            'HERE="$(dirname "$(readlink -f "$0")")"' \
+            'exec "${HERE}/usr/bin/Chaleur" "$@"' \
+            > "$APPDIR/AppRun"
           chmod +x "$APPDIR/AppRun"
 
           curl -L --retry 5 \

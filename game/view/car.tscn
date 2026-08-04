@@ -1,7 +1,39 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dfpvkdi0c8lrg"]
 
-[node name="Car" type="Node2D"]
+[ext_resource type="Script" uid="uid://dov53o77iutu" path="res://view/car.gd" id="1_car"]
+[ext_resource type="Texture2D" uid="uid://brb3fvhxm5yjq" path="res://assets/car.png" id="2_2weem"]
+[ext_resource type="Script" uid="uid://dp74vebkwptuh" path="res://view/finish_ring.gd" id="2_ring"]
 
-[node name="Body" type="Polygon2D" parent="."]
-color = Color(0.9, 0.25, 0.25, 1)
-polygon = PackedVector2Array(-10, -6, 10, -6, 12, 0, 10, 6, -10, 6, -12, 0)
+[node name="Car" type="Node2D" unique_id=136279429]
+script = ExtResource("1_car")
+
+[node name="Body" type="Node2D" parent="." unique_id=1619778043]
+unique_name_in_owner = true
+
+[node name="Sprite" type="Sprite2D" parent="Body" unique_id=1784406894]
+unique_name_in_owner = true
+scale = Vector2(0.04, 0.04)
+texture = ExtResource("2_2weem")
+
+[node name="NumberAnchor" type="Marker2D" parent="Body/Sprite" unique_id=1391466757]
+unique_name_in_owner = true
+position = Vector2(-100, 8)
+gizmo_extents = 24.0
+
+[node name="FinishRing" type="Node2D" parent="Body" unique_id=1894019193]
+unique_name_in_owner = true
+visible = false
+script = ExtResource("2_ring")
+
+[node name="NumberHost" type="Node2D" parent="." unique_id=307268204]
+unique_name_in_owner = true
+
+[node name="Number" type="Label" parent="NumberHost" unique_id=1156794185]
+unique_name_in_owner = true
+offset_right = 12.0
+offset_bottom = 12.0
+theme_override_colors/font_color = Color(0.08, 0.08, 0.1, 1)
+theme_override_font_sizes/font_size = 8
+text = "1"
+horizontal_alignment = 1
+vertical_alignment = 1

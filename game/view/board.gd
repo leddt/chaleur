@@ -1,6 +1,6 @@
 extends Control
 
-const PLAYER_COLORS := TrackView.PLAYER_COLORS
+const PLAYER_COLORS := CarToken.PLAYER_COLORS
 const GEAR_ACTIVE := Color(0.45, 1.0, 0.45)
 const GEAR_NORMAL := Color(0.85, 0.88, 0.9)
 

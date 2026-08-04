@@ -1,15 +1,8 @@
 class_name TrackView
 extends Control
 
-const PLAYER_COLORS: Array[Color] = [
-	Color(0.9, 0.25, 0.25),
-	Color(0.25, 0.55, 0.95),
-	Color(0.25, 0.8, 0.4),
-	Color(0.95, 0.8, 0.2),
-	Color(0.95, 0.55, 0.15),
-	Color(0.7, 0.35, 0.9),
-]
-
+const PLAYER_COLORS := CarToken.PLAYER_COLORS
+const CAR_SCENE := preload("res://view/car.tscn")
 const MOVE_DURATION := 0.5
 
 var engine: HeatGameEngine
@@ -25,9 +18,15 @@ var _anim_elapsed: Dictionary = {} # player_id -> float
 var _anim_duration: Dictionary = {} # player_id -> float
 var _layout: TrackLayout
 
+var _cars_layer: Node2D
+var _cars: Dictionary = {} # player_id -> CarToken
+
 
 func _ready() -> void:
 	set_process(true)
+	_cars_layer = Node2D.new()
+	_cars_layer.name = "Cars"
+	add_child(_cars_layer)
 
 
 func set_engine(p_engine: HeatGameEngine, snap: bool = false) -> void:
@@ -37,12 +36,14 @@ func set_engine(p_engine: HeatGameEngine, snap: bool = false) -> void:
 		_layout = TrackLayout.for_track_id(engine.track.id)
 	if engine == null:
 		_clear_viz()
+		_clear_cars()
 		queue_redraw()
 		return
 	if snap or _viz_progress.is_empty():
 		_snap_all()
 	else:
 		_ensure_viz_keys()
+	_sync_cars()
 	queue_redraw()
 
 
@@ -54,11 +55,13 @@ func refresh(animate: bool = true) -> void:
 		_start_animations()
 	else:
 		_snap_all()
+	_sync_cars()
 	queue_redraw()
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
+		_sync_cars()
 		queue_redraw()
 
 
@@ -83,6 +86,7 @@ func _process(delta: float) -> void:
 		_anim_to.erase(player_id)
 		_anim_elapsed.erase(player_id)
 		_anim_duration.erase(player_id)
+	_sync_cars()
 	queue_redraw()
 
 
@@ -110,11 +114,6 @@ func _draw_layout_track() -> void:
 			draw_circle(pos, 4.0, col)
 			if space % 3 == 0:
 				draw_string(ThemeDB.fallback_font, pos + Vector2(4, -4), str(space), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
-	for p in engine.players:
-		var prog := _display_progress(p)
-		var spot := int(_viz_spot.get(p.id, p.spot))
-		var car_pos := _car_pos_layout(prog, spot)
-		_draw_car(car_pos, p)
 
 
 func _draw_oval_track() -> void:
@@ -138,28 +137,43 @@ func _draw_oval_track() -> void:
 		if corner:
 			label = "%d<%d" % [space, corner.speed_limit]
 		draw_string(ThemeDB.fallback_font, pos + Vector2(-10, 4), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
+
+
+func _sync_cars() -> void:
+	if engine == null:
+		_clear_cars()
+		return
+	var alive: Dictionary = {}
 	for p in engine.players:
+		alive[p.id] = true
+		var car: CarToken = _cars.get(p.id) as CarToken
+		if car == null:
+			car = CAR_SCENE.instantiate() as CarToken
+			_cars_layer.add_child(car)
+			car.setup(p.id)
+			_cars[p.id] = car
 		var prog := _display_progress(p)
 		var spot := int(_viz_spot.get(p.id, p.spot))
-		var car_pos := _car_pos_oval(prog, spot, center, rx, ry)
-		_draw_car(car_pos, p)
+		var sample := _car_sample(prog, spot)
+		car.set_pose(sample.pos, sample.heading)
+		car.set_finished(p.finished)
+	var stale: Array[int] = []
+	for player_id in _cars.keys():
+		if not alive.has(player_id):
+			stale.append(int(player_id))
+	for player_id in stale:
+		var car: CarToken = _cars[player_id]
+		_cars.erase(player_id)
+		if is_instance_valid(car):
+			car.queue_free()
 
 
-func _draw_car(car_pos: Vector2, p: PlayerState) -> void:
-	var col := PLAYER_COLORS[p.id % PLAYER_COLORS.size()]
-	draw_circle(car_pos, 9.0, col)
-	var ring := Color(1, 1, 1) if p.finished else Color(0, 0, 0)
-	draw_arc(car_pos, 9.0, 0, TAU, 20, ring, 2.5 if p.finished else 2.0)
-	var tag := "F" if p.finished else str(p.id + 1)
-	draw_string(
-		ThemeDB.fallback_font,
-		car_pos + Vector2(-4, 4),
-		tag,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1,
-		11,
-		Color.WHITE
-	)
+func _clear_cars() -> void:
+	for player_id in _cars.keys():
+		var car: CarToken = _cars[player_id]
+		if is_instance_valid(car):
+			car.queue_free()
+	_cars.clear()
 
 
 func _display_progress(p: PlayerState) -> float:
@@ -221,7 +235,14 @@ func _start_animations() -> void:
 		_viz_progress[p.id] = from_prog
 
 
-func _car_pos_layout(progress: float, spot: int) -> Vector2:
+func _car_sample(progress: float, spot: int) -> Dictionary:
+	if _layout != null and _layout.texture != null:
+		return _car_sample_layout(progress, spot)
+	var center := size * 0.5
+	return _car_sample_oval(progress, spot, center, size.x * 0.42, size.y * 0.38)
+
+
+func _car_sample_layout(progress: float, spot: int) -> Dictionary:
 	var track := engine.track
 	var p0 := int(floor(progress))
 	var frac := progress - float(p0)
@@ -229,10 +250,16 @@ func _car_pos_layout(progress: float, spot: int) -> Vector2:
 	var s1 := track.space_of_progress(p0 + 1)
 	var a := _layout.uv_to_view(_layout.spot_uv(s0, spot), size)
 	var b := _layout.uv_to_view(_layout.spot_uv(s1, spot), size)
-	return a.lerp(b, frac)
+	var pos := a.lerp(b, frac)
+	var heading := b - a
+	if heading.length_squared() < 0.0001:
+		var s2 := track.space_of_progress(p0 + 2)
+		var c := _layout.uv_to_view(_layout.spot_uv(s2, spot), size)
+		heading = c - a
+	return {"pos": pos, "heading": heading}
 
 
-func _car_pos_oval(progress: float, spot: int, center: Vector2, rx: float, ry: float) -> Vector2:
+func _car_sample_oval(progress: float, spot: int, center: Vector2, rx: float, ry: float) -> Dictionary:
 	var track := engine.track
 	var p0 := int(floor(progress))
 	var frac := progress - float(p0)
@@ -244,11 +271,11 @@ func _car_pos_oval(progress: float, spot: int, center: Vector2, rx: float, ry: f
 	var tangential := b - a
 	if tangential.length_squared() < 0.0001:
 		var nxt := _oval_space_pos((s0 + 1) % track.space_count, center, rx, ry)
-		tangential = (nxt - a).normalized()
-	else:
-		tangential = tangential.normalized()
+		tangential = nxt - a
+	tangential = tangential.normalized()
 	var normal := Vector2(-tangential.y, tangential.x)
-	return base + normal * (float(spot) - 0.5) * 12.0
+	var pos := base + normal * (float(spot) - 0.5) * 12.0
+	return {"pos": pos, "heading": tangential}
 
 
 func _oval_space_pos(space: int, center: Vector2, rx: float, ry: float) -> Vector2:

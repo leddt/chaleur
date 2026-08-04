@@ -10,9 +10,11 @@ var show_space_debug: bool = false
 
 ## Visual progress/spot (lags behind engine while animating).
 var _viz_progress: Dictionary = {} # player_id -> float
-var _viz_spot: Dictionary = {} # player_id -> int
+var _viz_spot: Dictionary = {} # player_id -> float
 var _anim_from: Dictionary = {} # player_id -> float
 var _anim_to: Dictionary = {} # player_id -> float
+var _anim_from_spot: Dictionary = {} # player_id -> float
+var _anim_to_spot: Dictionary = {} # player_id -> float
 var _anim_elapsed: Dictionary = {} # player_id -> float
 var _anim_duration: Dictionary = {} # player_id -> float
 var _layout: TrackLayout
@@ -78,13 +80,19 @@ func _process(delta: float) -> void:
 		var u := t * t * (3.0 - 2.0 * t)
 		var from_p: float = float(_anim_from[player_id])
 		var to_p: float = float(_anim_to[player_id])
+		var from_s: float = float(_anim_from_spot.get(player_id, _viz_spot.get(player_id, 0.0)))
+		var to_s: float = float(_anim_to_spot.get(player_id, from_s))
 		_viz_progress[player_id] = lerpf(from_p, to_p, u)
+		_viz_spot[player_id] = lerpf(from_s, to_s, u)
 		if t >= 1.0:
 			_viz_progress[player_id] = to_p
+			_viz_spot[player_id] = to_s
 			finished.append(int(player_id))
 	for player_id in finished:
 		_anim_from.erase(player_id)
 		_anim_to.erase(player_id)
+		_anim_from_spot.erase(player_id)
+		_anim_to_spot.erase(player_id)
 		_anim_elapsed.erase(player_id)
 		_anim_duration.erase(player_id)
 	_sync_cars()
@@ -154,7 +162,7 @@ func _sync_cars() -> void:
 			car.setup(p.id)
 			_cars[p.id] = car
 		var prog := _display_progress(p)
-		var spot := int(_viz_spot.get(p.id, p.spot))
+		var spot := float(_viz_spot.get(p.id, float(p.spot)))
 		var sample := _car_sample(prog, spot)
 		car.set_pose(sample.pos, sample.heading)
 		car.set_finished(p.finished)
@@ -192,6 +200,8 @@ func _display_progress(p: PlayerState) -> float:
 func _clear_viz() -> void:
 	_anim_from.clear()
 	_anim_to.clear()
+	_anim_from_spot.clear()
+	_anim_to_spot.clear()
 	_anim_elapsed.clear()
 	_anim_duration.clear()
 	_viz_progress.clear()
@@ -202,51 +212,79 @@ func _ensure_viz_keys() -> void:
 	for p in engine.players:
 		if not _viz_progress.has(p.id):
 			_viz_progress[p.id] = float(p.progress)
-			_viz_spot[p.id] = p.spot
+			_viz_spot[p.id] = float(p.spot)
 
 
 func _snap_all() -> void:
 	_anim_from.clear()
 	_anim_to.clear()
+	_anim_from_spot.clear()
+	_anim_to_spot.clear()
 	_anim_elapsed.clear()
 	_anim_duration.clear()
 	_viz_progress.clear()
 	_viz_spot.clear()
 	for p in engine.players:
 		_viz_progress[p.id] = float(p.progress)
-		_viz_spot[p.id] = p.spot
+		_viz_spot[p.id] = float(p.spot)
 
 
 func _start_animations() -> void:
 	for p in engine.players:
 		var from_prog := float(_viz_progress.get(p.id, p.progress))
 		var to_prog := float(p.progress)
-		_viz_spot[p.id] = p.spot
-		if absf(from_prog - to_prog) < 0.01:
+		var from_spot := float(_viz_spot.get(p.id, p.spot))
+		var to_spot := float(p.spot)
+		var prog_delta := absf(from_prog - to_prog)
+		var spot_delta := absf(from_spot - to_spot)
+		if prog_delta < 0.01 and spot_delta < 0.01:
 			_viz_progress[p.id] = to_prog
+			_viz_spot[p.id] = to_spot
 			_anim_from.erase(p.id)
 			_anim_to.erase(p.id)
+			_anim_from_spot.erase(p.id)
+			_anim_to_spot.erase(p.id)
 			_anim_elapsed.erase(p.id)
 			_anim_duration.erase(p.id)
 			continue
-		if _anim_to.has(p.id) and absf(float(_anim_to[p.id]) - to_prog) < 0.01:
+		if (
+			_anim_to.has(p.id)
+			and absf(float(_anim_to[p.id]) - to_prog) < 0.01
+			and absf(float(_anim_to_spot.get(p.id, to_spot)) - to_spot) < 0.01
+		):
 			continue
-		var steps := maxf(1.0, absf(to_prog - from_prog))
+		var steps := maxf(1.0, maxf(prog_delta, spot_delta))
 		_anim_from[p.id] = from_prog
 		_anim_to[p.id] = to_prog
+		_anim_from_spot[p.id] = from_spot
+		_anim_to_spot[p.id] = to_spot
 		_anim_elapsed[p.id] = 0.0
 		_anim_duration[p.id] = clampf(MOVE_DURATION * (steps / 3.0), 0.35, 1.1)
 		_viz_progress[p.id] = from_prog
+		_viz_spot[p.id] = from_spot
 
 
-func _car_sample(progress: float, spot: int) -> Dictionary:
+func _car_sample(progress: float, spot: float) -> Dictionary:
 	if _layout != null and _layout.texture != null:
 		return _car_sample_layout(progress, spot)
 	var center := size * 0.5
 	return _car_sample_oval(progress, spot, center, size.x * 0.42, size.y * 0.38)
 
 
-func _car_sample_layout(progress: float, spot: int) -> Dictionary:
+func _car_sample_layout(progress: float, spot: float) -> Dictionary:
+	var spot0 := int(floor(spot))
+	var spot_frac := spot - float(spot0)
+	if spot_frac < 0.001:
+		return _car_sample_layout_at_spot(progress, spot0)
+	var a := _car_sample_layout_at_spot(progress, spot0)
+	var b := _car_sample_layout_at_spot(progress, spot0 + 1)
+	return {
+		"pos": (a["pos"] as Vector2).lerp(b["pos"] as Vector2, spot_frac),
+		"heading": (a["heading"] as Vector2).lerp(b["heading"] as Vector2, spot_frac),
+	}
+
+
+func _car_sample_layout_at_spot(progress: float, spot: int) -> Dictionary:
 	var track := engine.track
 	var p0 := int(floor(progress))
 	var frac := progress - float(p0)
@@ -263,7 +301,7 @@ func _car_sample_layout(progress: float, spot: int) -> Dictionary:
 	return {"pos": pos, "heading": heading}
 
 
-func _car_sample_oval(progress: float, spot: int, center: Vector2, rx: float, ry: float) -> Dictionary:
+func _car_sample_oval(progress: float, spot: float, center: Vector2, rx: float, ry: float) -> Dictionary:
 	var track := engine.track
 	var p0 := int(floor(progress))
 	var frac := progress - float(p0)
@@ -278,7 +316,7 @@ func _car_sample_oval(progress: float, spot: int, center: Vector2, rx: float, ry
 		tangential = nxt - a
 	tangential = tangential.normalized()
 	var normal := Vector2(-tangential.y, tangential.x)
-	var pos := base + normal * (float(spot) - 0.5) * 12.0
+	var pos := base + normal * (spot - 0.5) * 12.0
 	return {"pos": pos, "heading": tangential}
 
 

@@ -57,7 +57,7 @@ func set_cards(
 		btn.disabled = not selectable
 		if enabled and not selectable:
 			btn.modulate = Color(1, 1, 1, 0.45)
-			btn.tooltip_text = "%s (non défaussable)" % card.id
+			btn.tooltip_text = "%s (non sélectionnable)" % card.id
 		else:
 			btn.tooltip_text = card.id
 		btn.text = _label_for(card)

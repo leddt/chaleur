@@ -183,7 +183,15 @@ func _build_actions_for(actor_id: int) -> void:
 		HeatGameEngine.Phase.SHIFT_GEARS:
 			_set_hand(_visible_hand(actor_id), false)
 		HeatGameEngine.Phase.PLAY_CARDS:
-			_set_hand(_visible_hand(actor_id), true, true)
+			var actor := _engine.players[actor_id]
+			var cluttered := actor.playable_in_hand().size() < actor.gear
+			_set_hand(
+				_visible_hand(actor_id),
+				true,
+				true,
+				func(card: HeatCard) -> bool:
+					return card.is_playable() or (cluttered and card.kind == HeatCard.Kind.HEAT)
+			)
 		HeatGameEngine.Phase.PLAYER_TURN:
 			if _engine.turn_step == HeatGameEngine.TurnStep.DISCARD:
 				_set_hand(

@@ -18,6 +18,8 @@ var engine: CardPile = CardPile.new()
 
 # Per-round / per-turn working data
 var gear_locked: bool = false
+## Chosen gear before simultaneous reveal (-1 = none).
+var pending_gear: int = -1
 var cards_locked: bool = false
 var skipped_move: bool = false
 var round_speed: int = 0
@@ -29,6 +31,7 @@ var turn_complete: bool = false
 
 func reset_round_flags() -> void:
 	gear_locked = false
+	pending_gear = -1
 	cards_locked = false
 	skipped_move = false
 	round_speed = 0

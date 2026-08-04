@@ -120,13 +120,11 @@ func shift_gear(player_id: int, target_gear: int) -> ActionResult:
 	var delta := absi(target_gear - p.gear)
 	if delta > 2:
 		return ActionResult.fail("Cannot shift more than 2 gears")
-	if delta == 2:
-		if not _pay_heat(p, 1):
-			return ActionResult.fail("Not enough Heat to shift 2 gears")
-		_log("%s pays 1 Heat for double shift" % p.display_name)
-	p.gear = target_gear
+	if delta == 2 and p.engine_heat() < 1:
+		return ActionResult.fail("Not enough Heat to shift 2 gears")
+	# Apply and announce only once everyone has locked (simultaneous reveal).
+	p.pending_gear = target_gear
 	p.gear_locked = true
-	_log("%s shifts to gear %d" % [p.display_name, p.gear])
 	_try_advance_from_shift()
 	return ActionResult.success()
 
@@ -352,8 +350,27 @@ func _try_advance_from_shift() -> void:
 	for p in players:
 		if not p.finished and not p.gear_locked:
 			return
+	_reveal_locked_gears()
 	phase = Phase.PLAY_CARDS
 	_log("All gears locked — play cards")
+
+
+func _reveal_locked_gears() -> void:
+	for p in players:
+		if p.finished or p.pending_gear < 1:
+			continue
+		var from_gear := p.gear
+		var target := p.pending_gear
+		var delta := absi(target - from_gear)
+		if delta == 2:
+			if not _pay_heat(p, 1):
+				# Validated at lock time; still guard state consistency.
+				push_warning("Missing Heat for double shift on reveal for %s" % p.display_name)
+			else:
+				_log("%s pays 1 Heat for double shift" % p.display_name)
+		p.gear = target
+		p.pending_gear = -1
+		_log("%s shifts to gear %d" % [p.display_name, p.gear])
 
 
 func _try_advance_from_play() -> void:

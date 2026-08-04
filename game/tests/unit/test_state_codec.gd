@@ -25,6 +25,21 @@ func test_codec_hides_other_hands_from_viewer() -> void:
 	assert_eq(int(p1["hand_count"]), engine.players[1].hand.size())
 
 
+func test_codec_hides_other_pending_gear_from_viewer() -> void:
+	var engine := HeatTestHelpers.make_engine(2, 7)
+	assert_true(engine.shift_gear(1, 3).ok)
+	var snap := StateCodec.encode(engine, 0)
+	var p0: Dictionary = snap["players"][0]
+	var p1: Dictionary = snap["players"][1]
+	assert_eq(int(p1["gear"]), 1)
+	assert_eq(int(p1["pending_gear"]), -1)
+	assert_true(bool(p1["gear_locked"]))
+	assert_eq(int(p0["pending_gear"]), -1)
+	# Full encode still carries pending for authority / rematch.
+	var full := StateCodec.encode(engine, -1)
+	assert_eq(int(full["players"][1]["pending_gear"]), 3)
+
+
 func test_host_rejects_action_when_not_pending() -> void:
 	var engine := HeatTestHelpers.make_engine(2, 3)
 	Game.engine = engine

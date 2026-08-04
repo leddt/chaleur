@@ -7,7 +7,13 @@ func test_double_shift_costs_one_heat() -> void:
 	HeatTestHelpers.ensure_engine_heat(p, 6)
 	var r := engine.shift_gear(0, 3)
 	assert_true(r.ok, r.error)
+	# Gear stays secret until everyone has locked.
+	assert_eq(p.gear, 1)
+	assert_eq(p.pending_gear, 3)
+	assert_eq(p.engine_heat(), 6)
+	assert_true(engine.shift_gear(1, 1).ok)
 	assert_eq(p.gear, 3)
+	assert_eq(p.pending_gear, -1)
 	assert_eq(p.engine_heat(), 5)
 
 
@@ -18,6 +24,21 @@ func test_double_shift_illegal_without_heat() -> void:
 	var r := engine.shift_gear(0, 3)
 	assert_false(r.ok)
 	assert_eq(p.gear, 1)
+	assert_eq(p.pending_gear, -1)
+
+
+func test_shift_logs_only_after_everyone_locks() -> void:
+	var engine := HeatTestHelpers.make_engine(2, 1)
+	assert_true(engine.shift_gear(0, 2).ok)
+	for line in engine.event_log:
+		assert_false("shifts to gear" in line, line)
+	assert_true(engine.shift_gear(1, 1).ok)
+	var shift_lines := 0
+	for line in engine.event_log:
+		if "shifts to gear" in line:
+			shift_lines += 1
+	assert_eq(shift_lines, 2)
+	assert_eq(engine.phase, HeatGameEngine.Phase.PLAY_CARDS)
 
 
 func test_stress_resolved_before_react_step() -> void:

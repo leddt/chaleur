@@ -83,6 +83,7 @@ static func _decode_track(data: Dictionary) -> HeatTrack:
 
 static func _encode_player(p: PlayerState, viewer_player_id: int) -> Dictionary:
 	var show_hand := viewer_player_id < 0 or viewer_player_id == p.id
+	var show_pending := show_hand
 	return {
 		"id": p.id,
 		"display_name": p.display_name,
@@ -99,6 +100,7 @@ static func _encode_player(p: PlayerState, viewer_player_id: int) -> Dictionary:
 		"discard": _encode_pile(p.discard),
 		"engine": _encode_pile(p.engine),
 		"gear_locked": p.gear_locked,
+		"pending_gear": p.pending_gear if show_pending else -1,
 		"cards_locked": p.cards_locked,
 		"skipped_move": p.skipped_move,
 		"round_speed": p.round_speed,
@@ -128,6 +130,7 @@ static func _decode_player(data: Dictionary) -> PlayerState:
 	p.discard = _decode_pile(data.get("discard", []))
 	p.engine = _decode_pile(data.get("engine", []))
 	p.gear_locked = bool(data.get("gear_locked", false))
+	p.pending_gear = int(data.get("pending_gear", -1))
 	p.cards_locked = bool(data.get("cards_locked", false))
 	p.skipped_move = bool(data.get("skipped_move", false))
 	p.round_speed = int(data.get("round_speed", 0))

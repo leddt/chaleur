@@ -40,9 +40,11 @@ func set_engine(p_engine: HeatGameEngine, snap: bool = false) -> void:
 		return
 	if snap or _viz_progress.is_empty():
 		_snap_all()
+		_sync_cars()
 	else:
+		# Keep lagging viz positions so a following refresh(animate=true) can tween.
+		# Syncing here would _display_progress-snap to the new engine state and kill moves.
 		_ensure_viz_keys()
-	_sync_cars()
 	queue_redraw()
 
 
@@ -176,8 +178,11 @@ func _clear_cars() -> void:
 
 
 func _display_progress(p: PlayerState) -> float:
-	if _anim_to.has(p.id):
-		return float(_viz_progress.get(p.id, p.progress))
+	# Viz is the source of truth for drawing; only snap/animate paths update it
+	# toward engine.progress. Eagerly copying engine here would cancel tweens when
+	# set_engine() syncs cars before refresh() starts animations (online snapshots).
+	if _viz_progress.has(p.id):
+		return float(_viz_progress[p.id])
 	var prog := float(p.progress)
 	_viz_progress[p.id] = prog
 	_viz_spot[p.id] = p.spot

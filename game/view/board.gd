@@ -345,6 +345,7 @@ func _append_new_logs() -> void:
 		_log.append_text(JournalFormat.to_bbcode(line))
 		if JournalFormat.is_reveal_line(line):
 			_flash_reveal(JournalFormat.reveal_banner_text(line))
+		Sfx.play_for_log_line(line)
 		_log_cursor += 1
 
 
@@ -364,8 +365,11 @@ func _flash_reveal(text: String) -> void:
 
 
 func _show_finish() -> void:
+	var first_show := not _finish_overlay.visible
 	_pass_overlay.visible = false
 	_finish_overlay.visible = true
+	if first_show:
+		Sfx.play("podium")
 	var lines: PackedStringArray = ["Classement"]
 	for p in _engine.ranking():
 		lines.append("%d. %s" % [p.finish_rank, p.display_name])

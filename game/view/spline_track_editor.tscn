@@ -1,0 +1,88 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://view/spline_track_editor.gd" id="1_script"]
+
+[node name="SplineTrackEditor" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.09, 0.11, 1)
+
+[node name="Root" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 6
+
+[node name="TopBar" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Root/TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Créateur de tracé"
+
+[node name="StatusLabel" type="Label" parent="Root/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "…"
+autowrap_mode = 3
+
+[node name="ResetButton" type="Button" parent="Root/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Réinitialiser"
+
+[node name="BackButton" type="Button" parent="Root/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Menu"
+
+[node name="InfoLabel" type="Label" parent="Root"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Info"
+autowrap_mode = 3
+
+[node name="Toolbar" type="HBoxContainer" parent="Root"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TypeLabel" type="Label" parent="Root/Toolbar"]
+layout_mode = 2
+text = "Type du point"
+
+[node name="TypeOption" type="OptionButton" parent="Root/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(140, 0)
+
+[node name="Hint" type="Label" parent="Root"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.75, 0.78, 0.82, 1)
+text = "Clic près de la courbe : ajouter (Auto). Clic droit : supprimer (min. 3). Double-clic sur un point : cycler Auto→Tension→Libre. Type : menu ou 1/2/3. Poignées : Tension (bleues) · Libre (bleue=out, violette=in)."
+autowrap_mode = 3
+
+[node name="Canvas" type="Control" parent="Root"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 0

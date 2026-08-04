@@ -5,15 +5,6 @@ extends Node2D
 ## Place `%NumberAnchor` (Marker2D) on the white circle in the editor —
 ## it is a child of the sprite so it stays glued when the car scales/rotates.
 
-const PLAYER_COLORS: Array[Color] = [
-	Color(0.9, 0.25, 0.25),
-	Color(0.25, 0.55, 0.95),
-	Color(0.25, 0.8, 0.4),
-	Color(0.95, 0.8, 0.2),
-	Color(0.95, 0.55, 0.15),
-	Color(0.7, 0.35, 0.9),
-]
-
 const TEXTURE_PATH := "res://assets/car.png"
 const CAR_LENGTH := 20.0
 
@@ -32,7 +23,7 @@ var player_id: int = 0
 
 func setup(p_player_id: int) -> void:
 	player_id = p_player_id
-	var color := PLAYER_COLORS[player_id % PLAYER_COLORS.size()]
+	var color := PlayerPalette.color_for(player_id)
 	var tex := texture_for(color)
 	if tex == null:
 		return

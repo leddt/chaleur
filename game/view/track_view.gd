@@ -1,7 +1,6 @@
 class_name TrackView
 extends Control
 
-const PLAYER_COLORS := CarToken.PLAYER_COLORS
 const CAR_SCENE := preload("res://view/car.tscn")
 const MOVE_DURATION := 0.5
 

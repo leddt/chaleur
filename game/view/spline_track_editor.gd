@@ -6,6 +6,11 @@ const HANDLE_HIT_RADIUS := 12.0
 const POINT_HIT_RADIUS := 14.0
 const CURVE_HIT_RADIUS := 14.0
 const MIN_CANVAS_SIZE := 32.0
+## Half-width of the asphalt band around the centerline (pixels).
+const ROAD_HALF_WIDTH := 28.0
+const ASPHALT_COLOR := Color(0.28, 0.29, 0.31, 1.0)
+const ASPHALT_EDGE_COLOR := Color(0.18, 0.19, 0.21, 1.0)
+const CENTERLINE_COLOR := Color(0.95, 0.95, 0.97, 1.0)
 
 @onready var _canvas: Control = %Canvas
 @onready var _status: Label = %StatusLabel
@@ -169,13 +174,7 @@ func _on_canvas_draw() -> void:
 
 	var baked := _spline.baked_points()
 	if baked.size() >= 2:
-		_canvas.draw_polyline(baked, Color(0.95, 0.55, 0.2, 0.95), 3.0, true)
-
-	# Chord lines between anchors (faint)
-	for i in _spline.point_count():
-		var a := _spline.get_point(i).position
-		var b := _spline.get_point(i + 1).position
-		_canvas.draw_line(a, b, Color(1, 1, 1, 0.12), 1.0)
+		_draw_road(baked)
 
 	for i in _spline.point_count():
 		var cp := _spline.get_point(i)
@@ -204,6 +203,45 @@ func _on_canvas_draw() -> void:
 			13,
 			Color(1, 1, 1, 0.85)
 		)
+
+
+func _draw_road(baked: PackedVector2Array) -> void:
+	var pts := _unique_loop_points(baked)
+	if pts.size() < 3:
+		return
+	var loop := PackedVector2Array()
+	loop.resize(pts.size() + 1)
+	for i in pts.size():
+		loop[i] = pts[i]
+	loop[pts.size()] = pts[0]
+
+	# Dark shoulder underlay, then asphalt. Circles seal the closed join and sharp bends
+	# so we never depend on an offset polygon (those tear at the seam / fold in hairpins).
+	var edge_r := ROAD_HALF_WIDTH + 1.5
+	_stroke_closed_band(pts, loop, edge_r, ASPHALT_EDGE_COLOR)
+	_stroke_closed_band(pts, loop, ROAD_HALF_WIDTH, ASPHALT_COLOR)
+	_canvas.draw_polyline(loop, CENTERLINE_COLOR, 2.0, true)
+
+
+func _stroke_closed_band(pts: PackedVector2Array, loop: PackedVector2Array, radius: float, color: Color) -> void:
+	for i in pts.size():
+		_canvas.draw_circle(pts[i], radius, color)
+	_canvas.draw_polyline(loop, color, radius * 2.0, true)
+
+
+## Distinct samples of a closed centerline (first point not duplicated at the end).
+func _unique_loop_points(baked: PackedVector2Array) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	if baked.is_empty():
+		return pts
+	pts.append(baked[0])
+	for i in range(1, baked.size()):
+		if baked[i].distance_squared_to(pts[pts.size() - 1]) > 0.25:
+			pts.append(baked[i])
+	# Bake often repeats the start at the end — drop it so the loop closure is explicit.
+	if pts.size() >= 2 and pts[0].distance_squared_to(pts[pts.size() - 1]) <= 0.25:
+		pts.resize(pts.size() - 1)
+	return pts
 
 
 func _point_fill_color(type: int, selected: bool) -> Color:

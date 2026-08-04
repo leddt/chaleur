@@ -58,6 +58,23 @@ func distance_to_next_corner(progress: int) -> int:
 	return best
 
 
+## Remaining spaces to finish line (`finish_progress()`). Negative if already past.
+func distance_to_finish(progress: int) -> int:
+	return finish_progress() - progress
+
+
+## HUD helper: prefer finish distance once the next corner would wrap past the finish
+## (last sector of the race). Returns {"kind": "corner"|"finish"|"none", "distance": int}.
+func next_landmark(progress: int) -> Dictionary:
+	var to_finish := distance_to_finish(progress)
+	if to_finish < 0:
+		return {"kind": "none", "distance": -1}
+	var to_corner := distance_to_next_corner(progress)
+	if to_corner < 0 or to_corner >= to_finish:
+		return {"kind": "finish", "distance": to_finish}
+	return {"kind": "corner", "distance": to_corner}
+
+
 ## Hand-drawn track1.jpg layout (see res://data/track1_layout.json).
 static func track1(p_laps: int = 1) -> HeatTrack:
 	var layout := TrackLayout.for_track_id("track1")

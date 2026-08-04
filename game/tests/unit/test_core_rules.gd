@@ -376,3 +376,22 @@ func test_track1_starts_behind_line_two_per_space() -> void:
 	assert_eq(engine.players[3].progress, -2)
 	assert_eq(engine.track.space_of_progress(-2), 67)
 	assert_ne(engine.players[0].progress, engine.players[2].progress)
+
+
+func test_next_landmark_shows_finish_in_last_sector() -> void:
+	# usa_simplified: corners at 5, 11, 17, 21 — last sector wraps past finish.
+	var track := HeatTrack.usa_simplified(1)
+	var mid := track.next_landmark(10)
+	assert_eq(str(mid["kind"]), "corner")
+	assert_eq(int(mid["distance"]), 1) # next corner at 11
+	var last_sector := track.next_landmark(22)
+	assert_eq(str(last_sector["kind"]), "finish")
+	assert_eq(int(last_sector["distance"]), 2) # finish at 24
+	# Multi-lap: same space mid-race still points at the next corner, not finish.
+	var two_laps := HeatTrack.usa_simplified(2)
+	var first_lap_end := two_laps.next_landmark(22)
+	assert_eq(str(first_lap_end["kind"]), "corner")
+	assert_eq(int(first_lap_end["distance"]), 7) # wrap to corner 5
+	var final_sector := two_laps.next_landmark(46)
+	assert_eq(str(final_sector["kind"]), "finish")
+	assert_eq(int(final_sector["distance"]), 2) # finish at 48

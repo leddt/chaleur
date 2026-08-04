@@ -43,7 +43,7 @@ func ensure_chosen_gear(player: PlayerState) -> void:
 
 
 func set_empty() -> void:
-	_corner_dist.text = "Distance au prochain virage: —"
+	_corner_dist.text = "Distance: —"
 	_heat_value.text = "—"
 	_draw_value.text = "—"
 	_discard_value.text = "—"
@@ -55,11 +55,17 @@ func refresh(engine: HeatGameEngine, viewer: PlayerState) -> void:
 	if engine == null or viewer == null:
 		set_empty()
 		return
-	var dist := engine.track.distance_to_next_corner(viewer.progress)
-	if viewer.finished or dist < 0:
-		_corner_dist.text = "Distance au prochain virage: —"
+	if viewer.finished:
+		_corner_dist.text = "Distance: —"
 	else:
-		_corner_dist.text = "Distance au prochain virage: %d" % dist
+		var landmark := engine.track.next_landmark(viewer.progress)
+		match str(landmark.get("kind", "none")):
+			"finish":
+				_corner_dist.text = "Distance à l'arrivée: %d" % int(landmark["distance"])
+			"corner":
+				_corner_dist.text = "Distance au prochain virage: %d" % int(landmark["distance"])
+			_:
+				_corner_dist.text = "Distance: —"
 	_heat_value.text = str(viewer.engine_heat())
 	_draw_value.text = str(viewer.draw_pile.size())
 	_discard_value.text = str(viewer.discard.size())

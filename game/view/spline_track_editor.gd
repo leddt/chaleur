@@ -26,19 +26,20 @@ const MAX_VIEW_ZOOM := 4.0
 const VIEW_ZOOM_STEP := 1.12
 
 @onready var _canvas: Control = %Canvas
-@onready var _status: Label = %StatusLabel
-@onready var _info: Label = %InfoLabel
-@onready var _hint: Label = %Hint
-@onready var _mode_option: OptionButton = %ModeOption
-@onready var _type_label: Label = %TypeLabel
-@onready var _type_option: OptionButton = %TypeOption
-@onready var _algo_label: Label = %AlgoLabel
-@onready var _algo_option: OptionButton = %AlgoOption
-@onready var _len_label: Label = %LenLabel
+@onready var _summary: Label = %SummaryLabel
+@onready var _mode_trace: Button = %ModeTrace
+@onready var _mode_spaces: Button = %ModeSpaces
+@onready var _trace_section: Control = %TraceSection
+@onready var _spaces_section: Control = %SpacesSection
+@onready var _type_auto: BaseButton = %TypeAuto
+@onready var _type_tension: BaseButton = %TypeTension
+@onready var _type_free: BaseButton = %TypeFree
+@onready var _algo_center: BaseButton = %AlgoCenter
+@onready var _algo_inner: BaseButton = %AlgoInner
+@onready var _algo_adaptive: BaseButton = %AlgoAdaptive
 @onready var _space_len_slider: HSlider = %SpaceLenSlider
 @onready var _space_len_value: Label = %SpaceLenValue
 @onready var _set_start_button: Button = %SetStartButton
-@onready var _corner_speed_label: Label = %CornerSpeedLabel
 @onready var _corner_speed_spin: SpinBox = %CornerSpeedSpin
 @onready var _set_corner_button: Button = %SetCornerButton
 
@@ -73,12 +74,8 @@ func _ready() -> void:
 	_canvas.resized.connect(_on_canvas_resized)
 	%BackButton.pressed.connect(_on_back)
 	%ResetButton.pressed.connect(_on_reset)
-	_type_option.clear()
-	_type_option.add_item("Auto", TrackSpline.PointType.AUTO_SMOOTH)
-	_type_option.add_item("Tension", TrackSpline.PointType.TENSION)
-	_type_option.add_item("Libre", TrackSpline.PointType.FREE)
-	_type_option.item_selected.connect(_on_type_option_selected)
 	_setup_mode_ui()
+	_setup_type_ui()
 	_setup_segmentation_ui()
 	_set_start_button.pressed.connect(_on_set_start_pressed)
 	_setup_corner_ui()
@@ -89,19 +86,43 @@ func _ready() -> void:
 
 
 func _setup_mode_ui() -> void:
-	_mode_option.clear()
-	_mode_option.add_item("Tracé", EditMode.TRACE)
-	_mode_option.add_item("Cases", EditMode.SPACES)
-	_updating_mode_ui = true
-	_mode_option.select(_mode_option.get_item_index(_edit_mode))
-	_updating_mode_ui = false
-	_mode_option.item_selected.connect(_on_mode_selected)
+	_mode_trace.toggled.connect(_on_mode_trace_toggled)
+	_mode_spaces.toggled.connect(_on_mode_spaces_toggled)
+	_sync_mode_buttons()
 
 
-func _on_mode_selected(item_index: int) -> void:
-	if _updating_mode_ui:
+func _on_mode_trace_toggled(pressed: bool) -> void:
+	if _updating_mode_ui or not pressed:
 		return
-	_set_edit_mode(_mode_option.get_item_id(item_index))
+	_set_edit_mode(EditMode.TRACE)
+
+
+func _on_mode_spaces_toggled(pressed: bool) -> void:
+	if _updating_mode_ui or not pressed:
+		return
+	_set_edit_mode(EditMode.SPACES)
+
+
+func _sync_mode_buttons() -> void:
+	_updating_mode_ui = true
+	_mode_trace.button_pressed = _edit_mode == EditMode.TRACE
+	_mode_spaces.button_pressed = _edit_mode == EditMode.SPACES
+	_updating_mode_ui = false
+
+
+func _setup_type_ui() -> void:
+	_type_auto.toggled.connect(func(pressed: bool) -> void:
+		if pressed:
+			_on_type_radio(TrackSpline.PointType.AUTO_SMOOTH)
+	)
+	_type_tension.toggled.connect(func(pressed: bool) -> void:
+		if pressed:
+			_on_type_radio(TrackSpline.PointType.TENSION)
+	)
+	_type_free.toggled.connect(func(pressed: bool) -> void:
+		if pressed:
+			_on_type_radio(TrackSpline.PointType.FREE)
+	)
 
 
 func _set_edit_mode(mode: int) -> void:
@@ -109,6 +130,7 @@ func _set_edit_mode(mode: int) -> void:
 		return
 	_edit_mode = mode
 	_drag_mode = ""
+	_sync_mode_buttons()
 	_apply_edit_mode()
 	_refresh_info()
 	_canvas.queue_redraw()
@@ -116,24 +138,10 @@ func _set_edit_mode(mode: int) -> void:
 
 func _apply_edit_mode() -> void:
 	var trace := _edit_mode == EditMode.TRACE
-	_type_label.visible = trace
-	_type_option.visible = trace
-	# Segmentation controls stay available in both modes for now.
-	_algo_label.visible = true
-	_algo_option.visible = true
-	_len_label.visible = true
-	_space_len_slider.visible = true
-	_space_len_value.visible = true
-	_set_start_button.visible = not trace
-	_corner_speed_label.visible = not trace
-	_corner_speed_spin.visible = not trace
-	_set_corner_button.visible = not trace
+	_trace_section.visible = trace
+	_spaces_section.visible = not trace
 	_refresh_set_start_button()
 	_refresh_corner_ui()
-	if trace:
-		_hint.text = "Mode tracé — clic près de la courbe : ajouter. Clic droit : supprimer. Double-clic : type. Touches 1/2/3 : type. Molette : zoom. Molette milieu : pan. Ctrl+molette : tension."
-	else:
-		_hint.text = "Mode cases — sélectionner une case. Départ (ligne rouge précédente). Virage + vitesse max (ligne verte suivante). Molette : zoom. Molette milieu : pan."
 
 
 func _setup_segmentation_ui() -> void:
@@ -141,27 +149,25 @@ func _setup_segmentation_ui() -> void:
 	_seg_params.algorithm = TrackSegmenter.Algorithm.INNER_UNIFORM
 	_seg_params.car_length = 36.0
 	_seg_params.target_space_len = 36.0
-	_algo_option.clear()
-	_algo_option.add_item(
-		TrackSegmenter.algorithm_name(TrackSegmenter.Algorithm.CENTER_UNIFORM),
-		TrackSegmenter.Algorithm.CENTER_UNIFORM
+	_algo_center.toggled.connect(func(pressed: bool) -> void:
+		if pressed:
+			_on_algo_radio(TrackSegmenter.Algorithm.CENTER_UNIFORM)
 	)
-	_algo_option.add_item(
-		TrackSegmenter.algorithm_name(TrackSegmenter.Algorithm.INNER_UNIFORM),
-		TrackSegmenter.Algorithm.INNER_UNIFORM
+	_algo_inner.toggled.connect(func(pressed: bool) -> void:
+		if pressed:
+			_on_algo_radio(TrackSegmenter.Algorithm.INNER_UNIFORM)
 	)
-	_algo_option.add_item(
-		TrackSegmenter.algorithm_name(TrackSegmenter.Algorithm.ADAPTIVE_INNER),
-		TrackSegmenter.Algorithm.ADAPTIVE_INNER
+	_algo_adaptive.toggled.connect(func(pressed: bool) -> void:
+		if pressed:
+			_on_algo_radio(TrackSegmenter.Algorithm.ADAPTIVE_INNER)
 	)
-	_updating_seg_ui = true
-	_algo_option.select(_algo_option.get_item_index(_seg_params.algorithm))
 	_space_len_slider.min_value = 20.0
 	_space_len_slider.max_value = 80.0
 	_space_len_slider.step = 1.0
+	_updating_seg_ui = true
+	_sync_algo_radios()
 	_space_len_slider.value = _seg_params.car_length
 	_updating_seg_ui = false
-	_algo_option.item_selected.connect(_on_algo_selected)
 	_space_len_slider.value_changed.connect(_on_space_len_changed)
 	_refresh_space_len_label()
 
@@ -174,6 +180,31 @@ func _setup_corner_ui() -> void:
 	_corner_speed_spin.value = 4.0
 	_set_corner_button.pressed.connect(_on_set_corner_pressed)
 	_corner_speed_spin.value_changed.connect(_on_corner_speed_changed)
+
+
+func _on_algo_radio(algorithm: int) -> void:
+	if _updating_seg_ui:
+		return
+	if _seg_params.algorithm == algorithm:
+		return
+	_seg_params.algorithm = algorithm
+	_recompute_segmentation()
+	_refresh_status()
+	_refresh_info()
+	_canvas.queue_redraw()
+
+
+func _sync_algo_radios() -> void:
+	var was := _updating_seg_ui
+	_updating_seg_ui = true
+	match _seg_params.algorithm:
+		TrackSegmenter.Algorithm.CENTER_UNIFORM:
+			_algo_center.button_pressed = true
+		TrackSegmenter.Algorithm.ADAPTIVE_INNER:
+			_algo_adaptive.button_pressed = true
+		_:
+			_algo_inner.button_pressed = true
+	_updating_seg_ui = was
 
 
 func _on_corner_speed_changed(value: float) -> void:
@@ -221,7 +252,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _reset_spline() -> void:
 	if not _canvas_ready_for_spline():
 		_spline_ready = false
-		_status.text = "En attente du canvas…"
+		_refresh_summary()
 		return
 	var center := _canvas.size * 0.5
 	var radius := mini(center.x, center.y) * 0.55
@@ -248,16 +279,6 @@ func _on_back() -> void:
 	get_tree().change_scene_to_file("res://ui/main_menu.tscn")
 
 
-func _on_algo_selected(item_index: int) -> void:
-	if _updating_seg_ui:
-		return
-	_seg_params.algorithm = _algo_option.get_item_id(item_index)
-	_recompute_segmentation()
-	_refresh_status()
-	_refresh_info()
-	_canvas.queue_redraw()
-
-
 func _on_space_len_changed(value: float) -> void:
 	if _updating_seg_ui:
 		return
@@ -277,10 +298,12 @@ func _refresh_space_len_label() -> void:
 func _recompute_segmentation() -> void:
 	if _spline == null:
 		_seg_result = null
+		_refresh_summary()
 		return
 	_seg_params.road_half_width = ROAD_HALF_WIDTH
 	_seg_result = TrackSegmenter.segment(_spline, _seg_params)
 	_clamp_space_indices()
+	_refresh_summary()
 
 
 func _clamp_space_indices() -> void:
@@ -359,10 +382,10 @@ func _refresh_corner_ui() -> void:
 		_set_corner_button.text = "Virage"
 
 
-func _on_type_option_selected(item_index: int) -> void:
+func _on_type_radio(type: int) -> void:
 	if _updating_type_ui or _spline == null:
 		return
-	_set_selected_type(_type_option.get_item_id(item_index))
+	_set_selected_type(type)
 
 
 func _set_selected_type(type: int) -> void:
@@ -370,7 +393,7 @@ func _set_selected_type(type: int) -> void:
 		return
 	var cp := _spline.get_point(_selected)
 	if cp.type == type:
-		_sync_type_option()
+		_sync_type_radios()
 		return
 	_spline.set_point_type(_selected, type)
 	_dirty = true
@@ -379,67 +402,41 @@ func _set_selected_type(type: int) -> void:
 	_canvas.queue_redraw()
 
 
-func _sync_type_option() -> void:
+func _sync_type_radios() -> void:
 	if _spline == null or _spline.point_count() == 0:
 		return
 	_updating_type_ui = true
-	var type := _spline.get_point(_selected).type
-	var idx := _type_option.get_item_index(type)
-	if idx >= 0:
-		_type_option.select(idx)
+	match _spline.get_point(_selected).type:
+		TrackSpline.PointType.TENSION:
+			_type_tension.button_pressed = true
+		TrackSpline.PointType.FREE:
+			_type_free.button_pressed = true
+		_:
+			_type_auto.button_pressed = true
 	_updating_type_ui = false
 
 
-func _refresh_status() -> void:
-	if _spline == null:
-		_status.text = ""
-		return
+func _refresh_summary() -> void:
 	var spaces := 0 if _seg_result == null else _seg_result.space_count()
-	var algo := "" if _seg_result == null else TrackSegmenter.algorithm_name(_seg_result.algorithm)
-	_status.text = "Courbe fermée · %d points · %d cases (%s)" % [
-		_spline.point_count(), spaces, algo
-	]
+	_summary.text = "%d cases · %d virages" % [spaces, _corners.size()]
+
+
+func _refresh_status() -> void:
+	_refresh_summary()
 
 
 func _refresh_info() -> void:
-	if _spline == null or _spline.point_count() == 0:
-		_info.text = ""
-		return
 	if _edit_mode == EditMode.SPACES:
-		var spaces := 0 if _seg_result == null else _seg_result.space_count()
-		var sel_txt := "aucune"
-		if _selected_space >= 0 and spaces > 0:
-			sel_txt = "#%d" % _display_space_number(_selected_space)
-			if _selected_space == _start_space_index:
-				sel_txt += " (départ)"
-			if _corners.has(_selected_space):
-				sel_txt += " (virage <%d)" % int(_corners[_selected_space])
-		_info.text = "Mode cases · %d cases · %d virages · sélection %s · %s · longueur %.0f px" % [
-			spaces,
-			_corners.size(),
-			sel_txt,
-			TrackSegmenter.algorithm_name(_seg_params.algorithm),
-			_seg_params.car_length,
-		]
 		_refresh_set_start_button()
 		_refresh_corner_ui()
+		_refresh_summary()
+		return
+	if _spline == null or _spline.point_count() == 0:
+		_refresh_summary()
 		return
 	_selected = clampi(_selected, 0, _spline.point_count() - 1)
-	var cp := _spline.get_point(_selected)
-	var dirty := " *" if _dirty else ""
-	var extra := ""
-	if cp.type == TrackSpline.PointType.TENSION:
-		extra = "  tension %.2f" % cp.tension
-	_info.text = "Point %d/%d%s  %s  pos (%.0f, %.0f)%s" % [
-		_selected + 1,
-		_spline.point_count(),
-		dirty,
-		TrackSpline.type_name(cp.type),
-		cp.position.x,
-		cp.position.y,
-		extra,
-	]
-	_sync_type_option()
+	_sync_type_radios()
+	_refresh_summary()
 
 
 func _on_canvas_draw() -> void:
@@ -864,7 +861,6 @@ func _try_remove_at(pos: Vector2) -> void:
 	if best < 0:
 		return
 	if not _spline.remove_point(best):
-		_status.text = "Minimum %d points" % TrackSpline.MIN_POINTS
 		return
 	if _selected >= _spline.point_count():
 		_selected = _spline.point_count() - 1

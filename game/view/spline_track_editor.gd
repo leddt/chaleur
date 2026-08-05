@@ -2,6 +2,11 @@ extends Control
 
 ## Interactive editor for a closed TrackSpline (per-point Bezier types).
 
+enum EditMode {
+	TRACE, ## Edit control points / spline shape.
+	SPACES, ## Inspect / tune space segmentation.
+}
+
 const HANDLE_HIT_RADIUS := 12.0
 const POINT_HIT_RADIUS := 14.0
 const CURVE_HIT_RADIUS := 14.0
@@ -11,18 +16,38 @@ const ROAD_HALF_WIDTH := 28.0
 const ASPHALT_COLOR := Color(0.28, 0.29, 0.31, 1.0)
 const ASPHALT_EDGE_COLOR := Color(0.18, 0.19, 0.21, 1.0)
 const CENTERLINE_COLOR := Color(0.95, 0.95, 0.97, 1.0)
+const SPACE_EDGE_COLOR := Color(0.05, 0.05, 0.06, 0.95)
+const START_LINE_COLOR := Color(0.9, 0.15, 0.12, 1.0)
+const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.22)
 
 @onready var _canvas: Control = %Canvas
 @onready var _status: Label = %StatusLabel
 @onready var _info: Label = %InfoLabel
+@onready var _hint: Label = %Hint
+@onready var _mode_option: OptionButton = %ModeOption
+@onready var _type_label: Label = %TypeLabel
 @onready var _type_option: OptionButton = %TypeOption
+@onready var _algo_label: Label = %AlgoLabel
+@onready var _algo_option: OptionButton = %AlgoOption
+@onready var _len_label: Label = %LenLabel
+@onready var _space_len_slider: HSlider = %SpaceLenSlider
+@onready var _space_len_value: Label = %SpaceLenValue
+@onready var _set_start_button: Button = %SetStartButton
 
 var _spline: TrackSpline
 var _selected: int = 0
 var _drag_mode: String = "" ## "", "point", "out_handle", "in_handle"
 var _dirty: bool = false
 var _updating_type_ui: bool = false
+var _updating_seg_ui: bool = false
+var _updating_mode_ui: bool = false
 var _spline_ready: bool = false
+var _edit_mode: int = EditMode.TRACE
+var _seg_params: TrackSegmenter.Params = TrackSegmenter.Params.new()
+var _seg_result: TrackSegmenter.Result
+## Index of the start space (display number 1). The red line is its preceding frontier.
+var _start_space_index: int = 0
+var _selected_space: int = -1
 
 
 func _ready() -> void:
@@ -36,8 +61,86 @@ func _ready() -> void:
 	_type_option.add_item("Tension", TrackSpline.PointType.TENSION)
 	_type_option.add_item("Libre", TrackSpline.PointType.FREE)
 	_type_option.item_selected.connect(_on_type_option_selected)
+	_setup_mode_ui()
+	_setup_segmentation_ui()
+	_set_start_button.pressed.connect(_on_set_start_pressed)
+	_apply_edit_mode()
 	# Layout may still report 0-height here — wait for a usable canvas size.
 	call_deferred("_try_init_spline")
+
+
+func _setup_mode_ui() -> void:
+	_mode_option.clear()
+	_mode_option.add_item("Tracé", EditMode.TRACE)
+	_mode_option.add_item("Cases", EditMode.SPACES)
+	_updating_mode_ui = true
+	_mode_option.select(_mode_option.get_item_index(_edit_mode))
+	_updating_mode_ui = false
+	_mode_option.item_selected.connect(_on_mode_selected)
+
+
+func _on_mode_selected(item_index: int) -> void:
+	if _updating_mode_ui:
+		return
+	_set_edit_mode(_mode_option.get_item_id(item_index))
+
+
+func _set_edit_mode(mode: int) -> void:
+	if _edit_mode == mode:
+		return
+	_edit_mode = mode
+	_drag_mode = ""
+	_apply_edit_mode()
+	_refresh_info()
+	_canvas.queue_redraw()
+
+
+func _apply_edit_mode() -> void:
+	var trace := _edit_mode == EditMode.TRACE
+	_type_label.visible = trace
+	_type_option.visible = trace
+	# Segmentation controls stay available in both modes for now.
+	_algo_label.visible = true
+	_algo_option.visible = true
+	_len_label.visible = true
+	_space_len_slider.visible = true
+	_space_len_value.visible = true
+	_set_start_button.visible = not trace
+	_refresh_set_start_button()
+	if trace:
+		_hint.text = "Mode tracé — clic près de la courbe : ajouter. Clic droit : supprimer. Double-clic : type. Touches 1/2/3 : type du point."
+	else:
+		_hint.text = "Mode cases — clic pour sélectionner une case. « Case de départ » : la ligne qui la précède devient rouge ; la numérotation repart à 1."
+
+
+func _setup_segmentation_ui() -> void:
+	_seg_params.road_half_width = ROAD_HALF_WIDTH
+	_seg_params.algorithm = TrackSegmenter.Algorithm.INNER_UNIFORM
+	_seg_params.car_length = 36.0
+	_seg_params.target_space_len = 36.0
+	_algo_option.clear()
+	_algo_option.add_item(
+		TrackSegmenter.algorithm_name(TrackSegmenter.Algorithm.CENTER_UNIFORM),
+		TrackSegmenter.Algorithm.CENTER_UNIFORM
+	)
+	_algo_option.add_item(
+		TrackSegmenter.algorithm_name(TrackSegmenter.Algorithm.INNER_UNIFORM),
+		TrackSegmenter.Algorithm.INNER_UNIFORM
+	)
+	_algo_option.add_item(
+		TrackSegmenter.algorithm_name(TrackSegmenter.Algorithm.ADAPTIVE_INNER),
+		TrackSegmenter.Algorithm.ADAPTIVE_INNER
+	)
+	_updating_seg_ui = true
+	_algo_option.select(_algo_option.get_item_index(_seg_params.algorithm))
+	_space_len_slider.min_value = 20.0
+	_space_len_slider.max_value = 80.0
+	_space_len_slider.step = 1.0
+	_space_len_slider.value = _seg_params.car_length
+	_updating_seg_ui = false
+	_algo_option.item_selected.connect(_on_algo_selected)
+	_space_len_slider.value_changed.connect(_on_space_len_changed)
+	_refresh_space_len_label()
 
 
 func _on_canvas_resized() -> void:
@@ -56,7 +159,7 @@ func _try_init_spline() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _spline == null:
+	if _spline == null or _edit_mode != EditMode.TRACE:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
@@ -80,10 +183,14 @@ func _reset_spline() -> void:
 	var radius := mini(center.x, center.y) * 0.55
 	_spline = TrackSpline.make_default_triangle(center, radius)
 	_selected = 0
+	_selected_space = -1
+	_start_space_index = 0
 	_dirty = false
 	_spline_ready = true
+	_recompute_segmentation()
 	_refresh_status()
 	_refresh_info()
+	_refresh_set_start_button()
 	_canvas.queue_redraw()
 
 
@@ -94,6 +201,78 @@ func _on_reset() -> void:
 
 func _on_back() -> void:
 	get_tree().change_scene_to_file("res://ui/main_menu.tscn")
+
+
+func _on_algo_selected(item_index: int) -> void:
+	if _updating_seg_ui:
+		return
+	_seg_params.algorithm = _algo_option.get_item_id(item_index)
+	_recompute_segmentation()
+	_refresh_status()
+	_refresh_info()
+	_canvas.queue_redraw()
+
+
+func _on_space_len_changed(value: float) -> void:
+	if _updating_seg_ui:
+		return
+	_seg_params.car_length = value
+	_seg_params.target_space_len = value
+	_refresh_space_len_label()
+	_recompute_segmentation()
+	_refresh_status()
+	_refresh_info()
+	_canvas.queue_redraw()
+
+
+func _refresh_space_len_label() -> void:
+	_space_len_value.text = "%d px" % int(_space_len_slider.value)
+
+
+func _recompute_segmentation() -> void:
+	if _spline == null:
+		_seg_result = null
+		return
+	_seg_params.road_half_width = ROAD_HALF_WIDTH
+	_seg_result = TrackSegmenter.segment(_spline, _seg_params)
+	_clamp_space_indices()
+
+
+func _clamp_space_indices() -> void:
+	if _seg_result == null or _seg_result.space_count() == 0:
+		_start_space_index = 0
+		_selected_space = -1
+		return
+	var n := _seg_result.space_count()
+	_start_space_index = posmod(_start_space_index, n)
+	if _selected_space >= n:
+		_selected_space = -1
+
+
+func _on_set_start_pressed() -> void:
+	if _selected_space < 0 or _seg_result == null:
+		return
+	_start_space_index = _selected_space
+	_dirty = true
+	_refresh_info()
+	_refresh_set_start_button()
+	_canvas.queue_redraw()
+
+
+func _refresh_set_start_button() -> void:
+	if _set_start_button == null:
+		return
+	var can_set := (
+		_edit_mode == EditMode.SPACES
+		and _selected_space >= 0
+		and _seg_result != null
+		and _selected_space != _start_space_index
+	)
+	_set_start_button.disabled = not can_set
+	if _selected_space >= 0 and _selected_space == _start_space_index:
+		_set_start_button.text = "Départ ✓"
+	else:
+		_set_start_button.text = "Case de départ"
 
 
 func _on_type_option_selected(item_index: int) -> void:
@@ -131,12 +310,31 @@ func _refresh_status() -> void:
 	if _spline == null:
 		_status.text = ""
 		return
-	_status.text = "Courbe fermée · %d points" % _spline.point_count()
+	var spaces := 0 if _seg_result == null else _seg_result.space_count()
+	var algo := "" if _seg_result == null else TrackSegmenter.algorithm_name(_seg_result.algorithm)
+	_status.text = "Courbe fermée · %d points · %d cases (%s)" % [
+		_spline.point_count(), spaces, algo
+	]
 
 
 func _refresh_info() -> void:
 	if _spline == null or _spline.point_count() == 0:
 		_info.text = ""
+		return
+	if _edit_mode == EditMode.SPACES:
+		var spaces := 0 if _seg_result == null else _seg_result.space_count()
+		var sel_txt := "aucune"
+		if _selected_space >= 0 and spaces > 0:
+			sel_txt = "#%d" % _display_space_number(_selected_space)
+			if _selected_space == _start_space_index:
+				sel_txt += " (départ)"
+		_info.text = "Mode cases · %d cases · ligne rouge = avant case #1 · sélection %s · %s · longueur %.0f px" % [
+			spaces,
+			sel_txt,
+			TrackSegmenter.algorithm_name(_seg_params.algorithm),
+			_seg_params.car_length,
+		]
+		_refresh_set_start_button()
 		return
 	_selected = clampi(_selected, 0, _spline.point_count() - 1)
 	var cp := _spline.get_point(_selected)
@@ -159,6 +357,7 @@ func _refresh_info() -> void:
 func _on_canvas_draw() -> void:
 	if _spline == null:
 		return
+	_recompute_segmentation()
 	var font := ThemeDB.fallback_font
 	# Soft grid
 	var step := 40.0
@@ -175,7 +374,14 @@ func _on_canvas_draw() -> void:
 	var baked := _spline.baked_points()
 	if baked.size() >= 2:
 		_draw_road(baked)
+		_draw_spaces()
+		_draw_centerline(baked)
 
+	if _edit_mode == EditMode.TRACE:
+		_draw_control_points(font)
+
+
+func _draw_control_points(font: Font) -> void:
 	for i in _spline.point_count():
 		var cp := _spline.get_point(i)
 		var selected := i == _selected
@@ -205,6 +411,60 @@ func _on_canvas_draw() -> void:
 		)
 
 
+func _draw_spaces() -> void:
+	if _seg_result == null or _seg_result.space_count() < 2:
+		return
+	var font := ThemeDB.fallback_font
+	var n := _seg_result.space_count()
+	# Selection fill under separators.
+	if _selected_space >= 0 and _edit_mode == EditMode.SPACES:
+		var quad := _space_quad(_selected_space)
+		if quad.size() >= 3:
+			_canvas.draw_colored_polygon(quad, SPACE_SELECTED_COLOR)
+	for i in n:
+		var a: TrackSegmenter.Frontier = _seg_result.frontiers[i]
+		var inner_edge := a.center + a.inside_normal * ROAD_HALF_WIDTH
+		var outer_edge := a.center - a.inside_normal * ROAD_HALF_WIDTH
+		var is_start_line := i == _start_space_index
+		var col := START_LINE_COLOR if is_start_line else SPACE_EDGE_COLOR
+		var width := 3.5 if is_start_line else 2.0
+		_canvas.draw_line(inner_edge, outer_edge, col, width)
+		# Label the space that begins after this frontier (display number from start).
+		var label_pos := a.center + a.inside_normal * 12.0
+		# Nudge label into the space (halfway toward next frontier).
+		var b: TrackSegmenter.Frontier = _seg_result.frontiers[(i + 1) % n]
+		label_pos = a.center.lerp(b.center, 0.35) + a.inside_normal * 10.0
+		_canvas.draw_string(
+			font,
+			label_pos,
+			str(_display_space_number(i)),
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			11,
+			Color(1, 1, 1, 0.7)
+		)
+
+
+func _display_space_number(space_index: int) -> int:
+	if _seg_result == null or _seg_result.space_count() == 0:
+		return space_index + 1
+	var n := _seg_result.space_count()
+	return posmod(space_index - _start_space_index, n) + 1
+
+
+func _space_quad(space_index: int) -> PackedVector2Array:
+	if _seg_result == null or _seg_result.space_count() < 2:
+		return PackedVector2Array()
+	var n := _seg_result.space_count()
+	var a: TrackSegmenter.Frontier = _seg_result.frontiers[posmod(space_index, n)]
+	var b: TrackSegmenter.Frontier = _seg_result.frontiers[posmod(space_index + 1, n)]
+	var a_in := a.center + a.inside_normal * ROAD_HALF_WIDTH
+	var a_out := a.center - a.inside_normal * ROAD_HALF_WIDTH
+	var b_in := b.center + b.inside_normal * ROAD_HALF_WIDTH
+	var b_out := b.center - b.inside_normal * ROAD_HALF_WIDTH
+	return PackedVector2Array([a_in, b_in, b_out, a_out])
+
+
 func _draw_road(baked: PackedVector2Array) -> void:
 	var pts := _unique_loop_points(baked)
 	if pts.size() < 3:
@@ -220,6 +480,17 @@ func _draw_road(baked: PackedVector2Array) -> void:
 	var edge_r := ROAD_HALF_WIDTH + 1.5
 	_stroke_closed_band(pts, loop, edge_r, ASPHALT_EDGE_COLOR)
 	_stroke_closed_band(pts, loop, ROAD_HALF_WIDTH, ASPHALT_COLOR)
+
+
+func _draw_centerline(baked: PackedVector2Array) -> void:
+	var pts := _unique_loop_points(baked)
+	if pts.size() < 3:
+		return
+	var loop := PackedVector2Array()
+	loop.resize(pts.size() + 1)
+	for i in pts.size():
+		loop[i] = pts[i]
+	loop[pts.size()] = pts[0]
 	_canvas.draw_polyline(loop, CENTERLINE_COLOR, 2.0, true)
 
 
@@ -267,6 +538,9 @@ func _type_letter(type: int) -> String:
 func _on_canvas_gui_input(event: InputEvent) -> void:
 	if _spline == null:
 		return
+	if _edit_mode == EditMode.SPACES:
+		_on_spaces_gui_input(event)
+		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
@@ -285,6 +559,44 @@ func _on_canvas_gui_input(event: InputEvent) -> void:
 			_nudge_tension(-0.05)
 	elif event is InputEventMouseMotion and _drag_mode != "":
 		_continue_drag((event as InputEventMouseMotion).position)
+
+
+func _on_spaces_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			var idx := _space_index_at(mb.position)
+			_selected_space = idx
+			_refresh_info()
+			_refresh_set_start_button()
+			_canvas.queue_redraw()
+
+
+func _space_index_at(pos: Vector2) -> int:
+	if _seg_result == null or _seg_result.space_count() < 2:
+		return -1
+	var n := _seg_result.space_count()
+	for i in n:
+		var quad := _space_quad(i)
+		if quad.size() >= 3 and Geometry2D.is_point_in_polygon(pos, quad):
+			return i
+	# Fallback: nearest frontier center.
+	var best := -1
+	var best_d := INF
+	for i in n:
+		var fr: TrackSegmenter.Frontier = _seg_result.frontiers[i]
+		var mid := fr.center.lerp(
+			(_seg_result.frontiers[(i + 1) % n] as TrackSegmenter.Frontier).center,
+			0.5
+		)
+		var d := pos.distance_squared_to(mid)
+		if d < best_d:
+			best_d = d
+			best = i
+	# Only accept if reasonably close to the road.
+	if best >= 0 and sqrt(best_d) <= ROAD_HALF_WIDTH * 2.5:
+		return best
+	return -1
 
 
 func _begin_left(pos: Vector2) -> void:

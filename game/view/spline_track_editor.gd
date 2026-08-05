@@ -21,6 +21,9 @@ const SPACE_EDGE_COLOR := Color(0.05, 0.05, 0.06, 0.95)
 const START_LINE_COLOR := Color(0.9, 0.15, 0.12, 1.0)
 const CORNER_LINE_COLOR := Color(0.2, 0.85, 0.35, 1.0)
 const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.22)
+const MIN_VIEW_ZOOM := 0.25
+const MAX_VIEW_ZOOM := 4.0
+const VIEW_ZOOM_STEP := 1.12
 
 @onready var _canvas: Control = %Canvas
 @onready var _status: Label = %StatusLabel
@@ -58,6 +61,10 @@ var _selected_space: int = -1
 var _corners: Dictionary = {}
 var _cars_layer: Node2D
 var _preview_cars: Array = [] ## Array[CarToken] — one per spot (inner/outer).
+## View transform: screen = world * zoom + pan
+var _view_pan := Vector2.ZERO
+var _view_zoom := 1.0
+var _panning := false
 
 
 func _ready() -> void:
@@ -124,9 +131,9 @@ func _apply_edit_mode() -> void:
 	_refresh_set_start_button()
 	_refresh_corner_ui()
 	if trace:
-		_hint.text = "Mode tracé — clic près de la courbe : ajouter. Clic droit : supprimer. Double-clic : type. Touches 1/2/3 : type du point."
+		_hint.text = "Mode tracé — clic près de la courbe : ajouter. Clic droit : supprimer. Double-clic : type. Touches 1/2/3 : type. Molette : zoom. Molette milieu : pan. Ctrl+molette : tension."
 	else:
-		_hint.text = "Mode cases — sélectionner une case. Départ (ligne rouge précédente). Virage + vitesse max (ligne verte suivante)."
+		_hint.text = "Mode cases — sélectionner une case. Départ (ligne rouge précédente). Virage + vitesse max (ligne verte suivante). Molette : zoom. Molette milieu : pan."
 
 
 func _setup_segmentation_ui() -> void:
@@ -440,7 +447,7 @@ func _on_canvas_draw() -> void:
 		return
 	_recompute_segmentation()
 	var font := ThemeDB.fallback_font
-	# Soft grid
+	# Soft grid stays in screen space.
 	var step := 40.0
 	var grid_col := Color(1, 1, 1, 0.04)
 	var x := 0.0
@@ -451,6 +458,9 @@ func _on_canvas_draw() -> void:
 	while y < _canvas.size.y:
 		_canvas.draw_line(Vector2(0, y), Vector2(_canvas.size.x, y), grid_col, 1.0)
 		y += step
+
+	_canvas.draw_set_transform(_view_pan, 0.0, Vector2(_view_zoom, _view_zoom))
+	_apply_view_to_cars()
 
 	var baked := _spline.baked_points()
 	if baked.size() >= 2:
@@ -463,11 +473,69 @@ func _on_canvas_draw() -> void:
 	_sync_preview_cars()
 
 
+func _screen_to_world(screen: Vector2) -> Vector2:
+	return (screen - _view_pan) / _view_zoom
+
+
+func _hit_radius(screen_radius: float) -> float:
+	return screen_radius / _view_zoom
+
+
+func _apply_view_to_cars() -> void:
+	if _cars_layer == null:
+		return
+	_cars_layer.position = _view_pan
+	_cars_layer.scale = Vector2(_view_zoom, _view_zoom)
+
+
+func _zoom_at(screen_pos: Vector2, factor: float) -> void:
+	var new_zoom := clampf(_view_zoom * factor, MIN_VIEW_ZOOM, MAX_VIEW_ZOOM)
+	if is_equal_approx(new_zoom, _view_zoom):
+		return
+	_view_pan = screen_pos - (screen_pos - _view_pan) * (new_zoom / _view_zoom)
+	_view_zoom = new_zoom
+	_apply_view_to_cars()
+	_canvas.queue_redraw()
+
+
+## Shared view navigation (pan / zoom). Returns true if the event was consumed.
+func _handle_view_input(event: InputEvent) -> bool:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_MIDDLE:
+			_panning = mb.pressed
+			_canvas.accept_event()
+			return true
+		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
+			if mb.ctrl_pressed:
+				_nudge_tension(0.05)
+			else:
+				_zoom_at(mb.position, VIEW_ZOOM_STEP)
+			_canvas.accept_event()
+			return true
+		if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
+			if mb.ctrl_pressed:
+				_nudge_tension(-0.05)
+			else:
+				_zoom_at(mb.position, 1.0 / VIEW_ZOOM_STEP)
+			_canvas.accept_event()
+			return true
+	elif event is InputEventMouseMotion and _panning:
+		var mm := event as InputEventMouseMotion
+		_view_pan += mm.relative
+		_apply_view_to_cars()
+		_canvas.queue_redraw()
+		_canvas.accept_event()
+		return true
+	return false
+
+
 func _ensure_preview_cars() -> void:
 	if _cars_layer == null:
 		_cars_layer = Node2D.new()
 		_cars_layer.name = "PreviewCars"
 		_canvas.add_child(_cars_layer)
+		_apply_view_to_cars()
 	while _preview_cars.size() < 2:
 		var car := CAR_SCENE.instantiate() as CarToken
 		_cars_layer.add_child(car)
@@ -669,34 +737,33 @@ func _type_letter(type: int) -> String:
 func _on_canvas_gui_input(event: InputEvent) -> void:
 	if _spline == null:
 		return
+	if _handle_view_input(event):
+		return
 	if _edit_mode == EditMode.SPACES:
 		_on_spaces_gui_input(event)
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		var world := _screen_to_world(mb.position)
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
-				if mb.double_click and _try_cycle_type_at(mb.position):
+				if mb.double_click and _try_cycle_type_at(world):
 					pass
 				else:
-					_begin_left(mb.position)
+					_begin_left(world)
 			else:
 				_drag_mode = ""
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
-			_try_remove_at(mb.position)
-		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			_nudge_tension(0.05)
-		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			_nudge_tension(-0.05)
+			_try_remove_at(world)
 	elif event is InputEventMouseMotion and _drag_mode != "":
-		_continue_drag((event as InputEventMouseMotion).position)
+		_continue_drag(_screen_to_world((event as InputEventMouseMotion).position))
 
 
 func _on_spaces_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-			var idx := _space_index_at(mb.position)
+			var idx := _space_index_at(_screen_to_world(mb.position))
 			_selected_space = idx
 			_refresh_info()
 			_refresh_set_start_button()
@@ -716,7 +783,7 @@ func _begin_left(pos: Vector2) -> void:
 	if handle != "":
 		_drag_mode = handle
 		return
-	var best := _nearest_point(pos, POINT_HIT_RADIUS)
+	var best := _nearest_point(pos, _hit_radius(POINT_HIT_RADIUS))
 	if best >= 0:
 		_selected = best
 		_drag_mode = "point"
@@ -730,7 +797,7 @@ func _begin_left(pos: Vector2) -> void:
 
 
 func _try_cycle_type_at(pos: Vector2) -> bool:
-	var best := _nearest_point(pos, POINT_HIT_RADIUS)
+	var best := _nearest_point(pos, _hit_radius(POINT_HIT_RADIUS))
 	if best < 0:
 		return false
 	_selected = best
@@ -756,19 +823,20 @@ func _next_point_type(type: int) -> int:
 
 func _hit_editable_handle(index: int, pos: Vector2) -> String:
 	var cp := _spline.get_point(index)
+	var r := _hit_radius(HANDLE_HIT_RADIUS)
 	match cp.type:
 		TrackSpline.PointType.AUTO_SMOOTH:
 			return ""
 		TrackSpline.PointType.TENSION:
-			if pos.distance_to(_spline.out_handle_world(index)) <= HANDLE_HIT_RADIUS:
+			if pos.distance_to(_spline.out_handle_world(index)) <= r:
 				return "out_handle"
-			if pos.distance_to(_spline.in_handle_world(index)) <= HANDLE_HIT_RADIUS:
+			if pos.distance_to(_spline.in_handle_world(index)) <= r:
 				return "out_handle" # mirrored — either side adjusts tension
 			return ""
 		TrackSpline.PointType.FREE:
-			if pos.distance_to(_spline.out_handle_world(index)) <= HANDLE_HIT_RADIUS:
+			if pos.distance_to(_spline.out_handle_world(index)) <= r:
 				return "out_handle"
-			if pos.distance_to(_spline.in_handle_world(index)) <= HANDLE_HIT_RADIUS:
+			if pos.distance_to(_spline.in_handle_world(index)) <= r:
 				return "in_handle"
 			return ""
 		_:
@@ -777,7 +845,7 @@ func _hit_editable_handle(index: int, pos: Vector2) -> String:
 
 func _try_insert_at(pos: Vector2) -> bool:
 	var hit: Dictionary = _spline.closest_on_curve(pos)
-	if float(hit.distance) > CURVE_HIT_RADIUS:
+	if float(hit.distance) > _hit_radius(CURVE_HIT_RADIUS):
 		return false
 	var new_index := _spline.insert_point_near(pos)
 	if new_index < 0:
@@ -792,7 +860,7 @@ func _try_insert_at(pos: Vector2) -> bool:
 
 
 func _try_remove_at(pos: Vector2) -> void:
-	var best := _nearest_point(pos, POINT_HIT_RADIUS)
+	var best := _nearest_point(pos, _hit_radius(POINT_HIT_RADIUS))
 	if best < 0:
 		return
 	if not _spline.remove_point(best):

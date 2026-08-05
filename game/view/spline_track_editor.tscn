@@ -122,6 +122,29 @@ layout_mode = 2
 disabled = true
 text = "Case de départ"
 
+[node name="CornerSpeedLabel" type="Label" parent="Root/Toolbar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Vitesse"
+
+[node name="CornerSpeedSpin" type="SpinBox" parent="Root/Toolbar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(70, 0)
+min_value = 1.0
+max_value = 8.0
+value = 4.0
+rounded = true
+
+[node name="SetCornerButton" type="Button" parent="Root/Toolbar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+disabled = true
+text = "Virage"
+
 [node name="Hint" type="Label" parent="Root"]
 unique_name_in_owner = true
 layout_mode = 2

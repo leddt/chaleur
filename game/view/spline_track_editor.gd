@@ -19,6 +19,7 @@ const ASPHALT_EDGE_COLOR := Color(0.18, 0.19, 0.21, 1.0)
 const CENTERLINE_COLOR := Color(0.95, 0.95, 0.97, 1.0)
 const SPACE_EDGE_COLOR := Color(0.05, 0.05, 0.06, 0.95)
 const START_LINE_COLOR := Color(0.9, 0.15, 0.12, 1.0)
+const CORNER_LINE_COLOR := Color(0.2, 0.85, 0.35, 1.0)
 const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.22)
 
 @onready var _canvas: Control = %Canvas
@@ -34,6 +35,9 @@ const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.22)
 @onready var _space_len_slider: HSlider = %SpaceLenSlider
 @onready var _space_len_value: Label = %SpaceLenValue
 @onready var _set_start_button: Button = %SetStartButton
+@onready var _corner_speed_label: Label = %CornerSpeedLabel
+@onready var _corner_speed_spin: SpinBox = %CornerSpeedSpin
+@onready var _set_corner_button: Button = %SetCornerButton
 
 var _spline: TrackSpline
 var _selected: int = 0
@@ -42,6 +46,7 @@ var _dirty: bool = false
 var _updating_type_ui: bool = false
 var _updating_seg_ui: bool = false
 var _updating_mode_ui: bool = false
+var _updating_corner_ui: bool = false
 var _spline_ready: bool = false
 var _edit_mode: int = EditMode.TRACE
 var _seg_params: TrackSegmenter.Params = TrackSegmenter.Params.new()
@@ -49,6 +54,8 @@ var _seg_result: TrackSegmenter.Result
 ## Index of the start space (display number 1). The red line is its preceding frontier.
 var _start_space_index: int = 0
 var _selected_space: int = -1
+## space_index -> speed_limit (HeatCorner.from_space semantics).
+var _corners: Dictionary = {}
 var _cars_layer: Node2D
 var _preview_cars: Array = [] ## Array[CarToken] — one per spot (inner/outer).
 
@@ -67,6 +74,7 @@ func _ready() -> void:
 	_setup_mode_ui()
 	_setup_segmentation_ui()
 	_set_start_button.pressed.connect(_on_set_start_pressed)
+	_setup_corner_ui()
 	_apply_edit_mode()
 	_ensure_preview_cars()
 	# Layout may still report 0-height here — wait for a usable canvas size.
@@ -110,11 +118,15 @@ func _apply_edit_mode() -> void:
 	_space_len_slider.visible = true
 	_space_len_value.visible = true
 	_set_start_button.visible = not trace
+	_corner_speed_label.visible = not trace
+	_corner_speed_spin.visible = not trace
+	_set_corner_button.visible = not trace
 	_refresh_set_start_button()
+	_refresh_corner_ui()
 	if trace:
 		_hint.text = "Mode tracé — clic près de la courbe : ajouter. Clic droit : supprimer. Double-clic : type. Touches 1/2/3 : type du point."
 	else:
-		_hint.text = "Mode cases — clic pour sélectionner une case (aperçu des 2 voitures). « Case de départ » : ligne rouge précédente ; numérotation à partir de 1."
+		_hint.text = "Mode cases — sélectionner une case. Départ (ligne rouge précédente). Virage + vitesse max (ligne verte suivante)."
 
 
 func _setup_segmentation_ui() -> void:
@@ -145,6 +157,27 @@ func _setup_segmentation_ui() -> void:
 	_algo_option.item_selected.connect(_on_algo_selected)
 	_space_len_slider.value_changed.connect(_on_space_len_changed)
 	_refresh_space_len_label()
+
+
+func _setup_corner_ui() -> void:
+	_corner_speed_spin.min_value = 1.0
+	_corner_speed_spin.max_value = 8.0
+	_corner_speed_spin.step = 1.0
+	_corner_speed_spin.rounded = true
+	_corner_speed_spin.value = 4.0
+	_set_corner_button.pressed.connect(_on_set_corner_pressed)
+	_corner_speed_spin.value_changed.connect(_on_corner_speed_changed)
+
+
+func _on_corner_speed_changed(value: float) -> void:
+	if _updating_corner_ui:
+		return
+	if _selected_space < 0 or not _corners.has(_selected_space):
+		return
+	_corners[_selected_space] = int(value)
+	_dirty = true
+	_refresh_info()
+	_canvas.queue_redraw()
 
 
 func _on_canvas_resized() -> void:
@@ -189,6 +222,7 @@ func _reset_spline() -> void:
 	_selected = 0
 	_selected_space = -1
 	_start_space_index = 0
+	_corners.clear()
 	_dirty = false
 	_spline_ready = true
 	_recompute_segmentation()
@@ -246,11 +280,18 @@ func _clamp_space_indices() -> void:
 	if _seg_result == null or _seg_result.space_count() == 0:
 		_start_space_index = 0
 		_selected_space = -1
+		_corners.clear()
 		return
 	var n := _seg_result.space_count()
 	_start_space_index = posmod(_start_space_index, n)
 	if _selected_space >= n:
 		_selected_space = -1
+	var kept: Dictionary = {}
+	for key in _corners.keys():
+		var idx := int(key)
+		if idx >= 0 and idx < n:
+			kept[idx] = int(_corners[key])
+	_corners = kept
 
 
 func _on_set_start_pressed() -> void:
@@ -277,6 +318,38 @@ func _refresh_set_start_button() -> void:
 		_set_start_button.text = "Départ ✓"
 	else:
 		_set_start_button.text = "Case de départ"
+
+
+func _on_set_corner_pressed() -> void:
+	if _selected_space < 0 or _seg_result == null:
+		return
+	if _corners.has(_selected_space):
+		_corners.erase(_selected_space)
+	else:
+		_corners[_selected_space] = int(_corner_speed_spin.value)
+	_dirty = true
+	_refresh_info()
+	_refresh_corner_ui()
+	_canvas.queue_redraw()
+
+
+func _refresh_corner_ui() -> void:
+	if _set_corner_button == null:
+		return
+	var has_sel := (
+		_edit_mode == EditMode.SPACES
+		and _selected_space >= 0
+		and _seg_result != null
+	)
+	_set_corner_button.disabled = not has_sel
+	_corner_speed_spin.editable = has_sel
+	if has_sel and _corners.has(_selected_space):
+		_set_corner_button.text = "Retirer virage"
+		_updating_corner_ui = true
+		_corner_speed_spin.value = int(_corners[_selected_space])
+		_updating_corner_ui = false
+	else:
+		_set_corner_button.text = "Virage"
 
 
 func _on_type_option_selected(item_index: int) -> void:
@@ -332,13 +405,17 @@ func _refresh_info() -> void:
 			sel_txt = "#%d" % _display_space_number(_selected_space)
 			if _selected_space == _start_space_index:
 				sel_txt += " (départ)"
-		_info.text = "Mode cases · %d cases · ligne rouge = avant case #1 · sélection %s · %s · longueur %.0f px" % [
+			if _corners.has(_selected_space):
+				sel_txt += " (virage <%d)" % int(_corners[_selected_space])
+		_info.text = "Mode cases · %d cases · %d virages · sélection %s · %s · longueur %.0f px" % [
 			spaces,
+			_corners.size(),
 			sel_txt,
 			TrackSegmenter.algorithm_name(_seg_params.algorithm),
 			_seg_params.car_length,
 		]
 		_refresh_set_start_button()
+		_refresh_corner_ui()
 		return
 	_selected = clampi(_selected, 0, _spline.point_count() - 1)
 	var cp := _spline.get_point(_selected)
@@ -487,14 +564,34 @@ func _draw_spaces() -> void:
 		var inner_edge := a.center + a.inside_normal * ROAD_HALF_WIDTH
 		var outer_edge := a.center - a.inside_normal * ROAD_HALF_WIDTH
 		var is_start_line := i == _start_space_index
-		var col := START_LINE_COLOR if is_start_line else SPACE_EDGE_COLOR
-		var width := 3.5 if is_start_line else 2.0
+		# Line that follows space (i-1): exit of a corner space.
+		var space_before := posmod(i - 1, n)
+		var is_corner_exit := _corners.has(space_before)
+		var col := SPACE_EDGE_COLOR
+		var width := 2.0
+		if is_start_line:
+			col = START_LINE_COLOR
+			width = 3.5
+		elif is_corner_exit:
+			col = CORNER_LINE_COLOR
+			width = 3.5
 		_canvas.draw_line(inner_edge, outer_edge, col, width)
+		if is_corner_exit:
+			var limit := int(_corners[space_before])
+			# Outside the asphalt, near the green exit line.
+			var label_pos := outer_edge - a.inside_normal * 16.0
+			_canvas.draw_string(
+				font,
+				label_pos,
+				"<%d" % limit,
+				HORIZONTAL_ALIGNMENT_LEFT,
+				-1,
+				12,
+				CORNER_LINE_COLOR
+			)
 		# Label the space that begins after this frontier (display number from start).
-		var label_pos := a.center + a.inside_normal * 12.0
-		# Nudge label into the space (halfway toward next frontier).
 		var b: TrackSegmenter.Frontier = _seg_result.frontiers[(i + 1) % n]
-		label_pos = a.center.lerp(b.center, 0.35) + a.inside_normal * 10.0
+		var label_pos := a.center.lerp(b.center, 0.35) + a.inside_normal * 10.0
 		_canvas.draw_string(
 			font,
 			label_pos,
@@ -630,6 +727,7 @@ func _on_spaces_gui_input(event: InputEvent) -> void:
 			_selected_space = idx
 			_refresh_info()
 			_refresh_set_start_button()
+			_refresh_corner_ui()
 			_canvas.queue_redraw()
 
 

@@ -51,9 +51,195 @@ class Result:
 	var frontiers: Array = [] ## Array[Frontier]
 	var total_length: float = 0.0
 	var algorithm: int = Algorithm.INNER_UNIFORM
+	## Dense centerline samples used for ribbons / hit-tests (includes closing duplicate).
+	var samples: Array = []
 
 	func space_count() -> int:
 		return frontiers.size()
+
+
+	## Asphalt ribbon polygon for one space (follows the curve — OK in tight corners).
+	func space_ribbon(space_index: int, half_width: float) -> PackedVector2Array:
+		var pts := _space_centerline_samples(space_index)
+		if pts.size() < 2:
+			return PackedVector2Array()
+		var left := PackedVector2Array()
+		var right := PackedVector2Array()
+		left.resize(pts.size())
+		right.resize(pts.size())
+		for i in pts.size():
+			var s: Dictionary = pts[i]
+			var pos: Vector2 = s.pos
+			var inside: Vector2 = s.inside
+			left[i] = pos + inside * half_width
+			right[i] = pos - inside * half_width
+		var poly := PackedVector2Array()
+		poly.resize(pts.size() * 2)
+		for i in pts.size():
+			poly[i] = left[i]
+		for i in pts.size():
+			poly[pts.size() + i] = right[pts.size() - 1 - i]
+		return poly
+
+
+	## Space index under `world_pos`, or -1 if outside the asphalt band.
+	func space_at_world(world_pos: Vector2, half_width: float) -> int:
+		if frontiers.is_empty() or samples.is_empty() or total_length <= 0.0:
+			return -1
+		var best_i := 0
+		var best_d := INF
+		# Ignore closing duplicate when searching.
+		var n_samp := maxi(samples.size() - 1, 1)
+		for i in n_samp:
+			var d: float = world_pos.distance_squared_to(samples[i].pos as Vector2)
+			if d < best_d:
+				best_d = d
+				best_i = i
+		if sqrt(best_d) > half_width + 2.0:
+			return -1
+		var offset := float(samples[best_i].cum)
+		return space_index_at_offset(offset)
+
+
+	func space_index_at_offset(offset: float) -> int:
+		var n := frontiers.size()
+		if n == 0 or total_length <= 0.0:
+			return -1
+		var o := fposmod(offset, total_length)
+		for i in n:
+			var a := float((frontiers[i] as Frontier).offset)
+			var b := float((frontiers[(i + 1) % n] as Frontier).offset)
+			if a <= b:
+				if o >= a and o < b:
+					return i
+			else:
+				# Wrap across the finish.
+				if o >= a or o < b:
+					return i
+		return n - 1
+
+
+	func _space_centerline_samples(space_index: int) -> Array:
+		var n := frontiers.size()
+		if n < 2 or samples.is_empty():
+			return []
+		var i0 := posmod(space_index, n)
+		var a: Frontier = frontiers[i0]
+		var b: Frontier = frontiers[(i0 + 1) % n]
+		var o0 := float(a.offset)
+		var o1 := float(b.offset)
+		var out: Array = []
+		out.append({
+			"pos": a.center,
+			"inside": a.inside_normal,
+			"tangent": a.tangent,
+			"cum": o0,
+		})
+		var n_samp := maxi(samples.size() - 1, 0)
+		if o0 <= o1:
+			for i in n_samp:
+				var c := float(samples[i].cum)
+				if c > o0 and c < o1:
+					out.append(samples[i])
+		else:
+			for i in n_samp:
+				var c := float(samples[i].cum)
+				if c > o0:
+					out.append(samples[i])
+			for i in n_samp:
+				var c := float(samples[i].cum)
+				if c < o1:
+					out.append(samples[i])
+		out.append({
+			"pos": b.center,
+			"inside": b.inside_normal,
+			"tangent": b.tangent,
+			"cum": o1 if o1 > o0 else o1 + total_length,
+		})
+		return out
+
+
+	## Spot poses at mid-arc of the space (same ribbon logic — not a chord lerp).
+	func space_slot_poses(space_index: int, road_half_width: float, spot_inset: float) -> Array:
+		var n := frontiers.size()
+		if n < 2:
+			return []
+		var pts := _space_centerline_samples(space_index)
+		if pts.size() < 2:
+			return []
+		var mid := _interpolate_along_path(pts, 0.5)
+		var inside: Vector2 = mid.inside
+		if inside.length_squared() < 0.0001:
+			inside = (frontiers[posmod(space_index, n)] as Frontier).inside_normal
+		else:
+			inside = inside.normalized()
+		# Keep side coherent with the space entry frontier (avoids mid-lerp flip).
+		var entry_inside: Vector2 = (frontiers[posmod(space_index, n)] as Frontier).inside_normal
+		if inside.dot(entry_inside) < 0.0:
+			inside = -inside
+		var heading: Vector2 = mid.tangent
+		if heading.length_squared() < 0.0001:
+			heading = (frontiers[posmod(space_index, n)] as Frontier).tangent
+		else:
+			heading = heading.normalized()
+		var lateral := road_half_width * spot_inset
+		var center: Vector2 = mid.pos
+		return [
+			{"pos": center + inside * lateral, "heading": heading},
+			{"pos": center - inside * lateral, "heading": heading},
+		]
+
+
+	func _interpolate_along_path(pts: Array, fraction: float) -> Dictionary:
+		var seglens: PackedFloat32Array = PackedFloat32Array()
+		seglens.resize(pts.size() - 1)
+		var total := 0.0
+		for i in pts.size() - 1:
+			var d: float = (pts[i].pos as Vector2).distance_to(pts[i + 1].pos as Vector2)
+			seglens[i] = d
+			total += d
+		if total < 0.0001:
+			return pts[0]
+		var target := clampf(fraction, 0.0, 1.0) * total
+		var acc := 0.0
+		for i in seglens.size():
+			var seg: float = seglens[i]
+			if acc + seg >= target - 0.00001:
+				var u := 0.0 if seg < 0.0001 else (target - acc) / seg
+				return _lerp_sample(pts[i], pts[i + 1], u)
+			acc += seg
+		return pts[pts.size() - 1]
+
+
+	func _lerp_sample(a: Dictionary, b: Dictionary, u: float) -> Dictionary:
+		var ia: Vector2 = a.inside
+		var ib: Vector2 = b.inside
+		if ia.length_squared() > 0.0001:
+			ia = ia.normalized()
+		if ib.length_squared() > 0.0001:
+			ib = ib.normalized()
+		if ia.dot(ib) < 0.0:
+			ib = -ib
+		var ta: Vector2 = a.get("tangent", Vector2.RIGHT)
+		var tb: Vector2 = b.get("tangent", ta)
+		if ta.length_squared() > 0.0001:
+			ta = ta.normalized()
+		if tb.length_squared() > 0.0001:
+			tb = tb.normalized()
+		if ta.dot(tb) < 0.0:
+			tb = -tb
+		var inside := ia.lerp(ib, u)
+		if inside.length_squared() > 0.0001:
+			inside = inside.normalized()
+		var tangent := ta.lerp(tb, u)
+		if tangent.length_squared() > 0.0001:
+			tangent = tangent.normalized()
+		return {
+			"pos": (a.pos as Vector2).lerp(b.pos as Vector2, u),
+			"inside": inside,
+			"tangent": tangent,
+			"cum": lerpf(float(a.cum), float(b.cum), u),
+		}
 
 
 static func algorithm_name(algo: int) -> String:
@@ -87,6 +273,7 @@ static func segment(spline: TrackSpline, params: Params = null) -> Result:
 
 	for i in offsets.size():
 		result.frontiers.append(_frontier_at(samples, float(offsets[i]), p))
+	result.samples = samples
 	return result
 
 

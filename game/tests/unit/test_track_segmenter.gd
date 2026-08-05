@@ -59,3 +59,47 @@ func test_empty_spline_returns_empty_result() -> void:
 	var spline := TrackSpline.new()
 	var result := TrackSegmenter.segment(spline, _params(TrackSegmenter.Algorithm.CENTER_UNIFORM))
 	assert_eq(result.space_count(), 0)
+
+
+func test_space_ribbon_follows_curve_without_bowtie() -> void:
+	var spline := TrackSpline.make_default_triangle(Vector2.ZERO, 80.0)
+	# Pinch one point so curvature is sharp near a space.
+	spline.set_point_position(0, Vector2(0, -40))
+	var result := TrackSegmenter.segment(
+		spline, _params(TrackSegmenter.Algorithm.INNER_UNIFORM, 30.0)
+	)
+	assert_gte(result.space_count(), 8)
+	assert_false(result.samples.is_empty())
+	var ribbon := result.space_ribbon(0, 28.0)
+	assert_gte(ribbon.size(), 6)
+	# Hit-test near the first frontier center should resolve a space.
+	var fr: TrackSegmenter.Frontier = result.frontiers[0]
+	var hit := result.space_at_world(fr.center, 28.0)
+	assert_gte(hit, 0)
+
+
+func test_slot_poses_keep_outer_outside_in_tight_bend() -> void:
+	var spline := TrackSpline.make_default_triangle(Vector2(200, 200), 120.0)
+	spline.set_point_position(0, Vector2(200, 160))
+	var result := TrackSegmenter.segment(
+		spline, _params(TrackSegmenter.Algorithm.INNER_UNIFORM, 28.0)
+	)
+	assert_gte(result.space_count(), 8)
+	var centroid := Vector2(200, 200)
+	# Find the space whose mid is closest to the pinched vertex (tightest bend).
+	var best_i := 0
+	var best_d := INF
+	for i in result.space_count():
+		var poses_i: Array = result.space_slot_poses(i, 28.0, 0.45)
+		var mid: Vector2 = poses_i[0].pos.lerp(poses_i[1].pos, 0.5)
+		var d := mid.distance_squared_to(Vector2(200, 160))
+		if d < best_d:
+			best_d = d
+			best_i = i
+	var poses: Array = result.space_slot_poses(best_i, 28.0, 0.45)
+	var inner: Vector2 = poses[0].pos
+	var outer: Vector2 = poses[1].pos
+	assert_lt(inner.distance_to(centroid), outer.distance_to(centroid))
+	# Both cars should sit away from the centerline-ish mid chord of the two spots.
+	var sep := inner.distance_to(outer)
+	assert_gt(sep, 20.0, "inner/outer should stay laterally separated (got %s)" % sep)

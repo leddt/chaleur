@@ -498,25 +498,11 @@ func _sync_preview_cars() -> void:
 func _space_slot_poses(space_index: int) -> Array:
 	if _seg_result == null or _seg_result.space_count() < 2:
 		return []
-	var n := _seg_result.space_count()
-	var a: TrackSegmenter.Frontier = _seg_result.frontiers[posmod(space_index, n)]
-	var b: TrackSegmenter.Frontier = _seg_result.frontiers[posmod(space_index + 1, n)]
-	var center: Vector2 = a.center.lerp(b.center, 0.5)
-	var heading: Vector2 = a.tangent + b.tangent
-	if heading.length_squared() < 0.0001:
-		heading = a.tangent
-	else:
-		heading = heading.normalized()
-	var inside: Vector2 = a.inside_normal.lerp(b.inside_normal, 0.5)
-	if inside.length_squared() < 0.0001:
-		inside = a.inside_normal
-	else:
-		inside = inside.normalized()
-	var lateral := _seg_params.road_half_width * _seg_params.spot_inset
-	return [
-		{"pos": center + inside * lateral, "heading": heading},
-		{"pos": center - inside * lateral, "heading": heading},
-	]
+	return _seg_result.space_slot_poses(
+		space_index,
+		_seg_params.road_half_width,
+		_seg_params.spot_inset
+	)
 
 
 func _draw_control_points(font: Font) -> void:
@@ -554,11 +540,11 @@ func _draw_spaces() -> void:
 		return
 	var font := ThemeDB.fallback_font
 	var n := _seg_result.space_count()
-	# Selection fill under separators.
+	# Selection fill under separators (curved asphalt ribbon, not a flat quad).
 	if _selected_space >= 0 and _edit_mode == EditMode.SPACES:
-		var quad := _space_quad(_selected_space)
-		if quad.size() >= 3:
-			_canvas.draw_colored_polygon(quad, SPACE_SELECTED_COLOR)
+		var ribbon := _seg_result.space_ribbon(_selected_space, ROAD_HALF_WIDTH)
+		if ribbon.size() >= 3:
+			_canvas.draw_colored_polygon(ribbon, SPACE_SELECTED_COLOR)
 	for i in n:
 		var a: TrackSegmenter.Frontier = _seg_result.frontiers[i]
 		var inner_edge := a.center + a.inside_normal * ROAD_HALF_WIDTH
@@ -608,19 +594,6 @@ func _display_space_number(space_index: int) -> int:
 		return space_index + 1
 	var n := _seg_result.space_count()
 	return posmod(space_index - _start_space_index, n) + 1
-
-
-func _space_quad(space_index: int) -> PackedVector2Array:
-	if _seg_result == null or _seg_result.space_count() < 2:
-		return PackedVector2Array()
-	var n := _seg_result.space_count()
-	var a: TrackSegmenter.Frontier = _seg_result.frontiers[posmod(space_index, n)]
-	var b: TrackSegmenter.Frontier = _seg_result.frontiers[posmod(space_index + 1, n)]
-	var a_in := a.center + a.inside_normal * ROAD_HALF_WIDTH
-	var a_out := a.center - a.inside_normal * ROAD_HALF_WIDTH
-	var b_in := b.center + b.inside_normal * ROAD_HALF_WIDTH
-	var b_out := b.center - b.inside_normal * ROAD_HALF_WIDTH
-	return PackedVector2Array([a_in, b_in, b_out, a_out])
 
 
 func _draw_road(baked: PackedVector2Array) -> void:
@@ -734,28 +707,7 @@ func _on_spaces_gui_input(event: InputEvent) -> void:
 func _space_index_at(pos: Vector2) -> int:
 	if _seg_result == null or _seg_result.space_count() < 2:
 		return -1
-	var n := _seg_result.space_count()
-	for i in n:
-		var quad := _space_quad(i)
-		if quad.size() >= 3 and Geometry2D.is_point_in_polygon(pos, quad):
-			return i
-	# Fallback: nearest frontier center.
-	var best := -1
-	var best_d := INF
-	for i in n:
-		var fr: TrackSegmenter.Frontier = _seg_result.frontiers[i]
-		var mid := fr.center.lerp(
-			(_seg_result.frontiers[(i + 1) % n] as TrackSegmenter.Frontier).center,
-			0.5
-		)
-		var d := pos.distance_squared_to(mid)
-		if d < best_d:
-			best_d = d
-			best = i
-	# Only accept if reasonably close to the road.
-	if best >= 0 and sqrt(best_d) <= ROAD_HALF_WIDTH * 2.5:
-		return best
-	return -1
+	return _seg_result.space_at_world(pos, ROAD_HALF_WIDTH)
 
 
 func _begin_left(pos: Vector2) -> void:

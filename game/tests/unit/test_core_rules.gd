@@ -200,6 +200,33 @@ func test_boost_requires_heat() -> void:
 	assert_false(r.ok)
 
 
+func test_boost_allowed_in_any_gear() -> void:
+	for gear in [1, 2, 3, 4]:
+		var engine := HeatTestHelpers.make_engine(1, 20 + gear)
+		var p := engine.players[0]
+		HeatTestHelpers.ensure_engine_heat(p, 6)
+		p.gear = gear
+		p.gear_locked = true
+		p.progress = 0
+		p.spot = 0
+		engine.phase = HeatGameEngine.Phase.PLAY_CARDS
+		var speeds: Array[int] = []
+		for _i in gear:
+			speeds.append(1)
+		assert_true(HeatTestHelpers.play_speeds(engine, 0, speeds), "gear %d play" % gear)
+		assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
+		p.draw_pile.clear()
+		p.discard.clear()
+		p.draw_pile.add(HeatCard.new("boost_spd_g%d" % gear, HeatCard.Kind.SPEED, 2))
+		var speed_before := p.round_speed
+		var heat_before := p.engine_heat()
+		var r := engine.react(0, 0, true, false)
+		assert_true(r.ok, "gear %d: %s" % [gear, r.error])
+		assert_true(p.boost_used, "gear %d boost_used" % gear)
+		assert_eq(p.round_speed, speed_before + 2, "gear %d speed" % gear)
+		assert_lt(p.engine_heat(), heat_before, "gear %d paid Heat" % gear)
+
+
 func test_replenish_to_seven_and_recycle_discard() -> void:
 	var engine := HeatTestHelpers.make_engine(1, 11)
 	var p := engine.players[0]

@@ -213,11 +213,10 @@ func _build_react_ui(p: PlayerState) -> void:
 	elif max_cd > 0:
 		add_child(_make_label("Refroidir : aucun Heat en main"))
 
-	if p.can_boost_from_gear():
-		var boost_btn := _make_check("Boost — 1 Heat, ajoute une carte de vitesse")
-		boost_btn.disabled = p.engine_heat() < 1
-		boost_btn.toggled.connect(func(on: bool) -> void: _react_boost = on)
-		add_child(boost_btn)
+	var boost_btn := _make_check("Boost — 1 Heat, ajoute une carte de vitesse")
+	boost_btn.disabled = p.engine_heat() < 1
+	boost_btn.toggled.connect(func(on: bool) -> void: _react_boost = on)
+	add_child(boost_btn)
 
 	if p.has_adrenaline:
 		var ad_btn := _make_check("Adrénaline — +1 Speed")

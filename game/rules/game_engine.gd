@@ -198,8 +198,7 @@ func react(player_id: int, cooldown: int, boost: bool, adrenaline_speed: bool) -
 	if cooldown > p.hand.count_kind(HeatCard.Kind.HEAT):
 		return ActionResult.fail("Not enough Heat in hand to cooldown")
 	if boost:
-		if not p.can_boost_from_gear():
-			return ActionResult.fail("Boost not available in this gear")
+		# Core rules: boost once per turn in any gear, paying 1 Heat.
 		if p.engine_heat() < 1:
 			return ActionResult.fail("Not enough Heat to boost")
 	if adrenaline_speed and not p.has_adrenaline:

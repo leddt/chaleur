@@ -61,7 +61,3 @@ func cooldown_from_gear() -> int:
 			return 1
 		_:
 			return 0
-
-
-func can_boost_from_gear() -> bool:
-	return gear >= 3

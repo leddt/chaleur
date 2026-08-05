@@ -7,6 +7,7 @@ enum EditMode {
 	SPACES, ## Inspect / tune space segmentation.
 }
 
+const CAR_SCENE := preload("res://view/car.tscn")
 const HANDLE_HIT_RADIUS := 12.0
 const POINT_HIT_RADIUS := 14.0
 const CURVE_HIT_RADIUS := 14.0
@@ -48,6 +49,8 @@ var _seg_result: TrackSegmenter.Result
 ## Index of the start space (display number 1). The red line is its preceding frontier.
 var _start_space_index: int = 0
 var _selected_space: int = -1
+var _cars_layer: Node2D
+var _preview_cars: Array = [] ## Array[CarToken] — one per spot (inner/outer).
 
 
 func _ready() -> void:
@@ -65,6 +68,7 @@ func _ready() -> void:
 	_setup_segmentation_ui()
 	_set_start_button.pressed.connect(_on_set_start_pressed)
 	_apply_edit_mode()
+	_ensure_preview_cars()
 	# Layout may still report 0-height here — wait for a usable canvas size.
 	call_deferred("_try_init_spline")
 
@@ -110,7 +114,7 @@ func _apply_edit_mode() -> void:
 	if trace:
 		_hint.text = "Mode tracé — clic près de la courbe : ajouter. Clic droit : supprimer. Double-clic : type. Touches 1/2/3 : type du point."
 	else:
-		_hint.text = "Mode cases — clic pour sélectionner une case. « Case de départ » : la ligne qui la précède devient rouge ; la numérotation repart à 1."
+		_hint.text = "Mode cases — clic pour sélectionner une case (aperçu des 2 voitures). « Case de départ » : ligne rouge précédente ; numérotation à partir de 1."
 
 
 func _setup_segmentation_ui() -> void:
@@ -379,6 +383,63 @@ func _on_canvas_draw() -> void:
 
 	if _edit_mode == EditMode.TRACE:
 		_draw_control_points(font)
+	_sync_preview_cars()
+
+
+func _ensure_preview_cars() -> void:
+	if _cars_layer == null:
+		_cars_layer = Node2D.new()
+		_cars_layer.name = "PreviewCars"
+		_canvas.add_child(_cars_layer)
+	while _preview_cars.size() < 2:
+		var car := CAR_SCENE.instantiate() as CarToken
+		_cars_layer.add_child(car)
+		car.setup(_preview_cars.size())
+		_preview_cars.append(car)
+
+
+func _sync_preview_cars() -> void:
+	_ensure_preview_cars()
+	var show := (
+		_edit_mode == EditMode.SPACES
+		and _selected_space >= 0
+		and _seg_result != null
+		and _seg_result.space_count() >= 2
+	)
+	_cars_layer.visible = show
+	if not show:
+		return
+	var poses := _space_slot_poses(_selected_space)
+	for i in mini(2, poses.size()):
+		var car: CarToken = _preview_cars[i]
+		var pose: Dictionary = poses[i]
+		car.set_pose(pose.pos, pose.heading)
+		car.visible = true
+
+
+## Mid-space poses for spot 0 (inner) and spot 1 (outer), as in-game.
+func _space_slot_poses(space_index: int) -> Array:
+	if _seg_result == null or _seg_result.space_count() < 2:
+		return []
+	var n := _seg_result.space_count()
+	var a: TrackSegmenter.Frontier = _seg_result.frontiers[posmod(space_index, n)]
+	var b: TrackSegmenter.Frontier = _seg_result.frontiers[posmod(space_index + 1, n)]
+	var center: Vector2 = a.center.lerp(b.center, 0.5)
+	var heading: Vector2 = a.tangent + b.tangent
+	if heading.length_squared() < 0.0001:
+		heading = a.tangent
+	else:
+		heading = heading.normalized()
+	var inside: Vector2 = a.inside_normal.lerp(b.inside_normal, 0.5)
+	if inside.length_squared() < 0.0001:
+		inside = a.inside_normal
+	else:
+		inside = inside.normalized()
+	var lateral := _seg_params.road_half_width * _seg_params.spot_inset
+	return [
+		{"pos": center + inside * lateral, "heading": heading},
+		{"pos": center - inside * lateral, "heading": heading},
+	]
 
 
 func _draw_control_points(font: Font) -> void:

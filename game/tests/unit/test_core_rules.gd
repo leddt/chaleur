@@ -365,17 +365,44 @@ func test_track1_starts_behind_line_two_per_space() -> void:
 	engine.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 1)
 	assert_true(engine.track.start_behind_finish_line)
 	assert_eq(engine.track.space_count, 69)
-	# Front row (closest to line): progress -1 → space 68
-	assert_eq(engine.players[0].progress, -1)
-	assert_eq(engine.players[1].progress, -1)
 	assert_eq(engine.track.space_of_progress(-1), 68)
-	assert_eq(engine.players[0].spot, 0)
-	assert_eq(engine.players[1].spot, 1)
-	# Second row: progress -2 → space 67
-	assert_eq(engine.players[2].progress, -2)
-	assert_eq(engine.players[3].progress, -2)
 	assert_eq(engine.track.space_of_progress(-2), 67)
-	assert_ne(engine.players[0].progress, engine.players[2].progress)
+	var front: Array[PlayerState] = []
+	var second: Array[PlayerState] = []
+	for p in engine.players:
+		match p.progress:
+			-1:
+				front.append(p)
+			-2:
+				second.append(p)
+	assert_eq(front.size(), 2)
+	assert_eq(second.size(), 2)
+	assert_ne(front[0].spot, front[1].spot)
+	assert_ne(second[0].spot, second[1].spot)
+
+
+func test_starting_grid_order_follows_seed_not_seat_order() -> void:
+	var same_a := HeatGameEngine.new()
+	var same_b := HeatGameEngine.new()
+	same_a.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 7)
+	same_b.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 7)
+	for i in 4:
+		assert_eq(same_a.players[i].progress, same_b.players[i].progress)
+		assert_eq(same_a.players[i].spot, same_b.players[i].spot)
+
+	# Seat order would always put players 0–1 on the front row; a shuffled grid
+	# must break that for at least one seed.
+	var broke_seat_order := false
+	for seed in range(1, 80):
+		var engine := HeatGameEngine.new()
+		engine.setup(["A", "B", "C", "D"], HeatTrack.track1(1), seed)
+		if engine.players[0].progress != -1 or engine.players[1].progress != -1:
+			broke_seat_order = true
+			break
+		if engine.players[0].spot != 0 or engine.players[1].spot != 1:
+			broke_seat_order = true
+			break
+	assert_true(broke_seat_order)
 
 
 func test_next_landmark_shows_finish_in_last_sector() -> void:

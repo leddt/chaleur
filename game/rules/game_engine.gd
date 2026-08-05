@@ -289,22 +289,34 @@ func _log(line: String) -> void:
 
 
 func _assign_unique_start_spots() -> void:
+	# Shuffle grid order so lobby/seat order (host first) is not the pole.
+	var grid: Array[int] = []
+	for i in players.size():
+		grid.append(i)
+	for i in range(grid.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp := grid[i]
+		grid[i] = grid[j]
+		grid[j] = tmp
+
 	if track.start_behind_finish_line:
 		# Behind the start/finish line: last spaces of the final sector.
 		# progress -1 => space (n-1), -2 => (n-2), … ; max 2 cars per space.
 		var per_space := maxi(1, track.start_max_per_space)
-		for i in players.size():
-			var row := int(i / per_space)
-			var spot := i % per_space
-			players[i].progress = -(row + 1)
-			var space := track.space_of_progress(players[i].progress)
+		for rank in grid.size():
+			var p := players[grid[rank]]
+			var row := int(rank / per_space)
+			var spot := rank % per_space
+			p.progress = -(row + 1)
+			var space := track.space_of_progress(p.progress)
 			var cap := track.spot_count(space)
-			players[i].spot = mini(spot, maxi(cap - 1, 0))
+			p.spot = mini(spot, maxi(cap - 1, 0))
 		return
 	var max_spots := track.spot_count(0)
-	for i in players.size():
-		players[i].progress = 0
-		players[i].spot = i % maxi(max_spots, 1)
+	for rank in grid.size():
+		var p := players[grid[rank]]
+		p.progress = 0
+		p.spot = rank % maxi(max_spots, 1)
 
 
 func _draw_up_to(p: PlayerState, target: int) -> void:

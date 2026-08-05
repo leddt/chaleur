@@ -72,8 +72,11 @@ func on_hand_selection_changed() -> void:
 func _build_shift_ui(p: PlayerState) -> void:
 	_sidebar.ensure_chosen_gear(p)
 	_sidebar.set_gear_editable(true, p)
-	add_child(_make_label("Choisir le rapport (actuel %d)" % p.gear))
-	var confirm := _make_button("Valider le rapport")
+	add_child(_make_eyebrow("ÉTAPE 1 — RAPPORT"))
+	add_child(_make_label(
+		"Choisis ton rapport — tu es en %d. Deux crans coûtent 1 Heat." % p.gear
+	))
+	var confirm := _make_button("Engager", true)
 	confirm.pressed.connect(func() -> void:
 		action_requested.emit("shift_gear", {"gear": _sidebar.chosen_gear}, p.id)
 	)
@@ -89,11 +92,14 @@ func _build_play_ui(p: PlayerState) -> void:
 	_hand.set_selection_limit(required)
 	var hint_text: String
 	if _play_cluttered:
-		hint_text = "Main encombrée : joue toutes les jouables + Heat pour atteindre %d" % required
+		hint_text = "Main encombrée — joue tout ce qui peut l'être, complète avec du Heat"
+	elif required == 1:
+		hint_text = "Joue 1 carte"
 	else:
-		hint_text = "Sélectionne exactement %d carte(s) jouable(s)" % required
+		hint_text = "Joue %d cartes" % required
+	add_child(_make_eyebrow("ÉTAPE 2 — CARTES"))
 	add_child(_make_label(hint_text))
-	_play_confirm = _make_button("Jouer la sélection")
+	_play_confirm = _make_button("Jouer", true)
 	_play_confirm.disabled = true
 	_play_confirm.pressed.connect(func() -> void:
 		action_requested.emit("play_cards", {"card_ids": _hand.selected_ids()}, p.id)
@@ -144,10 +150,11 @@ func _build_turn_ui(p: PlayerState) -> void:
 		HeatGameEngine.TurnStep.REACT:
 			_build_react_ui(p)
 		HeatGameEngine.TurnStep.SLIPSTREAM:
+			add_child(_make_eyebrow("ASPIRATION"))
 			add_child(_make_label(
 				"Slipstream disponible (+2 cases, n'augmente pas la Speed virage)"
 			))
-			var yes := _make_button("Slipstream")
+			var yes := _make_button("Slipstream", true)
 			yes.pressed.connect(func() -> void:
 				action_requested.emit("slipstream", {"use": true}, p.id)
 			)
@@ -158,22 +165,23 @@ func _build_turn_ui(p: PlayerState) -> void:
 			add_child(yes)
 			add_child(no)
 		HeatGameEngine.TurnStep.DISCARD:
+			add_child(_make_eyebrow("FIN DE TOUR"))
 			add_child(_make_label(
 				"Défausse optionnelle (pas Heat/Stress), puis pioche jusqu'à 7"
 			))
-			_discard_confirm = _make_button("Ne rien défausser")
+			_discard_confirm = _make_button("Passer la défausse", true)
 			_discard_confirm.pressed.connect(func() -> void:
 				action_requested.emit("discard", {"card_ids": _hand.selected_ids()}, p.id)
 			)
 			add_child(_discard_confirm)
 			_update_discard_confirm()
 		_:
-			add_child(_make_label("Résolution automatique…"))
+			add_child(_make_label("La course avance…"))
 
 
 func _discard_button_label(count: int) -> String:
 	if count <= 0:
-		return "Ne rien défausser"
+		return "Passer la défausse"
 	if count == 1:
 		return "Défausser 1 carte"
 	return "Défausser %d cartes" % count
@@ -193,40 +201,30 @@ func _build_react_ui(p: PlayerState) -> void:
 	if p.has_adrenaline:
 		max_cd += 1
 	var heat_in_hand := p.hand.count_kind(HeatCard.Kind.HEAT)
+	# Cooling moves Heat from the hand back into the engine, so the hand caps it.
+	var cd_limit := mini(max_cd, heat_in_hand)
+	add_child(_make_eyebrow("RÉACTION"))
 	add_child(_make_label(
-		"React — speed actuelle %d%s" % [p.round_speed, " — ADRENALINE" if p.has_adrenaline else ""]
+		"Ta vitesse est %d%s" % [p.round_speed, " — ADRÉNALINE" if p.has_adrenaline else ""]
 	))
 
-	var cd_label := _make_label("Cooldown: 0 (max %d, heat en main %d)" % [max_cd, heat_in_hand])
-	add_child(cd_label)
-	add_child(_make_label("Choisir le cooldown :"))
-	for n in range(0, max_cd + 1):
-		if n > heat_in_hand:
-			break
-		var btn := _make_button("Cooldown %d" % n)
-		btn.toggle_mode = true
-		btn.button_pressed = n == 0
-		btn.pressed.connect(func() -> void:
-			_react_cooldown = n
-			cd_label.text = "Cooldown: %d (max %d, heat en main %d)" % [n, max_cd, heat_in_hand]
-			for child in get_children():
-				if child is Button and child.toggle_mode and str(child.text).begins_with("Cooldown "):
-					child.button_pressed = (child == btn)
-		)
-		add_child(btn)
+	if cd_limit > 0:
+		add_child(_make_cooldown_stepper(cd_limit))
+	elif max_cd > 0:
+		add_child(_make_label("Refroidir : aucun Heat en main"))
 
 	if p.can_boost_from_gear():
-		var boost_btn := _make_check("Boost (1 Heat engine, +Speed carte)")
+		var boost_btn := _make_check("Boost — 1 Heat, ajoute une carte de vitesse")
 		boost_btn.disabled = p.engine_heat() < 1
 		boost_btn.toggled.connect(func(on: bool) -> void: _react_boost = on)
 		add_child(boost_btn)
 
 	if p.has_adrenaline:
-		var ad_btn := _make_check("Adrenaline +1 Speed")
+		var ad_btn := _make_check("Adrénaline — +1 Speed")
 		ad_btn.toggled.connect(func(on: bool) -> void: _react_adrenaline = on)
 		add_child(ad_btn)
 
-	var confirm := _make_button("Valider React")
+	var confirm := _make_button("Réagir", true)
 	confirm.pressed.connect(func() -> void:
 		action_requested.emit("react", {
 			"cooldown": _react_cooldown,
@@ -237,21 +235,74 @@ func _build_react_ui(p: PlayerState) -> void:
 	add_child(confirm)
 
 
+## Cooling is a quantity, not a menu. One stepper replaces one button per amount,
+## which used to stack up to four buttons in the panel.
+func _make_cooldown_stepper(limit: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	var minus := Button.new()
+	minus.text = "-"
+	minus.custom_minimum_size = Vector2(36, 0)
+
+	var readout := Label.new()
+	readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	readout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	readout.add_theme_font_size_override("font_size", 13)
+
+	var plus := Button.new()
+	plus.text = "+"
+	plus.custom_minimum_size = Vector2(36, 0)
+
+	var sync := func() -> void:
+		readout.text = "Refroidir %d / %d" % [_react_cooldown, limit]
+		minus.disabled = _react_cooldown <= 0
+		plus.disabled = _react_cooldown >= limit
+
+	minus.pressed.connect(func() -> void:
+		_react_cooldown = maxi(0, _react_cooldown - 1)
+		sync.call()
+	)
+	plus.pressed.connect(func() -> void:
+		_react_cooldown = mini(limit, _react_cooldown + 1)
+		sync.call()
+	)
+
+	row.add_child(minus)
+	row.add_child(readout)
+	row.add_child(plus)
+	sync.call()
+	return row
+
+
+## The "what am I being asked to do" line. Sits above the controls, always in the
+## same place, so the instruction is never something you have to hunt for.
 func _make_label(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_font_size_override("font_size", 14)
 	return label
 
 
-func _make_button(text: String) -> Button:
+## Small uppercase caption naming the current step, above the instruction.
+func _make_eyebrow(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.theme_type_variation = "Eyebrow"
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return label
+
+
+func _make_button(text: String, primary: bool = false) -> Button:
 	var btn := Button.new()
 	btn.text = text
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	btn.clip_text = false
+	if primary:
+		btn.theme_type_variation = "Primary"
 	return btn
 
 

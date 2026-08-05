@@ -31,7 +31,7 @@ static func _translate(line: String) -> String:
 	m = _re("^(.+) plays (\\d+) card\\(s\\)( \\(cluttered\\))?$").search(line)
 	if m:
 		var clutter := " (main encombrée)" if m.get_string(3) != "" else ""
-		return "%s joue %s carte(s)%s" % [m.get_string(1), m.get_string(2), clutter]
+		return "%s joue %s%s" % [m.get_string(1), _cards(m.get_string(2)), clutter]
 
 	m = _re("^(.+) cluttered — no move, gear to 1$").search(line)
 	if m:
@@ -91,7 +91,7 @@ static func _translate(line: String) -> String:
 
 	m = _re("^(.+) discards (\\d+) card\\(s\\)$").search(line)
 	if m:
-		return "%s défausse %s carte(s)" % [m.get_string(1), m.get_string(2)]
+		return "%s défausse %s" % [m.get_string(1), _cards(m.get_string(2))]
 
 	m = _re("^(.+) replenishes hand \\((\\d+)\\)$").search(line)
 	if m:
@@ -145,6 +145,11 @@ static func reveal_banner_text(line: String) -> String:
 	if m:
 		return fr
 	return fr
+
+
+## "1 carte" / "3 cartes" — the engine emits a raw count, the journal reads as prose.
+static func _cards(count: String) -> String:
+	return "1 carte" if count == "1" else "%s cartes" % count
 
 
 static func _re(pattern: String) -> RegEx:

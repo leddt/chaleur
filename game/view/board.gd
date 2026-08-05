@@ -3,7 +3,7 @@ extends Control
 @onready var _track: TrackView = %TrackView
 @onready var _status: Label = %StatusLabel
 @onready var _phase: Label = %PhaseLabel
-@onready var _log: RichTextLabel = %EventLog
+@onready var _log: EventJournal = %EventLog
 @onready var _hand: CardHandView = %CardHand
 @onready var _actions: ActionPanel = %ActionBox
 @onready var _sidebar: PlayerSidebar = %Sidebar
@@ -14,6 +14,7 @@ extends Control
 @onready var _finish_label: Label = %FinishLabel
 @onready var _reveal_banner: PanelContainer = %RevealBanner
 @onready var _reveal_label: Label = %RevealLabel
+@onready var _kerb: Kerb = %CockpitKerb
 
 var _engine: HeatGameEngine
 var _revealed_seat: int = -1
@@ -22,9 +23,14 @@ var _log_cursor: int = 0
 var _ui_context_key: String = ""
 var _reveal_tween: Tween
 var _last_hand_key: String = ""
+var _kerb_scrolling: bool = false
 
 
 func _ready() -> void:
+	# Applied here rather than on the root so the kit's look stays scoped to the
+	# board. Without it the cards fall back to Godot's default font and lose the
+	# whole printed-cardboard effect.
+	theme = ThemeBuilder.build()
 	_actions.setup(_hand, _sidebar)
 	_actions.action_requested.connect(_dispatch)
 	if Game.engine == null and not Game.is_online():
@@ -88,6 +94,7 @@ func _refresh_all() -> void:
 		_append_new_logs()
 	_hud.refresh(_engine, Game.local_player_id if Game.is_online() else -1)
 	_refresh_sidebar()
+	_refresh_kerb()
 	_track.refresh(true)
 	if _engine.is_race_over():
 		_show_finish()
@@ -299,50 +306,74 @@ func _refresh_sidebar() -> void:
 	_sidebar.refresh(_engine, _viewer_player())
 
 
+## The kerb band was pure decoration. It now carries the seat colour of whoever the
+## game is waiting on, and scrolls while the engine resolves — so the band answers
+## "whose move is it, and is anything happening" without a line of text.
+func _refresh_kerb() -> void:
+	if _kerb == null or _engine == null:
+		return
+	var pending := _engine.pending_actor_ids()
+	if pending.is_empty():
+		# Nobody to act: the race is resolving on its own.
+		_kerb.color_a = Palette.MUSTARD
+		_kerb.color_b = Palette.INK
+		if not _kerb_scrolling:
+			_kerb_scrolling = true
+			_kerb.animate(70.0)
+		return
+	if _kerb_scrolling:
+		_kerb_scrolling = false
+		_kerb.stop_animation()
+	_kerb.color_a = PlayerPalette.color_for(pending[0])
+	_kerb.color_b = Palette.CARDBOARD
+
+
+## Player-facing phase name. The engine's own labels are English identifiers and
+## have no business appearing in the header.
 func _phase_text() -> String:
 	match _engine.phase:
 		HeatGameEngine.Phase.SHIFT_GEARS:
-			return "1. Shift Gears — choisissez un rapport"
+			return "Choisis ton rapport"
 		HeatGameEngine.Phase.PLAY_CARDS:
-			return "2. Play Cards — jouez autant de cartes que le rapport"
+			return "Joue tes cartes"
 		HeatGameEngine.Phase.PLAYER_TURN:
-			return "3–9. Tour — %s" % _turn_step_fr()
+			return _turn_step_fr()
 		HeatGameEngine.Phase.RACE_OVER:
 			return "Course terminée"
 		_:
-			return "Phase: %s" % str(_engine.phase)
+			return "En course"
 
 
 func _turn_step_fr() -> String:
 	match _engine.turn_step:
 		HeatGameEngine.TurnStep.REVEAL_MOVE:
-			return "Reveal & Move"
+			return "Révélation et déplacement"
 		HeatGameEngine.TurnStep.REACT:
-			return "React"
+			return "Réaction"
 		HeatGameEngine.TurnStep.SLIPSTREAM:
-			return "Slipstream"
+			return "Aspiration"
 		HeatGameEngine.TurnStep.CHECK_CORNER:
-			return "Check Corner"
+			return "Passage du virage"
 		HeatGameEngine.TurnStep.DISCARD:
-			return "Discard"
+			return "Défausse"
 		HeatGameEngine.TurnStep.REPLENISH:
-			return "Replenish"
+			return "Réapprovisionnement"
 		_:
-			return str(_engine.turn_step)
+			return "En course"
 
 
 func _rebuild_log() -> void:
 	_log.clear()
 	_log_cursor = 0
 	while _log_cursor < _engine.event_log.size():
-		_log.append_text(JournalFormat.to_bbcode(_engine.event_log[_log_cursor]))
+		_log.append(_engine.event_log[_log_cursor])
 		_log_cursor += 1
 
 
 func _append_new_logs() -> void:
 	while _log_cursor < _engine.event_log.size():
 		var line: String = _engine.event_log[_log_cursor]
-		_log.append_text(JournalFormat.to_bbcode(line))
+		_log.append(line)
 		if JournalFormat.is_reveal_line(line):
 			_flash_reveal(JournalFormat.reveal_banner_text(line))
 		Sfx.play_for_log_line(line)

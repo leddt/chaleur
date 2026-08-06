@@ -5,6 +5,7 @@ extends Control
 enum EditMode {
 	TRACE, ## Edit control points / spline shape.
 	SPACES, ## Inspect / tune space segmentation.
+	SECTORS, ## Select stretches between corners (may wrap past start).
 }
 
 const CAR_SCENE := preload("res://view/car.tscn")
@@ -16,11 +17,16 @@ const MIN_CANVAS_SIZE := 32.0
 const ROAD_HALF_WIDTH := 28.0
 const ASPHALT_COLOR := Color(0.28, 0.29, 0.31, 1.0)
 const ASPHALT_EDGE_COLOR := Color(0.18, 0.19, 0.21, 1.0)
+## Pale kerb on the race-line side of the asphalt (spot 0).
+const RACE_LINE_EDGE_COLOR := Color(0.58, 0.59, 0.62, 1.0)
+const RACE_LINE_EDGE_WIDTH := 5.0
+const ASPHALT_OUTER_EDGE_WIDTH := 1.5
 const CENTERLINE_COLOR := Color(0.95, 0.95, 0.97, 1.0)
 const SPACE_EDGE_COLOR := Color(0.05, 0.05, 0.06, 0.95)
 const START_LINE_COLOR := Color(0.9, 0.15, 0.12, 1.0)
 const CORNER_LINE_COLOR := Color(0.2, 0.85, 0.35, 1.0)
 const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.22)
+const SECTOR_SELECTED_COLOR := Color(0.35, 0.7, 1.0, 0.2)
 const CORNER_BADGE_RADIUS := 11.0
 ## Gap from asphalt edge to the badge's natural center.
 const CORNER_BADGE_GAP := 18.0
@@ -37,8 +43,12 @@ const VIEW_ZOOM_STEP := 1.12
 @onready var _summary: Label = %SummaryLabel
 @onready var _mode_trace: Button = %ModeTrace
 @onready var _mode_spaces: Button = %ModeSpaces
+@onready var _mode_sectors: Button = %ModeSectors
 @onready var _trace_section: Control = %TraceSection
 @onready var _spaces_section: Control = %SpacesSection
+@onready var _sectors_section: Control = %SectorsSection
+@onready var _sector_info_label: Label = %SectorInfoLabel
+@onready var _sector_race_line_button: Button = %SectorRaceLineButton
 @onready var _type_auto: BaseButton = %TypeAuto
 @onready var _type_tension: BaseButton = %TypeTension
 @onready var _type_free: BaseButton = %TypeFree
@@ -73,6 +83,10 @@ var _corners: Dictionary = {}
 var _drag_corner_space: int = -1
 ## World-space grab delta: mouse - badge center at press.
 var _drag_corner_grab := Vector2.ZERO
+## Index into `_compute_sectors()` (-1 = none).
+var _selected_sector: int = -1
+## flip_key (corner before sector, or -1 if no corners) -> race line on geometric outside.
+var _sector_flip_race_line: Dictionary = {}
 var _cars_layer: Node2D
 var _preview_cars: Array = [] ## Array[CarToken] — one per spot (inner/outer).
 ## View transform: screen = world * zoom + pan
@@ -92,6 +106,7 @@ func _ready() -> void:
 	_setup_segmentation_ui()
 	_set_start_button.pressed.connect(_on_set_start_pressed)
 	_setup_corner_ui()
+	_setup_sector_ui()
 	_apply_edit_mode()
 	_ensure_preview_cars()
 	# Layout may still report 0-height here — wait for a usable canvas size.
@@ -101,6 +116,7 @@ func _ready() -> void:
 func _setup_mode_ui() -> void:
 	_mode_trace.toggled.connect(_on_mode_trace_toggled)
 	_mode_spaces.toggled.connect(_on_mode_spaces_toggled)
+	_mode_sectors.toggled.connect(_on_mode_sectors_toggled)
 	_sync_mode_buttons()
 
 
@@ -116,10 +132,17 @@ func _on_mode_spaces_toggled(pressed: bool) -> void:
 	_set_edit_mode(EditMode.SPACES)
 
 
+func _on_mode_sectors_toggled(pressed: bool) -> void:
+	if _updating_mode_ui or not pressed:
+		return
+	_set_edit_mode(EditMode.SECTORS)
+
+
 func _sync_mode_buttons() -> void:
 	_updating_mode_ui = true
 	_mode_trace.button_pressed = _edit_mode == EditMode.TRACE
 	_mode_spaces.button_pressed = _edit_mode == EditMode.SPACES
+	_mode_sectors.button_pressed = _edit_mode == EditMode.SECTORS
 	_updating_mode_ui = false
 
 
@@ -151,11 +174,12 @@ func _set_edit_mode(mode: int) -> void:
 
 
 func _apply_edit_mode() -> void:
-	var trace := _edit_mode == EditMode.TRACE
-	_trace_section.visible = trace
-	_spaces_section.visible = not trace
+	_trace_section.visible = _edit_mode == EditMode.TRACE
+	_spaces_section.visible = _edit_mode == EditMode.SPACES
+	_sectors_section.visible = _edit_mode == EditMode.SECTORS
 	_refresh_set_start_button()
 	_refresh_corner_ui()
+	_refresh_sector_ui()
 
 
 func _setup_segmentation_ui() -> void:
@@ -342,6 +366,8 @@ func _reset_spline() -> void:
 	_start_space_index = 0
 	_corners.clear()
 	_drag_corner_space = -1
+	_selected_sector = -1
+	_sector_flip_race_line.clear()
 	_dirty = false
 	_spline_ready = true
 	_recompute_segmentation()
@@ -392,6 +418,7 @@ func _clamp_space_indices() -> void:
 		_start_space_index = 0
 		_selected_space = -1
 		_corners.clear()
+		_selected_sector = -1
 		return
 	var n := _seg_result.space_count()
 	_start_space_index = posmod(_start_space_index, n)
@@ -407,6 +434,149 @@ func _clamp_space_indices() -> void:
 			else:
 				kept[idx] = _make_corner_entry(int(entry))
 	_corners = kept
+	_prune_sector_flips()
+	_clamp_selected_sector()
+
+
+## Corner spaces in ascending track index (closed-loop order).
+func _corners_in_track_order() -> Array[int]:
+	var ordered: Array[int] = []
+	for key in _corners.keys():
+		ordered.append(int(key))
+	ordered.sort()
+	return ordered
+
+
+## Sectors = stretches between consecutive corners (may wrap past the start line).
+## Each entry: {from: int, to: int} inclusive — from the space after a corner
+## through the next corner space.
+func _compute_sectors() -> Array:
+	var out: Array = []
+	if _seg_result == null:
+		return out
+	var n := _seg_result.space_count()
+	if n < 1:
+		return out
+	var corners := _corners_in_track_order()
+	if corners.is_empty():
+		out.append({
+			"from": _start_space_index,
+			"to": posmod(_start_space_index - 1, n),
+		})
+		return out
+	for i in corners.size():
+		var prev_corner := corners[i]
+		var next_corner := corners[(i + 1) % corners.size()]
+		out.append({
+			"from": posmod(prev_corner + 1, n),
+			"to": next_corner,
+		})
+	return out
+
+
+func _sector_space_count(sector: Dictionary) -> int:
+	if _seg_result == null:
+		return 0
+	var n := _seg_result.space_count()
+	return posmod(int(sector.to) - int(sector.from), n) + 1
+
+
+func _space_in_sector(space: int, sector: Dictionary) -> bool:
+	if _seg_result == null:
+		return false
+	var n := _seg_result.space_count()
+	return posmod(space - int(sector.from), n) <= posmod(int(sector.to) - int(sector.from), n)
+
+
+func _sector_index_at_space(space: int) -> int:
+	var sectors := _compute_sectors()
+	for i in sectors.size():
+		if _space_in_sector(space, sectors[i]):
+			return i
+	return -1
+
+
+## Stable key for a sector's race-line flip: corner exited into the sector (-1 if none).
+func _sector_flip_key(sector: Dictionary) -> int:
+	if _corners.is_empty() or _seg_result == null:
+		return -1
+	var n := _seg_result.space_count()
+	return posmod(int(sector.from) - 1, n)
+
+
+func _sector_race_line_flipped(sector: Dictionary) -> bool:
+	return bool(_sector_flip_race_line.get(_sector_flip_key(sector), false))
+
+
+func _space_race_line_flipped(space: int) -> bool:
+	var idx := _sector_index_at_space(space)
+	if idx < 0:
+		return false
+	var sectors := _compute_sectors()
+	if idx >= sectors.size():
+		return false
+	return _sector_race_line_flipped(sectors[idx])
+
+
+func _prune_sector_flips() -> void:
+	var kept: Dictionary = {}
+	if _corners.is_empty():
+		if _sector_flip_race_line.get(-1, false):
+			kept[-1] = true
+	else:
+		for key in _corners.keys():
+			var corner := int(key)
+			if _sector_flip_race_line.get(corner, false):
+				kept[corner] = true
+	_sector_flip_race_line = kept
+
+
+func _setup_sector_ui() -> void:
+	_sector_race_line_button.pressed.connect(_on_sector_race_line_pressed)
+
+
+func _on_sector_race_line_pressed() -> void:
+	var sectors := _compute_sectors()
+	if _selected_sector < 0 or _selected_sector >= sectors.size():
+		return
+	var key := _sector_flip_key(sectors[_selected_sector])
+	_sector_flip_race_line[key] = not bool(_sector_flip_race_line.get(key, false))
+	if not _sector_flip_race_line[key]:
+		_sector_flip_race_line.erase(key)
+	_dirty = true
+	_refresh_sector_ui()
+	_canvas.queue_redraw()
+
+
+func _refresh_sector_ui() -> void:
+	if _sector_info_label == null:
+		return
+	var sectors := _compute_sectors()
+	var has_sel := _selected_sector >= 0 and _selected_sector < sectors.size()
+	_sector_race_line_button.disabled = not has_sel
+	if not has_sel:
+		_sector_info_label.text = (
+			"Aucun secteur sélectionné"
+			if sectors.is_empty()
+			else "%d secteurs — clique une case" % sectors.size()
+		)
+		_sector_race_line_button.text = "Ligne de course : intérieure"
+		return
+	var sector: Dictionary = sectors[_selected_sector]
+	var count := _sector_space_count(sector)
+	var from_disp := _display_space_number(int(sector.from))
+	var to_disp := _display_space_number(int(sector.to))
+	_sector_info_label.text = "Secteur %d / %d — cases %d→%d (%d)" % [
+		_selected_sector + 1,
+		sectors.size(),
+		from_disp,
+		to_disp,
+		count,
+	]
+	var flipped := _sector_race_line_flipped(sector)
+	_sector_race_line_button.text = (
+		"Ligne de course : extérieure" if flipped else "Ligne de course : intérieure"
+	)
 
 
 func _on_set_start_pressed() -> void:
@@ -414,6 +584,7 @@ func _on_set_start_pressed() -> void:
 		return
 	_start_space_index = _selected_space
 	_dirty = true
+	_clamp_selected_sector()
 	_refresh_info()
 	_refresh_set_start_button()
 	_canvas.queue_redraw()
@@ -445,9 +616,17 @@ func _on_set_corner_pressed() -> void:
 	else:
 		_corners[_selected_space] = _make_corner_entry(int(_corner_speed_spin.value))
 	_dirty = true
+	_prune_sector_flips()
+	_clamp_selected_sector()
 	_refresh_info()
 	_refresh_corner_ui()
 	_canvas.queue_redraw()
+
+
+func _clamp_selected_sector() -> void:
+	var sector_count := _compute_sectors().size()
+	if _selected_sector >= sector_count:
+		_selected_sector = -1
 
 
 func _refresh_corner_ui() -> void:
@@ -511,7 +690,8 @@ func _sync_type_radios() -> void:
 
 func _refresh_summary() -> void:
 	var spaces := 0 if _seg_result == null else _seg_result.space_count()
-	_summary.text = "%d cases · %d virages" % [spaces, _corners.size()]
+	var sectors := _compute_sectors().size()
+	_summary.text = "%d cases · %d virages · %d secteurs" % [spaces, _corners.size(), sectors]
 
 
 func _refresh_status() -> void:
@@ -522,6 +702,10 @@ func _refresh_info() -> void:
 	if _edit_mode == EditMode.SPACES:
 		_refresh_set_start_button()
 		_refresh_corner_ui()
+		_refresh_summary()
+		return
+	if _edit_mode == EditMode.SECTORS:
+		_refresh_sector_ui()
 		_refresh_summary()
 		return
 	if _spline == null or _spline.point_count() == 0:
@@ -635,16 +819,23 @@ func _ensure_preview_cars() -> void:
 
 func _sync_preview_cars() -> void:
 	_ensure_preview_cars()
-	var show := (
-		_edit_mode == EditMode.SPACES
-		and _selected_space >= 0
-		and _seg_result != null
-		and _seg_result.space_count() >= 2
-	)
+	var space := -1
+	if _seg_result != null and _seg_result.space_count() >= 2:
+		if _edit_mode == EditMode.SPACES and _selected_space >= 0:
+			space = _selected_space
+		elif _edit_mode == EditMode.SECTORS and _selected_sector >= 0:
+			var sectors := _compute_sectors()
+			if _selected_sector < sectors.size():
+				# Mid-sector space so the race-line flip is obvious while editing.
+				var sector: Dictionary = sectors[_selected_sector]
+				var count := _sector_space_count(sector)
+				var n := _seg_result.space_count()
+				space = posmod(int(sector.from) + int(count / 2), n)
+	var show := space >= 0
 	_cars_layer.visible = show
 	if not show:
 		return
-	var poses := _space_slot_poses(_selected_space)
+	var poses := _space_slot_poses(space)
 	for i in mini(2, poses.size()):
 		var car: CarToken = _preview_cars[i]
 		var pose: Dictionary = poses[i]
@@ -652,8 +843,9 @@ func _sync_preview_cars() -> void:
 		car.visible = true
 
 
-## Mid-space poses for spot 0 (inner) and spot 1 (outer), as in-game.
+## Mid-space poses for spot 0 (race line) and spot 1 (outer).
 ## Outer is nudged rearward so the two cars don't sit side-by-side flush.
+## A flipped sector swaps which geometric side is the race line.
 func _space_slot_poses(space_index: int) -> Array:
 	if _seg_result == null or _seg_result.space_count() < 2:
 		return []
@@ -664,13 +856,16 @@ func _space_slot_poses(space_index: int) -> Array:
 	)
 	if poses.size() < 2:
 		return poses
-	var outer: Dictionary = poses[1]
+	var race: Dictionary = (poses[0] as Dictionary).duplicate()
+	var outer: Dictionary = (poses[1] as Dictionary).duplicate()
+	if _space_race_line_flipped(space_index):
+		var tmp_pos: Vector2 = race.pos
+		race["pos"] = outer.pos
+		outer["pos"] = tmp_pos
 	var heading: Vector2 = outer.heading
 	if heading.length_squared() > 0.0001:
-		outer = outer.duplicate()
 		outer["pos"] = (outer.pos as Vector2) - heading.normalized() * OUTER_SPOT_ALONG_OFFSET
-		poses[1] = outer
-	return poses
+	return [race, outer]
 
 
 func _draw_control_points(font: Font) -> void:
@@ -709,10 +904,12 @@ func _draw_spaces() -> void:
 	var font := ThemeDB.fallback_font
 	var n := _seg_result.space_count()
 	# Selection fill under separators (curved asphalt ribbon, not a flat quad).
-	if _selected_space >= 0 and _edit_mode == EditMode.SPACES:
+	if _edit_mode == EditMode.SPACES and _selected_space >= 0:
 		var ribbon := _seg_result.space_ribbon(_selected_space, ROAD_HALF_WIDTH)
 		if ribbon.size() >= 3:
 			_canvas.draw_colored_polygon(ribbon, SPACE_SELECTED_COLOR)
+	elif _edit_mode == EditMode.SECTORS and _selected_sector >= 0:
+		_draw_selected_sector_highlight()
 	for i in n:
 		var a: TrackSegmenter.Frontier = _seg_result.frontiers[i]
 		var inner_edge := a.center + a.inside_normal * ROAD_HALF_WIDTH
@@ -748,6 +945,22 @@ func _draw_spaces() -> void:
 	_draw_start_grid_markers()
 
 
+func _draw_selected_sector_highlight() -> void:
+	var sectors := _compute_sectors()
+	if _selected_sector < 0 or _selected_sector >= sectors.size():
+		return
+	var sector: Dictionary = sectors[_selected_sector]
+	var n := _seg_result.space_count()
+	var space := int(sector.from)
+	while true:
+		var ribbon := _seg_result.space_ribbon(space, ROAD_HALF_WIDTH)
+		if ribbon.size() >= 3:
+			_canvas.draw_colored_polygon(ribbon, SECTOR_SELECTED_COLOR)
+		if space == int(sector.to):
+			break
+		space = posmod(space + 1, n)
+
+
 ## White "]" pads on the five spaces behind the start/finish line (2 spots each).
 func _draw_start_grid_markers() -> void:
 	if _seg_result == null or _seg_result.space_count() < 2:
@@ -764,12 +977,12 @@ func _draw_start_grid_markers() -> void:
 			continue
 		fwd = fwd.normalized()
 		# Behind the exit line = into this space (anti-racing direction).
-		# Inner spot stays tight to the separator; outer sits a touch further back.
+		# Spot 0 (race line) follows sector flip; spot 1 stays nudged back.
+		var flipped := _space_race_line_flipped(space)
+		var race_side := fr.inside_normal if not flipped else -fr.inside_normal
+		_draw_start_grid_marker(fr.center - fwd * 4.0 + race_side * lateral, fwd)
 		_draw_start_grid_marker(
-			fr.center - fwd * 4.0 + fr.inside_normal * lateral, fwd
-		)
-		_draw_start_grid_marker(
-			fr.center - fwd * (4.0 + OUTER_SPOT_ALONG_OFFSET) - fr.inside_normal * lateral,
+			fr.center - fwd * (4.0 + OUTER_SPOT_ALONG_OFFSET) - race_side * lateral,
 			fwd
 		)
 
@@ -864,11 +1077,55 @@ func _draw_road(baked: PackedVector2Array) -> void:
 		loop[i] = pts[i]
 	loop[pts.size()] = pts[0]
 
-	# Dark shoulder underlay, then asphalt. Circles seal the closed join and sharp bends
-	# so we never depend on an offset polygon (those tear at the seam / fold in hairpins).
-	var edge_r := ROAD_HALF_WIDTH + 1.5
-	_stroke_closed_band(pts, loop, edge_r, ASPHALT_EDGE_COLOR)
+	# Kerbs first (under asphalt): thick pale race-line side, thin dark outer.
+	# Asphalt then hides mitre spikes that poke inward at sharp bends / flip joins.
+	_draw_asphalt_side_edges()
 	_stroke_closed_band(pts, loop, ROAD_HALF_WIDTH, ASPHALT_COLOR)
+
+
+## Dark thin outer kerb + pale thick race-line kerb (honours per-sector flip).
+func _draw_asphalt_side_edges() -> void:
+	if _seg_result == null or _seg_result.samples.is_empty():
+		return
+	var race_half := RACE_LINE_EDGE_WIDTH * 0.5
+	var outer_half := ASPHALT_OUTER_EDGE_WIDTH * 0.5
+	var race_run := PackedVector2Array()
+	var outer_run := PackedVector2Array()
+	var prev_flipped := false
+	var have_prev := false
+	for s in _seg_result.samples:
+		var inside: Vector2 = s.inside
+		if inside.length_squared() < 0.0001:
+			inside = Vector2.UP
+		else:
+			inside = inside.normalized()
+		var space := _seg_result.space_index_at_offset(float(s.cum))
+		var flipped := _space_race_line_flipped(space)
+		if have_prev and flipped != prev_flipped:
+			_stroke_asphalt_edge_run(race_run, RACE_LINE_EDGE_COLOR, RACE_LINE_EDGE_WIDTH)
+			_stroke_asphalt_edge_run(outer_run, ASPHALT_EDGE_COLOR, ASPHALT_OUTER_EDGE_WIDTH)
+			race_run = PackedVector2Array()
+			outer_run = PackedVector2Array()
+		have_prev = true
+		prev_flipped = flipped
+		var race_n := -inside if flipped else inside
+		var center: Vector2 = s.pos
+		# Centre the stroke on the asphalt lip so half sits outside (visible kerb)
+		# and half sits under asphalt (absorbs sharp mitres at corners).
+		race_run.append(center + race_n * (ROAD_HALF_WIDTH + race_half))
+		outer_run.append(center - race_n * (ROAD_HALF_WIDTH + outer_half))
+	_stroke_asphalt_edge_run(race_run, RACE_LINE_EDGE_COLOR, RACE_LINE_EDGE_WIDTH)
+	_stroke_asphalt_edge_run(outer_run, ASPHALT_EDGE_COLOR, ASPHALT_OUTER_EDGE_WIDTH)
+
+
+func _stroke_asphalt_edge_run(pts: PackedVector2Array, color: Color, width: float) -> void:
+	if pts.size() < 2:
+		return
+	var r := width * 0.5
+	# Circle stamps give round joins; polyline fills gaps between samples.
+	for i in pts.size():
+		_canvas.draw_circle(pts[i], r, color)
+	_canvas.draw_polyline(pts, color, width, true)
 
 
 func _draw_centerline(baked: PackedVector2Array) -> void:
@@ -931,6 +1188,9 @@ func _on_canvas_gui_input(event: InputEvent) -> void:
 		return
 	if _edit_mode == EditMode.SPACES:
 		_on_spaces_gui_input(event)
+		return
+	if _edit_mode == EditMode.SECTORS:
+		_on_sectors_gui_input(event)
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -1004,6 +1264,21 @@ func _badge_hit_at(world: Vector2) -> int:
 			best_d = d
 			best = space
 	return best
+
+
+func _on_sectors_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+			return
+		var space := _space_index_at(_screen_to_world(mb.position))
+		if space < 0:
+			_selected_sector = -1
+		else:
+			_selected_sector = _sector_index_at_space(space)
+		_refresh_sector_ui()
+		_canvas.queue_redraw()
+		_canvas.accept_event()
 
 
 func _space_index_at(pos: Vector2) -> int:

@@ -175,6 +175,14 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Cases"
 
+[node name="ModeSectors" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_group = SubResource("ButtonGroup_mode")
+text = "Secteurs"
+
 [node name="TraceSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -250,6 +258,33 @@ layout_mode = 2
 disabled = true
 text = "Extérieur"
 tooltip_text = "Côté d'affichage de la limite (réinitialise le décalage)"
+
+[node name="SectorsSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SectorHint" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.74, 0.78, 1)
+theme_override_font_sizes/font_size = 12
+text = "Clique une case pour sélectionner son secteur."
+autowrap_mode = 3
+
+[node name="SectorInfoLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Aucun secteur sélectionné"
+autowrap_mode = 3
+
+[node name="SectorRaceLineButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Ligne de course : intérieure"
+tooltip_text = "Inverse quel côté du ruban est le spot 0 (ligne de course)"
 
 [node name="PanelSpacer" type="Control" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
 layout_mode = 2

@@ -1,23 +1,41 @@
 class_name CardHandView
-extends GridContainer
+extends Control
+
+## The player's hand, drawn with the UI kit's Card rather than plain buttons.
+##
+## Layout is manual rather than a container: the cards sit on an arc and lift on
+## hover, which a GridContainer would fight by re-placing them every frame.
 
 signal selection_changed(selected_ids: Array[String])
+
+const CARD_SIZE := Vector2(118, 170)
+## Radians between two neighbouring cards.
+const FAN_SPREAD := 0.045
+## Depth of the arc, in pixels.
+const FAN_LIFT := 16.0
+## Horizontal step between cards. Wide enough that a card's value stays readable
+## when the next one overlaps it.
+const FAN_STEP := 104.0
 
 var _selected: Dictionary = {} # id -> true
 var _multi_select: bool = true
 var _enabled: bool = true
 ## -1 = unlimited. Caps how many cards can be selected at once.
 var _max_selection: int = -1
+var _cards: Array[Card] = []
 
 
 func _ready() -> void:
-	if columns < 1:
-		columns = 4
+	if custom_minimum_size == Vector2.ZERO:
+		custom_minimum_size = Vector2(0, CARD_SIZE.y + FAN_LIFT * 2.0 + 20.0)
+	clip_contents = false
+	resized.connect(_layout_fan)
 
 
 func clear_hand() -> void:
-	for child in get_children():
-		child.free()
+	for card in _cards:
+		card.queue_free()
+	_cards.clear()
 	_selected.clear()
 
 
@@ -29,10 +47,9 @@ func set_selection_limit(max_n: int) -> void:
 	while ids.size() > _max_selection:
 		var drop_id: String = ids.pop_back()
 		_selected.erase(drop_id)
-		for child in get_children():
-			if child is Button and str(child.get_meta("card_id")) == drop_id:
-				child.set_pressed_no_signal(false)
-				break
+		var card := _card_by_id(drop_id)
+		if card != null:
+			card.selected = false
 	selection_changed.emit(selected_ids())
 
 
@@ -46,33 +63,34 @@ func set_cards(
 	clear_hand()
 	_enabled = enabled
 	_multi_select = multi_select
-	for card in cards:
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(52, 72)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.toggle_mode = true
+	for heat_card in cards:
 		var selectable := enabled
 		if selectable and can_select.is_valid():
-			selectable = bool(can_select.call(card))
-		btn.disabled = not selectable
-		if enabled and not selectable:
-			btn.modulate = Color(1, 1, 1, 0.45)
-			btn.tooltip_text = "%s (non sélectionnable)" % card.id
-		else:
-			btn.tooltip_text = card.id
-		btn.text = _label_for(card)
-		btn.set_meta("card_id", card.id)
-		btn.add_theme_color_override("font_color", _color_for(card))
+			selectable = bool(can_select.call(heat_card))
+
+		var card := Card.new()
+		card.card_size = CARD_SIZE
+		add_child(card)
+		card.data = _to_card_data(heat_card)
+		# Only veil a card the player could otherwise expect to pick. Outside a
+		# selection phase the whole hand is simply inert, and veiling all of it
+		# turned the cockpit into grey mush.
+		card.dimmed = enabled and not selectable
+		card.set_meta("card_id", heat_card.id)
+		card.tooltip_text = heat_card.id if selectable else "%s (non jouable)" % heat_card.id
 		if selectable:
-			btn.toggled.connect(_on_card_toggled.bind(card.id, btn))
-		add_child(btn)
+			card.clicked.connect(_on_card_clicked)
+		_cards.append(card)
+
 		if animate:
-			btn.modulate.a = 0.0 if selectable else 0.45
-			btn.scale = Vector2(0.85, 0.85)
+			card.modulate.a = 0.0
 			var tween := create_tween()
-			tween.set_parallel(true)
-			tween.tween_property(btn, "modulate:a", 1.0 if selectable else 0.45, 0.22)
-			tween.tween_property(btn, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tween.tween_property(card, "modulate:a", 1.0, 0.22)
+
+	_layout_fan()
+	# On the first build the control has no size yet, so lay out again once the
+	# containers have run.
+	call_deferred("_layout_fan")
 
 
 func selected_ids() -> Array[String]:
@@ -85,52 +103,83 @@ func selected_ids() -> Array[String]:
 
 func clear_selection() -> void:
 	_selected.clear()
-	for child in get_children():
-		if child is Button:
-			child.set_pressed_no_signal(false)
+	for card in _cards:
+		card.selected = false
 	selection_changed.emit(selected_ids())
 
 
-func _on_card_toggled(pressed: bool, card_id: String, btn: Button) -> void:
-	if pressed and _max_selection >= 0 and selected_ids().size() >= _max_selection and not _selected.has(card_id):
-		btn.set_pressed_no_signal(false)
+# --- Layout ---
+
+func _layout_fan() -> void:
+	if _cards.is_empty():
+		return
+	var mid := float(_cards.size() - 1) * 0.5
+	var center_x := size.x * 0.5
+	# Tighten the step rather than overflow when the hand is large.
+	var step := FAN_STEP
+	var span := float(_cards.size() - 1) * step + CARD_SIZE.x
+	if span > size.x and _cards.size() > 1:
+		# Never tighter than the big number is wide, or the hand stops being readable.
+		step = maxf(44.0, (size.x - CARD_SIZE.x) / float(_cards.size() - 1))
+	# Cards pivot on their bottom centre, so tilting drops one bottom corner below
+	# the pivot. That overhang has to be budgeted or the outer cards get clipped.
+	var tilt_drop := CARD_SIZE.x * 0.5 * sin(absf(mid * FAN_SPREAD))
+	# The crest is raised by the full drop so the outermost cards still land on the
+	# bottom edge instead of hanging past it.
+	var crest := mid * FAN_LIFT * 0.5
+	var base_y := size.y - CARD_SIZE.y - crest - tilt_drop
+	if base_y < 0.0:
+		# Not enough height for the full arc: flatten it rather than clip cards.
+		crest = maxf(0.0, crest + base_y)
+		base_y = maxf(0.0, size.y - CARD_SIZE.y - crest - tilt_drop)
+
+	for i in _cards.size():
+		var card := _cards[i]
+		var offset := float(i) - mid
+		card.rotation = offset * FAN_SPREAD
+		card.position.x = center_x + offset * step - CARD_SIZE.x * 0.5
+		# Crest at the centre: the arc bulges up in the middle and the ends drop,
+		# the way a hand of cards actually sits when it is held.
+		card.set_rest_y(base_y + absf(offset) * FAN_LIFT * 0.5)
+
+
+# --- Selection ---
+
+func _on_card_clicked(card: Card) -> void:
+	var card_id: String = card.get_meta("card_id")
+	var pressed := not _selected.has(card_id)
+	if pressed and _max_selection >= 0 and selected_ids().size() >= _max_selection:
 		return
 	if not _multi_select and pressed:
-		for child in get_children():
-			if child is Button and child != btn:
-				child.set_pressed_no_signal(false)
-				var other_id: String = child.get_meta("card_id")
-				_selected.erase(other_id)
+		for other in _cards:
+			if other != card:
+				other.selected = false
+				_selected.erase(other.get_meta("card_id"))
 	if pressed:
 		_selected[card_id] = true
 	else:
 		_selected.erase(card_id)
+	card.selected = pressed
 	selection_changed.emit(selected_ids())
 
 
-func _label_for(card: HeatCard) -> String:
-	match card.kind:
-		HeatCard.Kind.SPEED:
-			return "SPD\n%d" % card.speed_value
-		HeatCard.Kind.UPGRADE:
-			return "UPG\n%d" % card.speed_value
-		HeatCard.Kind.HEAT:
-			return "HEAT"
-		HeatCard.Kind.STRESS:
-			return "STR"
-		_:
-			return "?"
+func _card_by_id(card_id: String) -> Card:
+	for card in _cards:
+		if str(card.get_meta("card_id")) == card_id:
+			return card
+	return null
 
 
-func _color_for(card: HeatCard) -> Color:
+# --- Model mapping ---
+
+## Rules-side HeatCard to the kit's presentation-side CardData.
+func _to_card_data(card: HeatCard) -> CardData:
 	match card.kind:
-		HeatCard.Kind.SPEED:
-			return Color(0.7, 0.85, 1.0)
 		HeatCard.Kind.UPGRADE:
-			return Color(0.7, 1.0, 0.75)
+			return CardData.upgrade(card.speed_value)
 		HeatCard.Kind.HEAT:
-			return Color(1.0, 0.55, 0.3)
+			return CardData.heat()
 		HeatCard.Kind.STRESS:
-			return Color(0.85, 0.65, 1.0)
+			return CardData.stress()
 		_:
-			return Color.WHITE
+			return CardData.speed(card.speed_value)

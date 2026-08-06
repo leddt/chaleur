@@ -26,6 +26,8 @@ var round_speed: int = 0
 var corners_crossed: Array[String] = []
 var has_adrenaline: bool = false
 var boost_used: bool = false
+var adrenaline_speed_used: bool = false
+var cooldown_used: int = 0
 var turn_complete: bool = false
 
 
@@ -38,6 +40,8 @@ func reset_round_flags() -> void:
 	corners_crossed.clear()
 	has_adrenaline = false
 	boost_used = false
+	adrenaline_speed_used = false
+	cooldown_used = 0
 	turn_complete = false
 
 
@@ -63,5 +67,28 @@ func cooldown_from_gear() -> int:
 			return 0
 
 
-func can_boost_from_gear() -> bool:
-	return gear >= 3
+func max_cooldown() -> int:
+	var n := cooldown_from_gear()
+	if has_adrenaline:
+		n += 1
+	return n
+
+
+func cooldown_remaining() -> int:
+	return maxi(0, max_cooldown() - cooldown_used)
+
+
+func can_use_boost() -> bool:
+	return not boost_used and engine_heat() >= 1
+
+
+func can_use_adrenaline() -> bool:
+	return has_adrenaline and not adrenaline_speed_used
+
+
+func can_use_cooldown() -> bool:
+	return cooldown_remaining() > 0 and hand.count_kind(HeatCard.Kind.HEAT) >= 1
+
+
+func has_pending_react_options() -> bool:
+	return can_use_boost() or can_use_adrenaline() or can_use_cooldown()

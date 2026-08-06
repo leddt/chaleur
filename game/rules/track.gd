@@ -65,6 +65,22 @@ func distance_to_finish(progress: int) -> int:
 
 ## HUD helper: prefer finish distance once the next corner would wrap past the finish
 ## (last sector of the race). Returns {"kind": "corner"|"finish"|"none", "distance": int}.
+## The corner `distance_to_next_corner` measured against, so the UI can show its
+## speed limit without re-deriving which corner is next.
+func next_corner(progress: int) -> HeatCorner:
+	if corners.is_empty() or space_count <= 0:
+		return null
+	var space := space_of_progress(progress)
+	var best := space_count
+	var found: HeatCorner = null
+	for corner in corners:
+		var d := posmod(corner.from_space - space, space_count)
+		if d < best:
+			best = d
+			found = corner
+	return found
+
+
 func next_landmark(progress: int) -> Dictionary:
 	var to_finish := distance_to_finish(progress)
 	if to_finish < 0:

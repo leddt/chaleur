@@ -86,7 +86,8 @@ func test_boost_increases_corner_speed_slipstream_does_not() -> void:
 	engine.debug_begin_turns([0, 1] as Array[int])
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
 	assert_eq(p.round_speed, 3)
-	assert_true(engine.react(0, 0, true, false).ok)
+	assert_true(engine.use_boost(0).ok)
+	assert_true(engine.finish_react(0).ok)
 	assert_eq(p.round_speed, 5)
 	var speed_after_boost := p.round_speed
 	# Slipstream must not change round_speed used for corners.
@@ -108,7 +109,7 @@ func test_corner_excess_causes_spin_out() -> void:
 	engine.phase = HeatGameEngine.Phase.PLAY_CARDS
 	assert_true(HeatTestHelpers.play_speeds(engine, 0, [6]))
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
-	assert_true(engine.react(0, 0, false, false).ok)
+	assert_true(engine.finish_react(0).ok)
 	if engine.turn_step == HeatGameEngine.TurnStep.SLIPSTREAM:
 		assert_true(engine.slipstream(0, false).ok)
 	assert_eq(p.engine_heat(), 0)
@@ -127,7 +128,7 @@ func test_multiple_corners_same_turn() -> void:
 	engine.phase = HeatGameEngine.Phase.PLAY_CARDS
 	assert_true(HeatTestHelpers.play_speeds(engine, 0, [8]))
 	var heat_before := p.engine_heat()
-	assert_true(engine.react(0, 0, false, false).ok)
+	assert_true(engine.finish_react(0).ok)
 	if engine.turn_step == HeatGameEngine.TurnStep.SLIPSTREAM:
 		assert_true(engine.slipstream(0, false).ok)
 	assert_eq(p.engine_heat(), heat_before - 7)
@@ -196,8 +197,125 @@ func test_boost_requires_heat() -> void:
 	engine.phase = HeatGameEngine.Phase.PLAY_CARDS
 	assert_true(HeatTestHelpers.play_speeds(engine, 0, [1, 1, 1, 1]))
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
-	var r := engine.react(0, 0, true, false)
+	var r := engine.use_boost(0)
 	assert_false(r.ok)
+
+
+func test_boost_allowed_in_any_gear() -> void:
+	for gear in [1, 2, 3, 4]:
+		var engine := HeatTestHelpers.make_engine(1, 20 + gear)
+		var p := engine.players[0]
+		HeatTestHelpers.ensure_engine_heat(p, 6)
+		p.gear = gear
+		p.gear_locked = true
+		p.progress = 0
+		p.spot = 0
+		engine.phase = HeatGameEngine.Phase.PLAY_CARDS
+		var speeds: Array[int] = []
+		for _i in gear:
+			speeds.append(1)
+		assert_true(HeatTestHelpers.play_speeds(engine, 0, speeds), "gear %d play" % gear)
+		assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
+		p.draw_pile.clear()
+		p.discard.clear()
+		p.draw_pile.add(HeatCard.new("boost_spd_g%d" % gear, HeatCard.Kind.SPEED, 2))
+		var speed_before := p.round_speed
+		var heat_before := p.engine_heat()
+		var r := engine.use_boost(0)
+		assert_true(r.ok, "gear %d: %s" % [gear, r.error])
+		assert_true(p.boost_used, "gear %d boost_used" % gear)
+		assert_eq(p.round_speed, speed_before + 2, "gear %d speed" % gear)
+		assert_lt(p.engine_heat(), heat_before, "gear %d paid Heat" % gear)
+		assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT, "gear %d stays in REACT" % gear)
+		assert_true(engine.finish_react(0).ok, "gear %d finish" % gear)
+
+
+func test_react_boost_and_adrenaline_order_independent() -> void:
+	for adrenaline_first in [true, false]:
+		var engine := HeatTestHelpers.make_engine(2, 30 if adrenaline_first else 31)
+		assert_true(HeatTestHelpers.shift_all(engine, 1))
+		assert_true(HeatTestHelpers.play_speeds(engine, 0, [1]))
+		assert_true(HeatTestHelpers.play_speeds(engine, 1, [1]))
+		# Last in turn order has adrenaline.
+		var last_id := engine.turn_order[engine.turn_order.size() - 1]
+		while engine.active_player() != null and engine.active_player().id != last_id:
+			var ap := engine.active_player()
+			assert_true(engine.finish_react(ap.id).ok)
+			if engine.turn_step == HeatGameEngine.TurnStep.SLIPSTREAM:
+				assert_true(engine.slipstream(ap.id, false).ok)
+			if engine.turn_step == HeatGameEngine.TurnStep.DISCARD:
+				assert_true(engine.discard_cards(ap.id, []).ok)
+		var p := engine.players[last_id]
+		assert_true(p.has_adrenaline)
+		HeatTestHelpers.ensure_engine_heat(p, 6)
+		p.draw_pile.clear()
+		p.discard.clear()
+		p.draw_pile.add(HeatCard.new("ord_spd", HeatCard.Kind.SPEED, 2))
+		var prog0 := p.progress
+		var speed0 := p.round_speed
+		if adrenaline_first:
+			assert_true(engine.use_adrenaline(last_id).ok)
+			assert_eq(p.progress, prog0 + 1)
+			assert_eq(p.round_speed, speed0 + 1)
+			assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
+			assert_true(engine.use_boost(last_id).ok)
+		else:
+			assert_true(engine.use_boost(last_id).ok)
+			assert_eq(p.progress, prog0 + 2)
+			assert_eq(p.round_speed, speed0 + 2)
+			assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
+			assert_true(engine.use_adrenaline(last_id).ok)
+		assert_eq(p.round_speed, speed0 + 3)
+		assert_eq(p.progress, prog0 + 3)
+		assert_true(p.boost_used)
+		assert_true(p.adrenaline_speed_used)
+		assert_false(engine.use_boost(last_id).ok)
+		assert_false(engine.use_adrenaline(last_id).ok)
+		assert_true(engine.finish_react(last_id).ok)
+
+
+func test_unit_cooldown_until_exhausted() -> void:
+	var engine := HeatTestHelpers.make_engine(1, 40)
+	var p := engine.players[0]
+	p.gear = 1
+	p.gear_locked = true
+	engine.phase = HeatGameEngine.Phase.PLAY_CARDS
+	# Put Heat in hand for cooldown.
+	p.hand.clear()
+	for i in 4:
+		p.hand.add(HeatCard.new("hh%d" % i, HeatCard.Kind.HEAT, 0))
+	p.hand.add(HeatCard.new("spd", HeatCard.Kind.SPEED, 1))
+	assert_true(engine.play_cards(0, ["spd"]).ok)
+	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
+	# Solo races still grant adrenaline to the sole mover; isolate cooldown quota.
+	p.has_adrenaline = false
+	assert_eq(p.max_cooldown(), 3)
+	assert_eq(p.cooldown_remaining(), 3)
+	assert_true(p.has_pending_react_options())
+	var heat0 := p.engine_heat()
+	for i in 3:
+		assert_true(engine.use_cooldown(0).ok, "cooldown %d" % i)
+		assert_eq(p.cooldown_used, i + 1)
+		assert_eq(p.cooldown_remaining(), 2 - i)
+	assert_eq(p.engine_heat(), heat0 + 3)
+	assert_false(engine.use_cooldown(0).ok)
+	assert_false(p.can_use_cooldown())
+	assert_true(engine.finish_react(0).ok)
+
+
+func test_codec_preserves_react_mid_step_flags() -> void:
+	var engine := HeatTestHelpers.make_engine(1, 41)
+	var p := engine.players[0]
+	p.boost_used = true
+	p.adrenaline_speed_used = true
+	p.cooldown_used = 2
+	p.has_adrenaline = true
+	var snap := StateCodec.encode(engine, -1)
+	var restored := StateCodec.decode(snap)
+	assert_true(restored.players[0].boost_used)
+	assert_true(restored.players[0].adrenaline_speed_used)
+	assert_eq(restored.players[0].cooldown_used, 2)
+	assert_true(restored.players[0].has_adrenaline)
 
 
 func test_replenish_to_seven_and_recycle_discard() -> void:
@@ -216,7 +334,7 @@ func test_replenish_to_seven_and_recycle_discard() -> void:
 		p.discard.add(HeatCard.new("e%d" % i, HeatCard.Kind.SPEED, 1))
 	p.hand.add(HeatCard.new("only", HeatCard.Kind.SPEED, 2))
 	assert_true(engine.play_cards(0, ["only"]).ok)
-	assert_true(engine.react(0, 0, false, false).ok)
+	assert_true(engine.finish_react(0).ok)
 	if engine.turn_step == HeatGameEngine.TurnStep.SLIPSTREAM:
 		assert_true(engine.slipstream(0, false).ok)
 	assert_true(engine.discard_cards(0, []).ok)
@@ -246,7 +364,7 @@ func test_same_round_finish_ranked_by_distance() -> void:
 	assert_true(HeatTestHelpers.play_speeds(engine, 0, [5])) # Alice -> 12
 	assert_true(HeatTestHelpers.play_speeds(engine, 1, [3])) # Bob -> 11
 	# Bob is ahead so acts first; both will finish this round.
-	assert_true(engine.react(bob.id, 0, false, false).ok)
+	assert_true(engine.finish_react(bob.id).ok)
 	if engine.turn_step == HeatGameEngine.TurnStep.DISCARD:
 		assert_true(engine.discard_cards(bob.id, []).ok)
 	# Alice's turn may already be at REACT after Bob advanced.
@@ -256,7 +374,7 @@ func test_same_round_finish_ranked_by_distance() -> void:
 		assert_eq(ap.id, alice.id)
 		match engine.turn_step:
 			HeatGameEngine.TurnStep.REACT:
-				assert_true(engine.react(alice.id, 0, false, false).ok)
+				assert_true(engine.finish_react(alice.id).ok)
 			HeatGameEngine.TurnStep.SLIPSTREAM:
 				assert_true(engine.slipstream(alice.id, false).ok)
 			HeatGameEngine.TurnStep.DISCARD:
@@ -305,7 +423,7 @@ func test_first_finisher_still_pending_then_others_continue() -> void:
 	assert_eq(pending.size(), 1)
 	assert_eq(pending[0], bob.id)
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
-	assert_true(engine.react(bob.id, 0, false, false).ok)
+	assert_true(engine.finish_react(bob.id).ok)
 	# Alice must still get her turn this round (or a later round) — race not over.
 	assert_false(engine.is_race_over())
 	assert_false(alice.finished)
@@ -346,7 +464,7 @@ func test_short_race_can_finish() -> void:
 					break
 				match engine.turn_step:
 					HeatGameEngine.TurnStep.REACT:
-						engine.react(ap.id, 0, false, false)
+						engine.finish_react(ap.id)
 					HeatGameEngine.TurnStep.SLIPSTREAM:
 						engine.slipstream(ap.id, false)
 					HeatGameEngine.TurnStep.DISCARD:
@@ -365,17 +483,44 @@ func test_track1_starts_behind_line_two_per_space() -> void:
 	engine.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 1)
 	assert_true(engine.track.start_behind_finish_line)
 	assert_eq(engine.track.space_count, 69)
-	# Front row (closest to line): progress -1 → space 68
-	assert_eq(engine.players[0].progress, -1)
-	assert_eq(engine.players[1].progress, -1)
 	assert_eq(engine.track.space_of_progress(-1), 68)
-	assert_eq(engine.players[0].spot, 0)
-	assert_eq(engine.players[1].spot, 1)
-	# Second row: progress -2 → space 67
-	assert_eq(engine.players[2].progress, -2)
-	assert_eq(engine.players[3].progress, -2)
 	assert_eq(engine.track.space_of_progress(-2), 67)
-	assert_ne(engine.players[0].progress, engine.players[2].progress)
+	var front: Array[PlayerState] = []
+	var second: Array[PlayerState] = []
+	for p in engine.players:
+		match p.progress:
+			-1:
+				front.append(p)
+			-2:
+				second.append(p)
+	assert_eq(front.size(), 2)
+	assert_eq(second.size(), 2)
+	assert_ne(front[0].spot, front[1].spot)
+	assert_ne(second[0].spot, second[1].spot)
+
+
+func test_starting_grid_order_follows_seed_not_seat_order() -> void:
+	var same_a := HeatGameEngine.new()
+	var same_b := HeatGameEngine.new()
+	same_a.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 7)
+	same_b.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 7)
+	for i in 4:
+		assert_eq(same_a.players[i].progress, same_b.players[i].progress)
+		assert_eq(same_a.players[i].spot, same_b.players[i].spot)
+
+	# Seat order would always put players 0–1 on the front row; a shuffled grid
+	# must break that for at least one seed.
+	var broke_seat_order := false
+	for seed in range(1, 80):
+		var engine := HeatGameEngine.new()
+		engine.setup(["A", "B", "C", "D"], HeatTrack.track1(1), seed)
+		if engine.players[0].progress != -1 or engine.players[1].progress != -1:
+			broke_seat_order = true
+			break
+		if engine.players[0].spot != 0 or engine.players[1].spot != 1:
+			broke_seat_order = true
+			break
+	assert_true(broke_seat_order)
 
 
 func test_next_landmark_shows_finish_in_last_sector() -> void:

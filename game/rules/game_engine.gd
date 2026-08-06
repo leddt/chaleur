@@ -183,58 +183,81 @@ func play_cards(player_id: int, card_ids: Array[String]) -> ActionResult:
 	return ActionResult.success()
 
 
-func react(player_id: int, cooldown: int, boost: bool, adrenaline_speed: bool) -> ActionResult:
+func use_boost(player_id: int) -> ActionResult:
 	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
 		return ActionResult.fail("Not in REACT step")
 	var p := active_player()
 	if p == null or p.id != player_id:
 		return ActionResult.fail("Not this player's turn")
-
-	var max_cd := p.cooldown_from_gear()
-	if p.has_adrenaline:
-		max_cd += 1
-	if cooldown < 0 or cooldown > max_cd:
-		return ActionResult.fail("Invalid cooldown amount")
-	if cooldown > p.hand.count_kind(HeatCard.Kind.HEAT):
-		return ActionResult.fail("Not enough Heat in hand to cooldown")
-	if boost:
-		if not p.can_boost_from_gear():
-			return ActionResult.fail("Boost not available in this gear")
-		if p.engine_heat() < 1:
-			return ActionResult.fail("Not enough Heat to boost")
-	if adrenaline_speed and not p.has_adrenaline:
-		return ActionResult.fail("No adrenaline")
-
-	# Apply cooldown
-	for _i in cooldown:
-		var heat := _take_heat_from_hand(p)
-		if heat:
-			p.engine.add(heat)
-	if cooldown > 0:
-		_log("%s cools down %d" % [p.display_name, cooldown])
-
-	# Adrenaline speed and boost may be ordered either way; apply adrenaline first then boost by default.
-	if adrenaline_speed:
-		p.round_speed += 1
-		_move_player(p, 1, false)
-		_log("%s uses adrenaline +1 speed" % p.display_name)
-
-	if boost:
-		_pay_heat(p, 1)
-		var speed_card := _flip_until_speed(p)
-		if speed_card == null:
-			return ActionResult.fail("Boost failed: no Speed card available")
-		p.play_area.add(speed_card)
-		p.round_speed += speed_card.speed_value
-		p.boost_used = true
-		_move_player(p, speed_card.speed_value, false)
-		_log("%s boosts for +%d" % [p.display_name, speed_card.speed_value])
-
+	if p.boost_used:
+		return ActionResult.fail("Boost already used")
+	if p.engine_heat() < 1:
+		return ActionResult.fail("Not enough Heat to boost")
+	_pay_heat(p, 1)
+	var speed_card := _flip_until_speed(p)
+	if speed_card == null:
+		return ActionResult.fail("Boost failed: no Speed card available")
+	p.play_area.add(speed_card)
+	p.round_speed += speed_card.speed_value
+	p.boost_used = true
+	_move_player(p, speed_card.speed_value, false)
+	_log("%s boosts for +%d" % [p.display_name, speed_card.speed_value])
 	_check_finish(p)
+	return ActionResult.success()
+
+
+func use_adrenaline(player_id: int) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	if not p.has_adrenaline:
+		return ActionResult.fail("No adrenaline")
+	if p.adrenaline_speed_used:
+		return ActionResult.fail("Adrenaline already used")
+	p.adrenaline_speed_used = true
+	p.round_speed += 1
+	_move_player(p, 1, false)
+	_log("%s uses adrenaline +1 speed" % p.display_name)
+	_check_finish(p)
+	return ActionResult.success()
+
+
+func use_cooldown(player_id: int) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	if p.cooldown_remaining() < 1:
+		return ActionResult.fail("No cooldown remaining")
+	if p.hand.count_kind(HeatCard.Kind.HEAT) < 1:
+		return ActionResult.fail("Not enough Heat in hand to cooldown")
+	var heat := _take_heat_from_hand(p)
+	if heat == null:
+		return ActionResult.fail("Not enough Heat in hand to cooldown")
+	p.engine.add(heat)
+	p.cooldown_used += 1
+	_log("%s cools down 1" % p.display_name)
+	return ActionResult.success()
+
+
+func finish_react(player_id: int) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
 	turn_step = TurnStep.SLIPSTREAM
 	if not _slipstream_eligible(p):
 		return _auto_skip_slipstream(p)
 	return ActionResult.success()
+
+
+## Legacy name used by UI / net action "react" (= finish React step).
+func react(player_id: int) -> ActionResult:
+	return finish_react(player_id)
 
 
 func slipstream(player_id: int, use: bool) -> ActionResult:
@@ -289,22 +312,34 @@ func _log(line: String) -> void:
 
 
 func _assign_unique_start_spots() -> void:
+	# Shuffle grid order so lobby/seat order (host first) is not the pole.
+	var grid: Array[int] = []
+	for i in players.size():
+		grid.append(i)
+	for i in range(grid.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp := grid[i]
+		grid[i] = grid[j]
+		grid[j] = tmp
+
 	if track.start_behind_finish_line:
 		# Behind the start/finish line: last spaces of the final sector.
 		# progress -1 => space (n-1), -2 => (n-2), … ; max 2 cars per space.
 		var per_space := maxi(1, track.start_max_per_space)
-		for i in players.size():
-			var row := int(i / per_space)
-			var spot := i % per_space
-			players[i].progress = -(row + 1)
-			var space := track.space_of_progress(players[i].progress)
+		for rank in grid.size():
+			var p := players[grid[rank]]
+			var row := int(rank / per_space)
+			var spot := rank % per_space
+			p.progress = -(row + 1)
+			var space := track.space_of_progress(p.progress)
 			var cap := track.spot_count(space)
-			players[i].spot = mini(spot, maxi(cap - 1, 0))
+			p.spot = mini(spot, maxi(cap - 1, 0))
 		return
 	var max_spots := track.spot_count(0)
-	for i in players.size():
-		players[i].progress = 0
-		players[i].spot = i % maxi(max_spots, 1)
+	for rank in grid.size():
+		var p := players[grid[rank]]
+		p.progress = 0
+		p.spot = rank % maxi(max_spots, 1)
 
 
 func _draw_up_to(p: PlayerState, target: int) -> void:

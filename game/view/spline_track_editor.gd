@@ -24,6 +24,11 @@ const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.22)
 const CORNER_BADGE_RADIUS := 11.0
 ## Gap from asphalt edge to the badge's natural center.
 const CORNER_BADGE_GAP := 18.0
+## Spaces immediately behind the start line that form the starting grid.
+const START_GRID_SPACES := 5
+const START_GRID_MARKER_COLOR := Color(0.95, 0.95, 0.98, 0.6)
+## Outer lane sits this far back along the track relative to the inner spot.
+const OUTER_SPOT_ALONG_OFFSET := 4.0
 const MIN_VIEW_ZOOM := 0.25
 const MAX_VIEW_ZOOM := 4.0
 const VIEW_ZOOM_STEP := 1.12
@@ -648,14 +653,24 @@ func _sync_preview_cars() -> void:
 
 
 ## Mid-space poses for spot 0 (inner) and spot 1 (outer), as in-game.
+## Outer is nudged rearward so the two cars don't sit side-by-side flush.
 func _space_slot_poses(space_index: int) -> Array:
 	if _seg_result == null or _seg_result.space_count() < 2:
 		return []
-	return _seg_result.space_slot_poses(
+	var poses := _seg_result.space_slot_poses(
 		space_index,
 		_seg_params.road_half_width,
 		_seg_params.spot_inset
 	)
+	if poses.size() < 2:
+		return poses
+	var outer: Dictionary = poses[1]
+	var heading: Vector2 = outer.heading
+	if heading.length_squared() > 0.0001:
+		outer = outer.duplicate()
+		outer["pos"] = (outer.pos as Vector2) - heading.normalized() * OUTER_SPOT_ALONG_OFFSET
+		poses[1] = outer
+	return poses
 
 
 func _draw_control_points(font: Font) -> void:
@@ -730,6 +745,70 @@ func _draw_spaces() -> void:
 			11,
 			Color(1, 1, 1, 0.7)
 		)
+	_draw_start_grid_markers()
+
+
+## White "]" pads on the five spaces behind the start/finish line (2 spots each).
+func _draw_start_grid_markers() -> void:
+	if _seg_result == null or _seg_result.space_count() < 2:
+		return
+	var n := _seg_result.space_count()
+	var rows := mini(START_GRID_SPACES, n)
+	var lateral := ROAD_HALF_WIDTH * _seg_params.spot_inset
+	for row in rows:
+		var space := posmod(_start_space_index - 1 - row, n)
+		var exit_i := posmod(space + 1, n)
+		var fr: TrackSegmenter.Frontier = _seg_result.frontiers[exit_i]
+		var fwd := fr.tangent
+		if fwd.length_squared() < 0.0001:
+			continue
+		fwd = fwd.normalized()
+		# Behind the exit line = into this space (anti-racing direction).
+		# Inner spot stays tight to the separator; outer sits a touch further back.
+		_draw_start_grid_marker(
+			fr.center - fwd * 4.0 + fr.inside_normal * lateral, fwd
+		)
+		_draw_start_grid_marker(
+			fr.center - fwd * (4.0 + OUTER_SPOT_ALONG_OFFSET) - fr.inside_normal * lateral,
+			fwd
+		)
+
+
+## Bracket "]" : spine parallel to the start line, short arms rearward.
+func _draw_start_grid_marker(center: Vector2, heading: Vector2) -> void:
+	var fwd := heading.normalized()
+	var right := Vector2(-fwd.y, fwd.x)
+	var half_w := 8.5
+	var arm := 5.0
+	var t := 1.0 # half stroke thickness
+	# Non-overlapping quads so alpha stays even at the corners.
+	_draw_start_grid_quad(
+		center, right, fwd,
+		-half_w + t, half_w - t, -t, t
+	) # spine (between the arms)
+	_draw_start_grid_quad(
+		center, right, fwd,
+		-half_w - t, -half_w + t, -arm, t
+	) # arm A + its corner
+	_draw_start_grid_quad(
+		center, right, fwd,
+		half_w - t, half_w + t, -arm, t
+	) # arm B + its corner
+
+
+func _draw_start_grid_quad(
+	origin: Vector2, right: Vector2, fwd: Vector2,
+	r0: float, r1: float, f0: float, f1: float
+) -> void:
+	_canvas.draw_colored_polygon(
+		PackedVector2Array([
+			origin + right * r0 + fwd * f0,
+			origin + right * r1 + fwd * f0,
+			origin + right * r1 + fwd * f1,
+			origin + right * r0 + fwd * f1,
+		]),
+		START_GRID_MARKER_COLOR
+	)
 
 
 ## Natural badge center on the outside or inside shoulder of the exit frontier.

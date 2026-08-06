@@ -244,6 +244,13 @@ max_value = 8.0
 value = 4.0
 rounded = true
 
+[node name="CornerSideButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerRow"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Extérieur"
+tooltip_text = "Côté d'affichage de la limite (réinitialise le décalage)"
+
 [node name="PanelSpacer" type="Control" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
 layout_mode = 2
 size_flags_vertical = 3

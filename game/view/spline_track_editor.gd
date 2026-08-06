@@ -21,6 +21,9 @@ const SPACE_EDGE_COLOR := Color(0.05, 0.05, 0.06, 0.95)
 const START_LINE_COLOR := Color(0.9, 0.15, 0.12, 1.0)
 const CORNER_LINE_COLOR := Color(0.2, 0.85, 0.35, 1.0)
 const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.22)
+const CORNER_BADGE_RADIUS := 11.0
+## Gap from asphalt edge to the badge's natural center.
+const CORNER_BADGE_GAP := 18.0
 const MIN_VIEW_ZOOM := 0.25
 const MAX_VIEW_ZOOM := 4.0
 const VIEW_ZOOM_STEP := 1.12
@@ -42,6 +45,7 @@ const VIEW_ZOOM_STEP := 1.12
 @onready var _set_start_button: Button = %SetStartButton
 @onready var _corner_speed_spin: SpinBox = %CornerSpeedSpin
 @onready var _set_corner_button: Button = %SetCornerButton
+@onready var _corner_side_button: Button = %CornerSideButton
 
 var _spline: TrackSpline
 var _selected: int = 0
@@ -58,8 +62,12 @@ var _seg_result: TrackSegmenter.Result
 ## Index of the start space (display number 1). The red line is its preceding frontier.
 var _start_space_index: int = 0
 var _selected_space: int = -1
-## space_index -> speed_limit (HeatCorner.from_space semantics).
+## space_index -> {speed_limit: int, outside: bool, offset: Vector2}
 var _corners: Dictionary = {}
+## Spaces-mode drag of a corner speed badge (-1 = none).
+var _drag_corner_space: int = -1
+## World-space grab delta: mouse - badge center at press.
+var _drag_corner_grab := Vector2.ZERO
 var _cars_layer: Node2D
 var _preview_cars: Array = [] ## Array[CarToken] — one per spot (inner/outer).
 ## View transform: screen = world * zoom + pan
@@ -130,6 +138,7 @@ func _set_edit_mode(mode: int) -> void:
 		return
 	_edit_mode = mode
 	_drag_mode = ""
+	_drag_corner_space = -1
 	_sync_mode_buttons()
 	_apply_edit_mode()
 	_refresh_info()
@@ -180,6 +189,61 @@ func _setup_corner_ui() -> void:
 	_corner_speed_spin.value = 4.0
 	_set_corner_button.pressed.connect(_on_set_corner_pressed)
 	_corner_speed_spin.value_changed.connect(_on_corner_speed_changed)
+	_corner_side_button.pressed.connect(_on_corner_side_pressed)
+
+
+func _make_corner_entry(speed_limit: int) -> Dictionary:
+	return {
+		"speed_limit": speed_limit,
+		"outside": true,
+		"offset": Vector2.ZERO,
+	}
+
+
+func _corner_speed(space: int) -> int:
+	var entry: Variant = _corners.get(space)
+	if entry is Dictionary:
+		return int(entry.get("speed_limit", 0))
+	return int(entry) if entry != null else 0
+
+
+func _corner_outside(space: int) -> bool:
+	var entry: Variant = _corners.get(space)
+	if entry is Dictionary:
+		return bool(entry.get("outside", true))
+	return true
+
+
+func _corner_offset(space: int) -> Vector2:
+	var entry: Variant = _corners.get(space)
+	if entry is Dictionary:
+		return entry.get("offset", Vector2.ZERO) as Vector2
+	return Vector2.ZERO
+
+
+func _set_corner_speed(space: int, speed_limit: int) -> void:
+	if not _corners.has(space):
+		return
+	var entry: Dictionary = _corners[space]
+	entry["speed_limit"] = speed_limit
+	_corners[space] = entry
+
+
+func _set_corner_side(space: int, outside: bool) -> void:
+	if not _corners.has(space):
+		return
+	var entry: Dictionary = _corners[space]
+	entry["outside"] = outside
+	entry["offset"] = Vector2.ZERO
+	_corners[space] = entry
+
+
+func _set_corner_offset(space: int, offset: Vector2) -> void:
+	if not _corners.has(space):
+		return
+	var entry: Dictionary = _corners[space]
+	entry["offset"] = offset
+	_corners[space] = entry
 
 
 func _on_algo_radio(algorithm: int) -> void:
@@ -212,9 +276,20 @@ func _on_corner_speed_changed(value: float) -> void:
 		return
 	if _selected_space < 0 or not _corners.has(_selected_space):
 		return
-	_corners[_selected_space] = int(value)
+	_set_corner_speed(_selected_space, int(value))
 	_dirty = true
 	_refresh_info()
+	_canvas.queue_redraw()
+
+
+func _on_corner_side_pressed() -> void:
+	if _updating_corner_ui:
+		return
+	if _selected_space < 0 or not _corners.has(_selected_space):
+		return
+	_set_corner_side(_selected_space, not _corner_outside(_selected_space))
+	_dirty = true
+	_refresh_corner_ui()
 	_canvas.queue_redraw()
 
 
@@ -261,6 +336,7 @@ func _reset_spline() -> void:
 	_selected_space = -1
 	_start_space_index = 0
 	_corners.clear()
+	_drag_corner_space = -1
 	_dirty = false
 	_spline_ready = true
 	_recompute_segmentation()
@@ -320,7 +396,11 @@ func _clamp_space_indices() -> void:
 	for key in _corners.keys():
 		var idx := int(key)
 		if idx >= 0 and idx < n:
-			kept[idx] = int(_corners[key])
+			var entry: Variant = _corners[key]
+			if entry is Dictionary:
+				kept[idx] = entry
+			else:
+				kept[idx] = _make_corner_entry(int(entry))
 	_corners = kept
 
 
@@ -355,8 +435,10 @@ func _on_set_corner_pressed() -> void:
 		return
 	if _corners.has(_selected_space):
 		_corners.erase(_selected_space)
+		if _drag_corner_space == _selected_space:
+			_drag_corner_space = -1
 	else:
-		_corners[_selected_space] = int(_corner_speed_spin.value)
+		_corners[_selected_space] = _make_corner_entry(int(_corner_speed_spin.value))
 	_dirty = true
 	_refresh_info()
 	_refresh_corner_ui()
@@ -371,15 +453,21 @@ func _refresh_corner_ui() -> void:
 		and _selected_space >= 0
 		and _seg_result != null
 	)
+	var has_corner := has_sel and _corners.has(_selected_space)
 	_set_corner_button.disabled = not has_sel
 	_corner_speed_spin.editable = has_sel
-	if has_sel and _corners.has(_selected_space):
+	_corner_side_button.disabled = not has_corner
+	if has_corner:
 		_set_corner_button.text = "Retirer virage"
 		_updating_corner_ui = true
-		_corner_speed_spin.value = int(_corners[_selected_space])
+		_corner_speed_spin.value = _corner_speed(_selected_space)
 		_updating_corner_ui = false
+		_corner_side_button.text = (
+			"Extérieur" if _corner_outside(_selected_space) else "Intérieur"
+		)
 	else:
 		_set_corner_button.text = "Virage"
+		_corner_side_button.text = "Extérieur"
 
 
 func _on_type_radio(type: int) -> void:
@@ -628,18 +716,8 @@ func _draw_spaces() -> void:
 			width = 3.5
 		_canvas.draw_line(inner_edge, outer_edge, col, width)
 		if is_corner_exit:
-			var limit := int(_corners[space_before])
-			# Outside the asphalt, near the green exit line.
-			var label_pos := outer_edge - a.inside_normal * 16.0
-			_canvas.draw_string(
-				font,
-				label_pos,
-				"<%d" % limit,
-				HORIZONTAL_ALIGNMENT_LEFT,
-				-1,
-				12,
-				CORNER_LINE_COLOR
-			)
+			var badge_c := _corner_badge_center(space_before, a)
+			_draw_corner_limit_badge(font, badge_c, _corner_speed(space_before))
 		# Label the space that begins after this frontier (display number from start).
 		var b: TrackSegmenter.Frontier = _seg_result.frontiers[(i + 1) % n]
 		var label_pos := a.center.lerp(b.center, 0.35) + a.inside_normal * 10.0
@@ -652,6 +730,42 @@ func _draw_spaces() -> void:
 			11,
 			Color(1, 1, 1, 0.7)
 		)
+
+
+## Natural badge center on the outside or inside shoulder of the exit frontier.
+func _corner_badge_natural(frontier: TrackSegmenter.Frontier, outside: bool) -> Vector2:
+	var lateral := ROAD_HALF_WIDTH + CORNER_BADGE_GAP
+	if outside:
+		return frontier.center - frontier.inside_normal * lateral
+	return frontier.center + frontier.inside_normal * lateral
+
+
+func _corner_badge_center(space: int, frontier: Variant = null) -> Vector2:
+	if frontier == null:
+		if _seg_result == null or _seg_result.space_count() == 0:
+			return Vector2.ZERO
+		var exit_i := posmod(space + 1, _seg_result.space_count())
+		frontier = _seg_result.frontiers[exit_i]
+	return _corner_badge_natural(frontier as TrackSegmenter.Frontier, _corner_outside(space)) + _corner_offset(space)
+
+
+## Green ring, white fill, black digits — reads as a speed-limit disc beside the exit line.
+func _draw_corner_limit_badge(font: Font, center: Vector2, limit: int) -> void:
+	var r := CORNER_BADGE_RADIUS
+	var font_size := 12
+	_canvas.draw_circle(center, r, Color.WHITE)
+	_canvas.draw_arc(center, r - 1.5, 0.0, TAU, 28, CORNER_LINE_COLOR, 2.5, true)
+	var text := str(limit)
+	var extent := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	_canvas.draw_string(
+		font,
+		center + Vector2(-extent.x * 0.5, extent.y * 0.34),
+		text,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		font_size,
+		Color.BLACK
+	)
 
 
 func _display_space_number(space_index: int) -> int:
@@ -759,13 +873,58 @@ func _on_canvas_gui_input(event: InputEvent) -> void:
 func _on_spaces_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-			var idx := _space_index_at(_screen_to_world(mb.position))
-			_selected_space = idx
+		if mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		var world := _screen_to_world(mb.position)
+		if mb.pressed:
+			var badge_space := _badge_hit_at(world)
+			if badge_space >= 0:
+				_selected_space = badge_space
+				_drag_corner_space = badge_space
+				_drag_corner_grab = world - _corner_badge_center(badge_space)
+				_refresh_info()
+				_refresh_set_start_button()
+				_refresh_corner_ui()
+				_canvas.queue_redraw()
+				_canvas.accept_event()
+				return
+			_drag_corner_space = -1
+			_selected_space = _space_index_at(world)
 			_refresh_info()
 			_refresh_set_start_button()
 			_refresh_corner_ui()
 			_canvas.queue_redraw()
+		elif _drag_corner_space >= 0:
+			_drag_corner_space = -1
+			_canvas.accept_event()
+	elif event is InputEventMouseMotion and _drag_corner_space >= 0:
+		if _seg_result == null or _seg_result.space_count() == 0:
+			_drag_corner_space = -1
+			return
+		var world := _screen_to_world((event as InputEventMouseMotion).position)
+		var exit_i := posmod(_drag_corner_space + 1, _seg_result.space_count())
+		var frontier: TrackSegmenter.Frontier = _seg_result.frontiers[exit_i]
+		var natural := _corner_badge_natural(frontier, _corner_outside(_drag_corner_space))
+		_set_corner_offset(_drag_corner_space, world - _drag_corner_grab - natural)
+		_dirty = true
+		_canvas.queue_redraw()
+		_canvas.accept_event()
+
+
+## Closest corner speed badge under `world`, or -1.
+func _badge_hit_at(world: Vector2) -> int:
+	if _seg_result == null or _corners.is_empty():
+		return -1
+	var r := _hit_radius(CORNER_BADGE_RADIUS + 2.0)
+	var best := -1
+	var best_d := r
+	for key in _corners.keys():
+		var space := int(key)
+		var d := world.distance_to(_corner_badge_center(space))
+		if d <= best_d:
+			best_d = d
+			best = space
+	return best
 
 
 func _space_index_at(pos: Vector2) -> int:

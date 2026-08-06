@@ -57,6 +57,7 @@ const VIEW_ZOOM_STEP := 1.12
 @onready var _algo_adaptive: BaseButton = %AlgoAdaptive
 @onready var _space_len_slider: HSlider = %SpaceLenSlider
 @onready var _space_len_value: Label = %SpaceLenValue
+@onready var _hide_space_numbers: CheckBox = %HideSpaceNumbers
 @onready var _set_start_button: Button = %SetStartButton
 @onready var _corner_speed_spin: SpinBox = %CornerSpeedSpin
 @onready var _set_corner_button: Button = %SetCornerButton
@@ -208,6 +209,9 @@ func _setup_segmentation_ui() -> void:
 	_updating_seg_ui = false
 	_space_len_slider.value_changed.connect(_on_space_len_changed)
 	_refresh_space_len_label()
+	_hide_space_numbers.toggled.connect(func(_pressed: bool) -> void:
+		_canvas.queue_redraw()
+	)
 
 
 func _setup_corner_ui() -> void:
@@ -930,18 +934,19 @@ func _draw_spaces() -> void:
 		if is_corner_exit:
 			var badge_c := _corner_badge_center(space_before, a)
 			_draw_corner_limit_badge(font, badge_c, _corner_speed(space_before))
-		# Label the space that begins after this frontier (display number from start).
-		var b: TrackSegmenter.Frontier = _seg_result.frontiers[(i + 1) % n]
-		var label_pos := a.center.lerp(b.center, 0.35) + a.inside_normal * 10.0
-		_canvas.draw_string(
-			font,
-			label_pos,
-			str(_display_space_number(i)),
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1,
-			11,
-			Color(1, 1, 1, 0.7)
-		)
+		if not _hide_space_numbers.button_pressed:
+			# Label the space that begins after this frontier (display number from start).
+			var b: TrackSegmenter.Frontier = _seg_result.frontiers[(i + 1) % n]
+			var label_pos := a.center.lerp(b.center, 0.35) + a.inside_normal * 10.0
+			_canvas.draw_string(
+				font,
+				label_pos,
+				str(_display_space_number(i)),
+				HORIZONTAL_ALIGNMENT_LEFT,
+				-1,
+				11,
+				Color(1, 1, 1, 0.7)
+			)
 	_draw_start_grid_markers()
 
 

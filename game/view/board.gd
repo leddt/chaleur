@@ -140,7 +140,20 @@ func _refresh_online() -> void:
 
 
 func _action_context_key(player_id: int) -> String:
-	return "%s|%s|%d" % [str(_engine.phase), str(_engine.turn_step), player_id]
+	if player_id < 0 or player_id >= _engine.players.size():
+		return "%s|%s|%d" % [str(_engine.phase), str(_engine.turn_step), player_id]
+	var p := _engine.players[player_id]
+	return "%s|%s|%d|b%d|a%d|c%d|s%d|eh%d|hh%d" % [
+		str(_engine.phase),
+		str(_engine.turn_step),
+		player_id,
+		int(p.boost_used),
+		int(p.adrenaline_speed_used),
+		p.cooldown_used,
+		p.round_speed,
+		p.engine_heat(),
+		p.hand.count_kind(HeatCard.Kind.HEAT),
+	]
 
 
 func _update_actor_status(actor_id: int) -> void:
@@ -252,13 +265,14 @@ func _dispatch(action: String, payload: Dictionary, player_id: int) -> void:
 			for id in payload.get("card_ids", []):
 				ids.append(str(id))
 			result = _engine.play_cards(player_id, ids)
+		"boost":
+			result = _engine.use_boost(player_id)
+		"adrenaline":
+			result = _engine.use_adrenaline(player_id)
+		"cooldown":
+			result = _engine.use_cooldown(player_id)
 		"react":
-			result = _engine.react(
-				player_id,
-				int(payload.get("cooldown", 0)),
-				bool(payload.get("boost", false)),
-				bool(payload.get("adrenaline", false))
-			)
+			result = _engine.finish_react(player_id)
 		"slipstream":
 			result = _engine.slipstream(player_id, bool(payload.get("use", false)))
 		"discard":

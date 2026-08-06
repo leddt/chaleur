@@ -183,57 +183,81 @@ func play_cards(player_id: int, card_ids: Array[String]) -> ActionResult:
 	return ActionResult.success()
 
 
-func react(player_id: int, cooldown: int, boost: bool, adrenaline_speed: bool) -> ActionResult:
+func use_boost(player_id: int) -> ActionResult:
 	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
 		return ActionResult.fail("Not in REACT step")
 	var p := active_player()
 	if p == null or p.id != player_id:
 		return ActionResult.fail("Not this player's turn")
-
-	var max_cd := p.cooldown_from_gear()
-	if p.has_adrenaline:
-		max_cd += 1
-	if cooldown < 0 or cooldown > max_cd:
-		return ActionResult.fail("Invalid cooldown amount")
-	if cooldown > p.hand.count_kind(HeatCard.Kind.HEAT):
-		return ActionResult.fail("Not enough Heat in hand to cooldown")
-	if boost:
-		# Core rules: boost once per turn in any gear, paying 1 Heat.
-		if p.engine_heat() < 1:
-			return ActionResult.fail("Not enough Heat to boost")
-	if adrenaline_speed and not p.has_adrenaline:
-		return ActionResult.fail("No adrenaline")
-
-	# Apply cooldown
-	for _i in cooldown:
-		var heat := _take_heat_from_hand(p)
-		if heat:
-			p.engine.add(heat)
-	if cooldown > 0:
-		_log("%s cools down %d" % [p.display_name, cooldown])
-
-	# Adrenaline speed and boost may be ordered either way; apply adrenaline first then boost by default.
-	if adrenaline_speed:
-		p.round_speed += 1
-		_move_player(p, 1, false)
-		_log("%s uses adrenaline +1 speed" % p.display_name)
-
-	if boost:
-		_pay_heat(p, 1)
-		var speed_card := _flip_until_speed(p)
-		if speed_card == null:
-			return ActionResult.fail("Boost failed: no Speed card available")
-		p.play_area.add(speed_card)
-		p.round_speed += speed_card.speed_value
-		p.boost_used = true
-		_move_player(p, speed_card.speed_value, false)
-		_log("%s boosts for +%d" % [p.display_name, speed_card.speed_value])
-
+	if p.boost_used:
+		return ActionResult.fail("Boost already used")
+	if p.engine_heat() < 1:
+		return ActionResult.fail("Not enough Heat to boost")
+	_pay_heat(p, 1)
+	var speed_card := _flip_until_speed(p)
+	if speed_card == null:
+		return ActionResult.fail("Boost failed: no Speed card available")
+	p.play_area.add(speed_card)
+	p.round_speed += speed_card.speed_value
+	p.boost_used = true
+	_move_player(p, speed_card.speed_value, false)
+	_log("%s boosts for +%d" % [p.display_name, speed_card.speed_value])
 	_check_finish(p)
+	return ActionResult.success()
+
+
+func use_adrenaline(player_id: int) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	if not p.has_adrenaline:
+		return ActionResult.fail("No adrenaline")
+	if p.adrenaline_speed_used:
+		return ActionResult.fail("Adrenaline already used")
+	p.adrenaline_speed_used = true
+	p.round_speed += 1
+	_move_player(p, 1, false)
+	_log("%s uses adrenaline +1 speed" % p.display_name)
+	_check_finish(p)
+	return ActionResult.success()
+
+
+func use_cooldown(player_id: int) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	if p.cooldown_remaining() < 1:
+		return ActionResult.fail("No cooldown remaining")
+	if p.hand.count_kind(HeatCard.Kind.HEAT) < 1:
+		return ActionResult.fail("Not enough Heat in hand to cooldown")
+	var heat := _take_heat_from_hand(p)
+	if heat == null:
+		return ActionResult.fail("Not enough Heat in hand to cooldown")
+	p.engine.add(heat)
+	p.cooldown_used += 1
+	_log("%s cools down 1" % p.display_name)
+	return ActionResult.success()
+
+
+func finish_react(player_id: int) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
 	turn_step = TurnStep.SLIPSTREAM
 	if not _slipstream_eligible(p):
 		return _auto_skip_slipstream(p)
 	return ActionResult.success()
+
+
+## Legacy name used by UI / net action "react" (= finish React step).
+func react(player_id: int) -> ActionResult:
+	return finish_react(player_id)
 
 
 func slipstream(player_id: int, use: bool) -> ActionResult:

@@ -107,6 +107,8 @@ static func _encode_player(p: PlayerState, viewer_player_id: int) -> Dictionary:
 		"corners_crossed": p.corners_crossed.duplicate(),
 		"has_adrenaline": p.has_adrenaline,
 		"boost_used": p.boost_used,
+		"adrenaline_speed_used": p.adrenaline_speed_used,
+		"cooldown_used": p.cooldown_used,
 		"turn_complete": p.turn_complete,
 	}
 
@@ -139,6 +141,8 @@ static func _decode_player(data: Dictionary) -> PlayerState:
 		p.corners_crossed.append(str(c))
 	p.has_adrenaline = bool(data.get("has_adrenaline", false))
 	p.boost_used = bool(data.get("boost_used", false))
+	p.adrenaline_speed_used = bool(data.get("adrenaline_speed_used", false))
+	p.cooldown_used = int(data.get("cooldown_used", 0))
 	p.turn_complete = bool(data.get("turn_complete", false))
 	return p
 

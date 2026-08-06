@@ -9,14 +9,13 @@ var _hand: CardHandView
 var _sidebar: PlayerSidebar
 var _engine: HeatGameEngine
 
-var _react_cooldown: int = 0
-var _react_boost: bool = false
-var _react_adrenaline: bool = false
 var _play_confirm: Button = null
 var _play_expected: int = -1
 var _play_cluttered: bool = false
 var _play_actor_id: int = -1
 var _discard_confirm: Button = null
+var _react_player_id: int = -1
+var _finish_confirm: ConfirmationDialog = null
 
 
 func setup(hand: CardHandView, sidebar: PlayerSidebar) -> void:
@@ -30,9 +29,6 @@ func is_showing() -> bool:
 
 func reset_drafts() -> void:
 	_sidebar.reset_gear_choice()
-	_react_cooldown = 0
-	_react_boost = false
-	_react_adrenaline = false
 
 
 func clear() -> void:
@@ -194,84 +190,68 @@ func _update_discard_confirm() -> void:
 
 
 func _build_react_ui(p: PlayerState) -> void:
-	_react_cooldown = 0
-	_react_boost = false
-	_react_adrenaline = false
-	var max_cd := p.cooldown_from_gear()
-	if p.has_adrenaline:
-		max_cd += 1
-	var heat_in_hand := p.hand.count_kind(HeatCard.Kind.HEAT)
-	# Cooling moves Heat from the hand back into the engine, so the hand caps it.
-	var cd_limit := mini(max_cd, heat_in_hand)
+	_react_player_id = p.id
 	add_child(_make_eyebrow("RÉACTION"))
 	add_child(_make_label(
 		"Ta vitesse est %d%s" % [p.round_speed, " — ADRÉNALINE" if p.has_adrenaline else ""]
 	))
 
-	if cd_limit > 0:
-		add_child(_make_cooldown_stepper(cd_limit))
-	elif max_cd > 0:
-		add_child(_make_label("Refroidir : aucun Heat en main"))
+	var ad_btn := _make_button("Adrénaline\n+1 vitesse")
+	ad_btn.disabled = not p.can_use_adrenaline()
+	ad_btn.pressed.connect(func() -> void:
+		action_requested.emit("adrenaline", {}, p.id)
+	)
+	add_child(ad_btn)
 
-	var boost_btn := _make_check("Boost — 1 Heat, ajoute une carte de vitesse")
-	boost_btn.disabled = p.engine_heat() < 1
-	boost_btn.toggled.connect(func(on: bool) -> void: _react_boost = on)
+	var boost_btn := _make_button("Boost\n+1 carte")
+	boost_btn.disabled = not p.can_use_boost()
+	boost_btn.pressed.connect(func() -> void:
+		action_requested.emit("boost", {}, p.id)
+	)
 	add_child(boost_btn)
 
-	if p.has_adrenaline:
-		var ad_btn := _make_check("Adrénaline — +1 Speed")
-		ad_btn.toggled.connect(func(on: bool) -> void: _react_adrenaline = on)
-		add_child(ad_btn)
-
-	var confirm := _make_button("Réagir", true)
-	confirm.pressed.connect(func() -> void:
-		action_requested.emit("react", {
-			"cooldown": _react_cooldown,
-			"boost": _react_boost,
-			"adrenaline": _react_adrenaline,
-		}, p.id)
+	var remaining := p.cooldown_remaining()
+	var cd_btn := _make_button("Cooldown (%d)\nRemet un heat dans le moteur" % remaining)
+	cd_btn.disabled = not p.can_use_cooldown()
+	cd_btn.pressed.connect(func() -> void:
+		action_requested.emit("cooldown", {}, p.id)
 	)
-	add_child(confirm)
+	add_child(cd_btn)
+
+	var finish := _make_button("Terminer", true)
+	finish.pressed.connect(_on_finish_react_pressed.bind(p.id))
+	add_child(finish)
 
 
-## Cooling is a quantity, not a menu. One stepper replaces one button per amount,
-## which used to stack up to four buttons in the panel.
-func _make_cooldown_stepper(limit: int) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+func _on_finish_react_pressed(player_id: int) -> void:
+	if _engine == null or player_id < 0 or player_id >= _engine.players.size():
+		return
+	var p := _engine.players[player_id]
+	if not p.has_pending_react_options():
+		action_requested.emit("react", {}, player_id)
+		return
+	_ensure_finish_confirm()
+	_finish_confirm.dialog_text = "Il te reste des réactions. Terminer quand même ?"
+	_react_player_id = player_id
+	_finish_confirm.popup_centered()
 
-	var minus := Button.new()
-	minus.text = "-"
-	minus.custom_minimum_size = Vector2(36, 0)
 
-	var readout := Label.new()
-	readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	readout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	readout.add_theme_font_size_override("font_size", 13)
+func _ensure_finish_confirm() -> void:
+	if _finish_confirm != null:
+		return
+	_finish_confirm = ConfirmationDialog.new()
+	_finish_confirm.title = "Terminer la réaction"
+	_finish_confirm.ok_button_text = "Terminer"
+	_finish_confirm.cancel_button_text = "Annuler"
+	_finish_confirm.confirmed.connect(_on_finish_react_confirmed)
+	# Keep outside clear() so the dialog is not freed while shown mid-REACT rebuilds.
+	get_tree().root.add_child(_finish_confirm)
 
-	var plus := Button.new()
-	plus.text = "+"
-	plus.custom_minimum_size = Vector2(36, 0)
 
-	var sync := func() -> void:
-		readout.text = "Refroidir %d / %d" % [_react_cooldown, limit]
-		minus.disabled = _react_cooldown <= 0
-		plus.disabled = _react_cooldown >= limit
-
-	minus.pressed.connect(func() -> void:
-		_react_cooldown = maxi(0, _react_cooldown - 1)
-		sync.call()
-	)
-	plus.pressed.connect(func() -> void:
-		_react_cooldown = mini(limit, _react_cooldown + 1)
-		sync.call()
-	)
-
-	row.add_child(minus)
-	row.add_child(readout)
-	row.add_child(plus)
-	sync.call()
-	return row
+func _on_finish_react_confirmed() -> void:
+	if _react_player_id < 0:
+		return
+	action_requested.emit("react", {}, _react_player_id)
 
 
 ## The "what am I being asked to do" line. Sits above the controls, always in the
@@ -302,13 +282,4 @@ func _make_button(text: String, primary: bool = false) -> Button:
 	btn.clip_text = false
 	if primary:
 		btn.theme_type_variation = "Primary"
-	return btn
-
-
-func _make_check(text: String) -> CheckButton:
-	var btn := CheckButton.new()
-	btn.text = text
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	btn.clip_text = false
 	return btn

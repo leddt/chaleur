@@ -754,13 +754,14 @@ func _apply_action(player_id: int, action: String, payload: Dictionary) -> Actio
 			for id in payload.get("card_ids", []):
 				ids.append(str(id))
 			return Game.engine.play_cards(player_id, ids)
+		"boost":
+			return Game.engine.use_boost(player_id)
+		"adrenaline":
+			return Game.engine.use_adrenaline(player_id)
+		"cooldown":
+			return Game.engine.use_cooldown(player_id)
 		"react":
-			return Game.engine.react(
-				player_id,
-				int(payload.get("cooldown", 0)),
-				bool(payload.get("boost", false)),
-				bool(payload.get("adrenaline", false))
-			)
+			return Game.engine.finish_react(player_id)
 		"slipstream":
 			return Game.engine.slipstream(player_id, bool(payload.get("use", false)))
 		"discard":

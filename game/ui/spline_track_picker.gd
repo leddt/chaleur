@@ -82,6 +82,9 @@ func _refresh_list() -> void:
 		var path := str(entry.get("path", ""))
 		var track_name := str(entry.get("name", path))
 		var builtin := bool(entry.get("builtin", false))
+		# Built-ins are view-only in race catalogs; editing them requires a debug build.
+		if builtin and not SplineTrackFile.can_write_builtin():
+			continue
 		if builtin:
 			track_name = "%s · intégrée" % track_name
 		_list.add_item(track_name)
@@ -98,7 +101,7 @@ func _refresh_list() -> void:
 		_on_item_selected(0)
 
 
-func _can_delete_index(index: int) -> bool:
+func _can_edit_index(index: int) -> bool:
 	if index < 0 or index >= _paths.size():
 		return false
 	if _builtins[index]:
@@ -106,9 +109,13 @@ func _can_delete_index(index: int) -> bool:
 	return true
 
 
+func _can_delete_index(index: int) -> bool:
+	return _can_edit_index(index)
+
+
 func _on_item_selected(index: int) -> void:
 	var has_sel := not _list.get_selected_items().is_empty()
-	_open_button.disabled = not has_sel
+	_open_button.disabled = not has_sel or not _can_edit_index(index)
 	_delete_button.disabled = not has_sel or not _can_delete_index(index)
 	_show_preview(index)
 
@@ -162,7 +169,7 @@ func _on_delete_confirmed() -> void:
 
 
 func _open_path_at(index: int) -> void:
-	if index < 0 or index >= _paths.size():
+	if not _can_edit_index(index):
 		return
 	SplineTrackFile.editor_pending_path = _paths[index]
 	get_tree().change_scene_to_file("res://view/spline_track_editor.tscn")

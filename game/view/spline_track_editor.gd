@@ -524,6 +524,10 @@ func _try_init_spline() -> void:
 	if path.is_empty():
 		_reset_spline()
 		return
+	if SplineTrackFile.is_builtin_path(path) and not SplineTrackFile.can_write_builtin():
+		_summary.text = "Les circuits intégrés ne sont éditables qu'en debug"
+		_reset_spline()
+		return
 	if not _load_from_path(path):
 		_reset_spline()
 		_summary.text = "Impossible de charger %s" % path

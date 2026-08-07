@@ -58,8 +58,22 @@ func test_list_entries_includes_saved() -> void:
 		if str(entry.get("path", "")) == path:
 			found = true
 			assert_eq(str(entry.get("name", "")), "ZZ List Entry")
+			assert_false(bool(entry.get("builtin", true)))
 			break
 	assert_true(found, "saved track should appear in list")
+
+
+func test_path_for_name_builtin_vs_user() -> void:
+	assert_eq(
+		SplineTrackFile.path_for_name("Oval", false),
+		"%s/oval.json" % SplineTrackFile.USER_DIR
+	)
+	assert_eq(
+		SplineTrackFile.path_for_name("Oval", true),
+		"%s/oval.json" % SplineTrackFile.BUILTIN_DIR
+	)
+	assert_true(SplineTrackFile.is_builtin_path(SplineTrackFile.path_for_name("Oval", true)))
+	assert_true(SplineTrackFile.is_user_path(SplineTrackFile.path_for_name("Oval", false)))
 
 
 func test_list_entries_skips_invalid_json() -> void:

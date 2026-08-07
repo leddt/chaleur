@@ -97,15 +97,18 @@ func next_landmark(progress: int) -> Dictionary:
 	return {"kind": "corner", "distance": to_corner}
 
 
-## User-saved spline tracks (`user://tracks/*.json`).
+## Built-in (`res://tracks`) and user-saved (`user://tracks`) spline tracks.
 static func catalog() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for entry in SplineTrackFile.list_entries():
 		if not entry is Dictionary:
 			continue
+		var track_name := str(entry.get("name", ""))
+		var builtin := bool(entry.get("builtin", false))
 		out.append({
 			"id": str(entry.get("path", "")),
-			"name": str(entry.get("name", "")),
+			"name": track_name,
+			"builtin": builtin,
 		})
 	return out
 

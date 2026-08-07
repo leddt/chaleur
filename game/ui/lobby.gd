@@ -103,6 +103,8 @@ func _setup_track_options() -> void:
 	for entry in HeatTrack.catalog():
 		var track_id := str(entry.get("id", ""))
 		var track_name := str(entry.get("name", track_id))
+		if bool(entry.get("builtin", false)):
+			track_name = "%s · intégrée" % track_name
 		_track_ids.append(track_id)
 		_track_option.add_item(track_name)
 		_track_option.set_item_metadata(_track_option.item_count - 1, track_id)

@@ -53,6 +53,8 @@ func _refresh_list() -> void:
 	for entry in HeatTrack.catalog():
 		var path := str(entry.get("id", ""))
 		var track_name := str(entry.get("name", path))
+		if bool(entry.get("builtin", false)):
+			track_name = "%s · intégrée" % track_name
 		_list.add_item(track_name)
 		_paths.append(path)
 	var has_tracks := not _paths.is_empty()

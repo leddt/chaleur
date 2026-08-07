@@ -45,6 +45,13 @@ size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
 text = "Créateur de tracé"
 
+[node name="BuiltinCheck" type="CheckBox" parent="Root/TopBar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Built-in (ressources)"
+tooltip_text = "Enregistrer dans res://tracks (debug uniquement)"
+
 [node name="SaveButton" type="Button" parent="Root/TopBar"]
 unique_name_in_owner = true
 layout_mode = 2

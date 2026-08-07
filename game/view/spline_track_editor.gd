@@ -36,6 +36,7 @@ const FIT_MARGIN := 24.0
 @onready var _canvas: Control = %Canvas
 @onready var _summary: Label = %SummaryLabel
 @onready var _track_name_edit: LineEdit = %TrackNameEdit
+@onready var _builtin_check: CheckBox = %BuiltinCheck
 @onready var _mode_trace: Button = %ModeTrace
 @onready var _mode_spaces: Button = %ModeSpaces
 @onready var _mode_sectors: Button = %ModeSectors
@@ -135,6 +136,8 @@ func _apply_kit_chrome() -> void:
 		title.remove_theme_font_size_override("font_size")
 	%BackButton.theme_type_variation = &"Compact"
 	%SaveButton.theme_type_variation = &"Primary"
+	_builtin_check.visible = SplineTrackFile.can_write_builtin()
+	_builtin_check.disabled = not SplineTrackFile.can_write_builtin()
 	_mode_trace.theme_type_variation = &"Compact"
 	_mode_spaces.theme_type_variation = &"Compact"
 	_mode_sectors.theme_type_variation = &"Compact"
@@ -169,7 +172,9 @@ func _apply_kit_chrome() -> void:
 
 func _setup_name_ui() -> void:
 	_track_name_edit.text_changed.connect(_on_track_name_changed)
+	_builtin_check.toggled.connect(_on_builtin_toggled)
 	_sync_track_name_field()
+	_sync_builtin_check()
 
 
 func _on_track_name_changed(value: String) -> void:
@@ -178,6 +183,22 @@ func _on_track_name_changed(value: String) -> void:
 	_track_name = value.strip_edges()
 	_dirty = true
 	_refresh_window_title()
+
+
+func _on_builtin_toggled(_pressed: bool) -> void:
+	if not SplineTrackFile.can_write_builtin():
+		return
+	_dirty = true
+
+
+func _sync_builtin_check() -> void:
+	_builtin_check.set_pressed_no_signal(
+		SplineTrackFile.can_write_builtin() and SplineTrackFile.is_builtin_path(_file_path)
+	)
+
+
+func _wants_builtin_save() -> bool:
+	return SplineTrackFile.can_write_builtin() and _builtin_check.button_pressed
 
 
 func _sync_track_name_field() -> void:
@@ -457,16 +478,27 @@ func _on_save() -> void:
 	if _spline == null:
 		_summary.text = "Rien à enregistrer"
 		return
-	var path := _file_path
-	if path.is_empty():
-		path = SplineTrackFile.path_for_name(_display_track_name())
+	var wants_builtin := _wants_builtin_save()
+	if wants_builtin and not SplineTrackFile.can_write_builtin():
+		_summary.text = "Les tracés built-in ne sont éditables qu'en debug"
+		return
+	var path := _resolve_save_path(wants_builtin)
 	var err := SplineTrackFile.save_document(path, _build_save_document())
 	if err != OK:
 		_summary.text = "Échec de l'enregistrement"
 		return
 	_file_path = path
 	_dirty = false
+	_sync_builtin_check()
 	_summary.text = "Enregistré : %s" % path
+
+
+func _resolve_save_path(wants_builtin: bool) -> String:
+	if not _file_path.is_empty():
+		var path_is_builtin := SplineTrackFile.is_builtin_path(_file_path)
+		if path_is_builtin == wants_builtin:
+			return _file_path
+	return SplineTrackFile.path_for_name(_display_track_name(), wants_builtin)
 
 
 func _build_save_document() -> Dictionary:
@@ -527,6 +559,7 @@ func _reset_spline() -> void:
 	_track_name = ""
 	_file_path = ""
 	_sync_track_name_field()
+	_sync_builtin_check()
 	_dirty = false
 	_spline_ready = true
 	_recompute_segmentation()
@@ -556,6 +589,7 @@ func _load_from_path(path: String) -> bool:
 	_file_path = path
 	_track_name = str(data.get("name", "")).strip_edges()
 	_sync_track_name_field()
+	_sync_builtin_check()
 	var seg: Variant = data.get("segmentation", {})
 	if seg is Dictionary:
 		_seg_params.algorithm = int(seg.get("algorithm", TrackSegmenter.Algorithm.INNER_UNIFORM))

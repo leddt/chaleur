@@ -1,19 +1,43 @@
 class_name SplineTrackFile
 extends RefCounted
 
-## JSON documents for spline tracks stored under user://tracks/.
+## JSON documents for spline tracks under user://tracks/ (player) and
+## res://tracks/ (built-in shipping tracks; writable in debug builds).
 
 const VERSION := 1
 const USER_DIR := "user://tracks"
+const BUILTIN_DIR := "res://tracks"
 
 ## Path to open in the spline editor next scene change. Empty = new track.
 static var editor_pending_path: String = ""
 
 
-static func ensure_user_dir() -> Error:
-	if DirAccess.dir_exists_absolute(USER_DIR):
+static func can_write_builtin() -> bool:
+	return OS.is_debug_build()
+
+
+static func is_builtin_path(path: String) -> bool:
+	return path.begins_with(BUILTIN_DIR + "/") or path == BUILTIN_DIR
+
+
+static func is_user_path(path: String) -> bool:
+	return path.begins_with(USER_DIR + "/") or path == USER_DIR
+
+
+static func ensure_dir(dir_path: String) -> Error:
+	if DirAccess.dir_exists_absolute(dir_path):
 		return OK
-	return DirAccess.make_dir_recursive_absolute(USER_DIR)
+	if dir_path == BUILTIN_DIR and not can_write_builtin():
+		return ERR_UNAUTHORIZED
+	return DirAccess.make_dir_recursive_absolute(dir_path)
+
+
+static func ensure_user_dir() -> Error:
+	return ensure_dir(USER_DIR)
+
+
+static func ensure_builtin_dir() -> Error:
+	return ensure_dir(BUILTIN_DIR)
 
 
 static func slugify(track_name: String) -> String:
@@ -37,14 +61,20 @@ static func slugify(track_name: String) -> String:
 	return out
 
 
-static func path_for_name(track_name: String) -> String:
-	return "%s/%s.json" % [USER_DIR, slugify(track_name)]
+static func path_for_name(track_name: String, builtin: bool = false) -> String:
+	var root := BUILTIN_DIR if builtin else USER_DIR
+	return "%s/%s.json" % [root, slugify(track_name)]
 
 
 static func save_document(path: String, data: Dictionary) -> Error:
-	var dir_err := ensure_user_dir()
+	if path.is_empty():
+		return ERR_INVALID_PARAMETER
+	if is_builtin_path(path) and not can_write_builtin():
+		push_error("SplineTrackFile: built-in writes require a debug build (%s)" % path)
+		return ERR_UNAUTHORIZED
+	var dir_err := ensure_dir(path.get_base_dir())
 	if dir_err != OK:
-		push_error("SplineTrackFile: cannot create %s (%s)" % [USER_DIR, dir_err])
+		push_error("SplineTrackFile: cannot create %s (%s)" % [path.get_base_dir(), dir_err])
 		return dir_err
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
@@ -72,13 +102,16 @@ static func load_document(path: String) -> Dictionary:
 static func delete_document(path: String) -> Error:
 	if path.is_empty() or not FileAccess.file_exists(path):
 		return OK
+	if is_builtin_path(path) and not can_write_builtin():
+		push_error("SplineTrackFile: cannot delete built-in %s outside debug" % path)
+		return ERR_UNAUTHORIZED
 	var err := DirAccess.remove_absolute(path)
 	if err != OK:
 		push_error("SplineTrackFile: cannot delete %s (%s)" % [path, err])
 	return err
 
 
-## True for documents written by this editor (ignores other JSON leftover in USER_DIR).
+## True for documents written by this editor (ignores other JSON leftover in dirs).
 static func is_valid_document(data: Dictionary) -> bool:
 	if data.is_empty():
 		return false
@@ -91,18 +124,35 @@ static func is_valid_document(data: Dictionary) -> bool:
 	return points is Array and not points.is_empty()
 
 
-## [{path: String, name: String, modified: int}] sorted by name.
-static func list_entries() -> Array:
-	ensure_user_dir()
+## [{path, name, modified, builtin}] sorted by name (built-in before user on tie).
+static func list_entries(include_user: bool = true, include_builtin: bool = true) -> Array:
 	var entries: Array = []
-	var dir := DirAccess.open(USER_DIR)
+	if include_builtin:
+		_collect_dir_entries(BUILTIN_DIR, true, entries)
+	if include_user:
+		ensure_user_dir()
+		_collect_dir_entries(USER_DIR, false, entries)
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var an := str(a.get("name", "")).to_lower()
+		var bn := str(b.get("name", "")).to_lower()
+		if an == bn:
+			return bool(a.get("builtin", false)) and not bool(b.get("builtin", false))
+		return an < bn
+	)
+	return entries
+
+
+static func _collect_dir_entries(dir_path: String, builtin: bool, out: Array) -> void:
+	if not DirAccess.dir_exists_absolute(dir_path):
+		return
+	var dir := DirAccess.open(dir_path)
 	if dir == null:
-		return entries
+		return
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
 	while file_name != "":
 		if not dir.current_is_dir() and file_name.ends_with(".json"):
-			var path := "%s/%s" % [USER_DIR, file_name]
+			var path := "%s/%s" % [dir_path, file_name]
 			var data := load_document(path)
 			if not is_valid_document(data):
 				file_name = dir.get_next()
@@ -110,14 +160,11 @@ static func list_entries() -> Array:
 			var display_name := str(data.get("name", "")).strip_edges()
 			if display_name.is_empty():
 				display_name = file_name.get_basename()
-			entries.append({
+			out.append({
 				"path": path,
 				"name": display_name,
 				"modified": int(FileAccess.get_modified_time(path)),
+				"builtin": builtin,
 			})
 		file_name = dir.get_next()
 	dir.list_dir_end()
-	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return str(a.get("name", "")).to_lower() < str(b.get("name", "")).to_lower()
-	)
-	return entries

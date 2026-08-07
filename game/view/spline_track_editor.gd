@@ -1091,16 +1091,22 @@ func _on_canvas_draw() -> void:
 		_canvas.draw_line(Vector2(0, y), Vector2(_canvas.size.x, y), grid_col, 1.0)
 		y += step
 
-	_canvas.draw_set_transform(_view_pan, 0.0, Vector2(_view_zoom, _view_zoom))
 	_apply_view_to_cars()
+	# Transform points in the painter (screen space), don't scale the canvas:
+	# canvas scale also stretches AA feathers and makes strokes soft when zoomed.
+	var xform := _compose_view_xform()
 
 	var baked := _spline.baked_points()
 	if baked.size() >= 2:
-		_draw_track(baked, font)
+		_draw_track(baked, font, xform)
 
 	if _edit_mode == EditMode.TRACE:
-		_draw_control_points(font)
+		_draw_control_points(font, xform)
 	_sync_preview_cars()
+
+
+func _compose_view_xform() -> Transform2D:
+	return Transform2D(0.0, Vector2(_view_zoom, _view_zoom), 0.0, _view_pan)
 
 
 func _screen_to_world(screen: Vector2) -> Vector2:
@@ -1308,61 +1314,63 @@ func _paint_context(font: Font) -> SplineTrackPainter.Context:
 	return ctx
 
 
-func _draw_track(baked: PackedVector2Array, font: Font) -> void:
+func _draw_track(baked: PackedVector2Array, font: Font, xform: Transform2D) -> void:
 	var ctx := _paint_context(font)
 	var body := SplineTrackPainter.Options.new()
 	body.asphalt = true
 	body.race_line = true
 	body.centerline = true
-	SplineTrackPainter.draw(_canvas, baked, ctx, body)
-	_draw_selection_fills()
+	SplineTrackPainter.draw(_canvas, baked, ctx, body, xform)
+	_draw_selection_fills(xform)
 	var overlays := SplineTrackPainter.editor_roadmap_options(_hide_space_numbers.button_pressed)
 	overlays.asphalt = false
 	overlays.race_line = false
 	overlays.centerline = false
-	SplineTrackPainter.draw(_canvas, baked, ctx, overlays)
+	SplineTrackPainter.draw(_canvas, baked, ctx, overlays, xform)
 
 
-func _draw_selection_fills() -> void:
+func _draw_selection_fills(xform: Transform2D) -> void:
 	if _seg_result == null or _seg_result.space_count() < 2:
 		return
 	if _edit_mode == EditMode.SPACES and _selected_space >= 0:
-		_draw_space_fill(_selected_space, SPACE_SELECTED_COLOR)
+		_draw_space_fill(_selected_space, SPACE_SELECTED_COLOR, xform)
 	elif _edit_mode == EditMode.SECTORS and _selected_sector >= 0:
-		_draw_selected_sector_highlight()
+		_draw_selected_sector_highlight(xform)
 
 
-func _draw_control_points(font: Font) -> void:
+func _draw_control_points(font: Font, xform: Transform2D) -> void:
+	var z := _view_zoom
 	for i in _spline.point_count():
 		var cp := _spline.get_point(i)
 		var selected := i == _selected
+		var pos := xform * cp.position
 		if selected and cp.type != TrackSpline.PointType.AUTO_SMOOTH:
-			var in_h := _spline.in_handle_world(i)
-			var out_h := _spline.out_handle_world(i)
+			var in_h := xform * _spline.in_handle_world(i)
+			var out_h := xform * _spline.out_handle_world(i)
 			var out_col := Color(0.35, 0.75, 1.0, 0.9)
 			var in_col := Color(0.75, 0.45, 1.0, 0.9) if cp.type == TrackSpline.PointType.FREE else out_col
-			_canvas.draw_line(cp.position, out_h, out_col, 1.5)
-			_canvas.draw_line(cp.position, in_h, in_col, 1.5)
-			var in_r := 6.0 if cp.type == TrackSpline.PointType.FREE else 3.5
-			_canvas.draw_circle(out_h, 6.0, out_col)
-			_canvas.draw_circle(in_h, in_r, in_col)
+			_canvas.draw_line(pos, out_h, out_col, 1.5 * z, true)
+			_canvas.draw_line(pos, in_h, in_col, 1.5 * z, true)
+			var in_r := (6.0 if cp.type == TrackSpline.PointType.FREE else 3.5) * z
+			_canvas.draw_circle(out_h, 6.0 * z, out_col, true, -1.0, true)
+			_canvas.draw_circle(in_h, in_r, in_col, true, -1.0, true)
 
 		var fill := _point_fill_color(cp.type, selected)
-		var radius := 10.0 if selected else 8.0
-		_canvas.draw_circle(cp.position, radius, fill)
-		_canvas.draw_arc(cp.position, radius, 0.0, TAU, 24, Color.WHITE if selected else Color(0, 0, 0, 0.7), 2.0)
+		var radius := (10.0 if selected else 8.0) * z
+		_canvas.draw_circle(pos, radius, fill, true, -1.0, true)
+		_canvas.draw_arc(pos, radius, 0.0, TAU, 24, Color.WHITE if selected else Color(0, 0, 0, 0.7), 2.0 * z, true)
 		_canvas.draw_string(
 			font,
-			cp.position + Vector2(12, -8),
+			pos + Vector2(12, -8) * z,
 			"%d %s" % [i + 1, _type_letter(cp.type)],
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
-			13,
+			maxi(1, int(round(13.0 * z))),
 			Color(1, 1, 1, 0.85)
 		)
 
 
-func _draw_selected_sector_highlight() -> void:
+func _draw_selected_sector_highlight(xform: Transform2D) -> void:
 	var sectors := _compute_sectors()
 	if _selected_sector < 0 or _selected_sector >= sectors.size():
 		return
@@ -1370,29 +1378,29 @@ func _draw_selected_sector_highlight() -> void:
 	var n := _seg_result.space_count()
 	var space := int(sector.from)
 	while true:
-		_draw_space_fill(space, SECTOR_SELECTED_COLOR)
+		_draw_space_fill(space, SECTOR_SELECTED_COLOR, xform)
 		if space == int(sector.to):
 			break
 		space = posmod(space + 1, n)
 
 
 ## Fills one space with triangles clamped to its frontiers (no round-cap bleed).
-func _draw_space_fill(space: int, color: Color) -> void:
+func _draw_space_fill(space: int, color: Color, xform: Transform2D) -> void:
 	var quads: Array = _seg_result.space_fill_quads(space, ROAD_HALF_WIDTH)
 	for q in quads:
 		var p: PackedVector2Array = q
 		if p.size() < 4:
 			continue
-		_draw_fill_tri(p[0], p[1], p[2], color)
-		_draw_fill_tri(p[0], p[2], p[3], color)
+		_draw_fill_tri(p[0], p[1], p[2], color, xform)
+		_draw_fill_tri(p[0], p[2], p[3], color, xform)
 
 
-func _draw_fill_tri(a: Vector2, b: Vector2, c: Vector2, color: Color) -> void:
-	# Skip collapsed slivers that Godot may refuse to fill.
+func _draw_fill_tri(a: Vector2, b: Vector2, c: Vector2, color: Color, xform: Transform2D) -> void:
+	# Skip collapsed slivers that Godot may refuse to fill (area in world space).
 	var area2 := absf((b - a).cross(c - a))
 	if area2 < 0.05:
 		return
-	_canvas.draw_colored_polygon(PackedVector2Array([a, b, c]), color)
+	_canvas.draw_colored_polygon(PackedVector2Array([xform * a, xform * b, xform * c]), color)
 
 
 func _corner_badge_natural(frontier: TrackSegmenter.Frontier, outside: bool) -> Vector2:

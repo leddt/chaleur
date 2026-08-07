@@ -338,7 +338,7 @@ static func _draw_space_overlays(canvas: CanvasItem, ctx: Context, opts: Options
 		elif opts.spaces:
 			draw_line = true
 		if draw_line:
-			canvas.draw_line(inner_edge, outer_edge, col, _sw(xform, width))
+			canvas.draw_line(inner_edge, outer_edge, col, _sw(xform, width), true)
 		if is_corner_exit and opts.speed_limits:
 			var badge_c := _tx(xform, corner_badge_center(ctx, space_before, a))
 			_draw_corner_limit_badge(canvas, font, badge_c, _corner_speed(ctx, space_before), xform)
@@ -377,13 +377,17 @@ static func _draw_corner_limit_badge(
 ) -> void:
 	var r := _sw(xform, CORNER_BADGE_RADIUS)
 	var font_size := maxi(8, int(round(_sw(xform, 12.0))))
-	canvas.draw_circle(center, r, Color.WHITE)
+	canvas.draw_circle(center, r, Color.WHITE, true, -1.0, true)
 	canvas.draw_arc(center, maxf(1.0, r - _sw(xform, 1.5)), 0.0, TAU, 28, CORNER_LINE_COLOR, _sw(xform, 2.5), true)
 	var text := str(limit)
 	var extent := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	# draw_string uses the baseline. Center the line box (ascent above, descent below).
+	var baseline := center.y + (
+		font.get_ascent(font_size) - font.get_descent(font_size)
+	) * 0.5
 	canvas.draw_string(
 		font,
-		center + Vector2(-extent.x * 0.5, extent.y * 0.34),
+		Vector2(center.x - extent.x * 0.5, baseline),
 		text,
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
@@ -428,27 +432,25 @@ static func _draw_start_grid_marker(
 	var half_w := 8.5 * s
 	var arm := 5.0 * s
 	var t := 1.0 * s
-	_draw_start_grid_quad(canvas, center, right, fwd, -half_w + t, half_w - t, -t, t)
-	_draw_start_grid_quad(canvas, center, right, fwd, -half_w - t, -half_w + t, -arm, t)
-	_draw_start_grid_quad(canvas, center, right, fwd, half_w - t, half_w + t, -arm, t)
-
-
-static func _draw_start_grid_quad(
-	canvas: CanvasItem,
-	origin: Vector2,
-	right: Vector2,
-	fwd: Vector2,
-	r0: float,
-	r1: float,
-	f0: float,
-	f1: float,
-) -> void:
-	canvas.draw_colored_polygon(
-		PackedVector2Array([
-			origin + right * r0 + fwd * f0,
-			origin + right * r1 + fwd * f0,
-			origin + right * r1 + fwd * f1,
-			origin + right * r0 + fwd * f1,
-		]),
-		START_GRID_MARKER_COLOR
+	var stroke := 2.0 * t
+	canvas.draw_line(
+		center + right * (-half_w + t),
+		center + right * (half_w - t),
+		START_GRID_MARKER_COLOR,
+		stroke,
+		true
+	)
+	canvas.draw_line(
+		center + right * (-half_w) + fwd * (-arm),
+		center + right * (-half_w) + fwd * t,
+		START_GRID_MARKER_COLOR,
+		stroke,
+		true
+	)
+	canvas.draw_line(
+		center + right * half_w + fwd * (-arm),
+		center + right * half_w + fwd * t,
+		START_GRID_MARKER_COLOR,
+		stroke,
+		true
 	)

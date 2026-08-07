@@ -97,6 +97,8 @@ var _panning := false
 
 
 func _ready() -> void:
+	theme = ThemeBuilder.build()
+	_apply_kit_chrome()
 	_canvas.draw.connect(_on_canvas_draw)
 	_canvas.gui_input.connect(_on_canvas_gui_input)
 	_canvas.resized.connect(_on_canvas_resized)
@@ -112,6 +114,47 @@ func _ready() -> void:
 	_ensure_preview_cars()
 	# Layout may still report 0-height here — wait for a usable canvas size.
 	call_deferred("_try_init_spline")
+
+
+func _apply_kit_chrome() -> void:
+	var bg := get_node_or_null("Background") as ColorRect
+	if bg != null:
+		bg.color = Palette.ASPHALT
+	var title := get_node_or_null("Root/TopBar/Title") as Label
+	if title != null:
+		title.theme_type_variation = &"TitleLabel"
+		title.remove_theme_font_size_override("font_size")
+	%BackButton.theme_type_variation = &"Primary"
+	%ResetButton.theme_type_variation = &"Compact"
+	_mode_trace.theme_type_variation = &"Compact"
+	_mode_spaces.theme_type_variation = &"Compact"
+	_mode_sectors.theme_type_variation = &"Compact"
+	_set_start_button.theme_type_variation = &"Compact"
+	_set_corner_button.theme_type_variation = &"Compact"
+	_corner_side_button.theme_type_variation = &"Compact"
+	_sector_race_line_button.theme_type_variation = &"Compact"
+	var side := get_node_or_null("Root/MainRow/SidePanel") as PanelContainer
+	if side != null:
+		side.theme_type_variation = &"Instrument"
+	for path in [
+		"Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/PrioTitle",
+		"Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/EditTitle",
+	]:
+		var section := get_node_or_null(path) as Label
+		if section != null:
+			section.theme_type_variation = &"Eyebrow"
+			section.remove_theme_font_size_override("font_size")
+			section.text = section.text.to_upper()
+	for path2 in [
+		"Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection/SectorHint",
+		"Root/MainRow/SidePanel/Margin/PanelVBox/SummaryLabel",
+	]:
+		var caption := get_node_or_null(path2) as Label
+		if caption != null:
+			caption.theme_type_variation = &"Caption"
+			caption.remove_theme_color_override("font_color")
+			caption.remove_theme_font_size_override("font_size")
+	_sector_info_label.theme_type_variation = &"Caption"
 
 
 func _setup_mode_ui() -> void:

@@ -48,6 +48,9 @@ static func build() -> Theme:
 
 	_setup_labels(t, body, display)
 	_setup_buttons(t, body)
+	_setup_checkboxes(t, body)
+	_setup_sliders(t)
+	_setup_spinboxes(t, body)
 	_setup_panels(t)
 	_setup_binnacle(t)
 	return t
@@ -93,6 +96,33 @@ static func _setup_buttons(t: Theme, body: Font) -> void:
 
 	_setup_card_button(t, body)
 	_setup_primary_button(t, body)
+	_setup_compact_button(t, body)
+
+
+## Bandeau étroit pour les sélecteurs de mode / panneau éditeur.
+static func _setup_compact_button(t: Theme, body: Font) -> void:
+	t.add_type("Compact")
+	t.set_type_variation("Compact", "Button")
+	t.set_font("font", "Compact", body)
+	t.set_font_size("font_size", "Compact", SIZE_S)
+	t.set_color("font_color", "Compact", Palette.CARDBOARD)
+	t.set_color("font_hover_color", "Compact", Palette.MUSTARD)
+	t.set_color("font_pressed_color", "Compact", Palette.INK)
+	t.set_color("font_disabled_color", "Compact", Palette.SMOKE)
+	t.set_stylebox("normal", "Compact", _compact_button_box(Color(0, 0, 0, 0), Palette.SMOKE))
+	t.set_stylebox("hover", "Compact", _compact_button_box(Color(0, 0, 0, 0), Palette.MUSTARD))
+	t.set_stylebox("pressed", "Compact", _compact_button_box(Palette.MUSTARD, Palette.MUSTARD))
+	t.set_stylebox("disabled", "Compact", _compact_button_box(Color(0, 0, 0, 0), Palette.INK))
+	t.set_stylebox("focus", "Compact", _compact_button_box(Color(0, 0, 0, 0), Palette.CARDBOARD))
+
+
+static func _compact_button_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var sb := _button_box(fill, border)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 6
+	return sb
 
 
 ## L'action principale d'une phase. Un bouton plein au milieu de boutons en
@@ -159,6 +189,108 @@ static func _button_box(fill: Color, border: Color) -> StyleBoxFlat:
 	sb.content_margin_top = 10
 	sb.content_margin_bottom = 10
 	return sb
+
+
+static func _setup_checkboxes(t: Theme, body: Font) -> void:
+	t.set_font("font", "CheckBox", body)
+	t.set_font_size("font_size", "CheckBox", SIZE_S)
+	t.set_color("font_color", "CheckBox", Palette.CARDBOARD)
+	t.set_color("font_hover_color", "CheckBox", Palette.MUSTARD)
+	t.set_color("font_pressed_color", "CheckBox", Palette.MUSTARD)
+	t.set_color("font_disabled_color", "CheckBox", Palette.SMOKE)
+	t.set_stylebox("normal", "CheckBox", StyleBoxEmpty.new())
+	t.set_stylebox("pressed", "CheckBox", StyleBoxEmpty.new())
+	t.set_stylebox("hover", "CheckBox", StyleBoxEmpty.new())
+	t.set_stylebox("hover_pressed", "CheckBox", StyleBoxEmpty.new())
+	t.set_stylebox("disabled", "CheckBox", StyleBoxEmpty.new())
+	t.set_stylebox("focus", "CheckBox", _compact_button_box(Color(0, 0, 0, 0), Palette.CARDBOARD))
+	t.set_icon("unchecked", "CheckBox", _check_icon(false, Palette.SMOKE))
+	t.set_icon("checked", "CheckBox", _check_icon(true, Palette.MUSTARD))
+	t.set_icon("unchecked_disabled", "CheckBox", _check_icon(false, Palette.INK))
+	t.set_icon("checked_disabled", "CheckBox", _check_icon(true, Palette.SMOKE))
+	t.set_icon("radio_unchecked", "CheckBox", _radio_icon(false, Palette.SMOKE))
+	t.set_icon("radio_checked", "CheckBox", _radio_icon(true, Palette.MUSTARD))
+	t.set_icon("radio_unchecked_disabled", "CheckBox", _radio_icon(false, Palette.INK))
+	t.set_icon("radio_checked_disabled", "CheckBox", _radio_icon(true, Palette.SMOKE))
+
+
+static func _check_icon(checked: bool, accent: Color) -> Texture2D:
+	var size := 16
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for y in range(2, size - 2):
+		for x in range(2, size - 2):
+			var edge := x == 2 or y == 2 or x == size - 3 or y == size - 3
+			if edge:
+				img.set_pixel(x, y, accent)
+			elif checked:
+				img.set_pixel(x, y, accent)
+	if checked:
+		for y in range(5, 11):
+			for x in range(5, 11):
+				img.set_pixel(x, y, Palette.INK)
+	return ImageTexture.create_from_image(img)
+
+
+static func _radio_icon(checked: bool, accent: Color) -> Texture2D:
+	var size := 16
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var c := Vector2(7.5, 7.5)
+	for y in size:
+		for x in size:
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(c)
+			if d >= 5.2 and d <= 6.6:
+				img.set_pixel(x, y, accent)
+			elif checked and d <= 3.2:
+				img.set_pixel(x, y, accent)
+	return ImageTexture.create_from_image(img)
+
+
+static func _setup_sliders(t: Theme) -> void:
+	var track := StyleBoxFlat.new()
+	track.bg_color = Palette.INK
+	track.set_corner_radius_all(2)
+	track.content_margin_top = 4
+	track.content_margin_bottom = 4
+	track.border_color = Palette.SMOKE
+	track.set_border_width_all(1)
+	t.set_stylebox("slider", "HSlider", track)
+	var grabber_area := StyleBoxFlat.new()
+	grabber_area.bg_color = Color(0, 0, 0, 0)
+	t.set_stylebox("grabber_area", "HSlider", grabber_area)
+	t.set_stylebox("grabber_area_highlight", "HSlider", grabber_area)
+	t.set_icon("grabber", "HSlider", _slider_grabber(Palette.CARDBOARD))
+	t.set_icon("grabber_highlight", "HSlider", _slider_grabber(Palette.MUSTARD))
+	t.set_icon("grabber_disabled", "HSlider", _slider_grabber(Palette.SMOKE))
+
+
+static func _slider_grabber(color: Color) -> Texture2D:
+	var img := Image.create(12, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for y in range(1, 15):
+		for x in range(1, 11):
+			img.set_pixel(x, y, color)
+	return ImageTexture.create_from_image(img)
+
+
+static func _setup_spinboxes(t: Theme, body: Font) -> void:
+	t.set_font("font", "LineEdit", body)
+	t.set_font_size("font_size", "LineEdit", SIZE_S)
+	t.set_color("font_color", "LineEdit", Palette.CARDBOARD)
+	t.set_color("font_placeholder_color", "LineEdit", Palette.SMOKE)
+	t.set_color("caret_color", "LineEdit", Palette.MUSTARD)
+	var field := StyleBoxFlat.new()
+	field.bg_color = Palette.ASPHALT
+	field.border_color = Palette.SMOKE
+	field.set_border_width_all(1)
+	field.set_corner_radius_all(2)
+	field.set_content_margin_all(6)
+	t.set_stylebox("normal", "LineEdit", field)
+	var focus := field.duplicate() as StyleBoxFlat
+	focus.border_color = Palette.CARDBOARD
+	t.set_stylebox("focus", "LineEdit", focus)
+	t.set_stylebox("read_only", "LineEdit", field)
 
 
 ## La casquette du tableau de bord : une seule masse sombre, un bord superieur

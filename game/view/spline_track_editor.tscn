@@ -45,7 +45,7 @@ theme_override_constants/separation = 8
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
-text = "Créateur de tracé"
+text = "Créateur de piste"
 
 [node name="BuiltinCheck" type="CheckBox" parent="Root/TopBar"]
 unique_name_in_owner = true
@@ -100,12 +100,12 @@ theme_override_constants/separation = 4
 
 [node name="NameTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection"]
 layout_mode = 2
-text = "Nom du tracé"
+text = "Nom de la piste"
 
 [node name="TrackNameEdit" type="LineEdit" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection"]
 unique_name_in_owner = true
 layout_mode = 2
-placeholder_text = "Nouveau tracé"
+placeholder_text = "Nouvelle piste"
 caret_blink = true
 
 [node name="PrioSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]

@@ -19,7 +19,7 @@ func _ready() -> void:
 	%BackButton.pressed.connect(_on_back_pressed)
 	_list.item_selected.connect(_on_item_selected)
 	_list.item_activated.connect(func(_i: int) -> void: _on_start_pressed())
-	_preview.set_placeholder("Sélectionne un tracé")
+	_preview.set_placeholder("Sélectionne une piste")
 	_laps_spin.min_value = 1
 	_laps_spin.max_value = 6
 	_laps_spin.value = 1
@@ -62,9 +62,9 @@ func _refresh_list() -> void:
 	_empty_label.visible = not has_tracks
 	_start_button.disabled = not has_tracks
 	_hint.text = (
-		"Choisis un tracé et le nombre de tours."
+		"Choisis une piste et le nombre de tours."
 		if has_tracks
-		else "Aucun tracé enregistré. Crée-en un dans le créateur de tracé."
+		else "Aucune piste enregistrée. Crée-en une dans le créateur de piste."
 	)
 	if has_tracks:
 		_list.select(0)
@@ -85,7 +85,7 @@ func _on_start_pressed() -> void:
 		return
 	var path := _paths[selected[0]]
 	if not Game.start_local_race([], int(_laps_spin.value), 0, path):
-		_hint.text = "Impossible de charger ce tracé."
+		_hint.text = "Impossible de charger cette piste."
 		return
 	get_tree().change_scene_to_file("res://view/board.tscn")
 

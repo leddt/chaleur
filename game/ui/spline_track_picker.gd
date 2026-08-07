@@ -24,7 +24,7 @@ func _ready() -> void:
 	%BackButton.pressed.connect(_on_back_pressed)
 	_list.item_selected.connect(_on_item_selected)
 	_list.item_activated.connect(_on_item_activated)
-	_preview.set_placeholder("Sélectionne un tracé")
+	_preview.set_placeholder("Sélectionne une piste")
 	_ensure_delete_confirm()
 	_refresh_list()
 
@@ -62,7 +62,7 @@ func _ensure_delete_confirm() -> void:
 	if _delete_confirm != null:
 		return
 	_delete_confirm = ConfirmationDialog.new()
-	_delete_confirm.title = "Supprimer le tracé"
+	_delete_confirm.title = "Supprimer la piste"
 	_delete_confirm.ok_button_text = "Supprimer"
 	_delete_confirm.cancel_button_text = "Annuler"
 	_delete_confirm.confirmed.connect(_on_delete_confirmed)
@@ -149,9 +149,9 @@ func _on_delete_pressed() -> void:
 	var track_name := _names[index] if index < _names.size() else _paths[index]
 	if track_name.is_empty():
 		track_name = _paths[index].get_file().get_basename()
-	var kind := "intégré" if _builtins[index] else "enregistré"
+	var kind := "intégrée" if _builtins[index] else "enregistrée"
 	_delete_confirm.dialog_text = (
-		"Supprimer le tracé %s « %s » ?\nCette action est définitive." % [kind, track_name]
+		"Supprimer la piste %s « %s » ?\nCette action est définitive." % [kind, track_name]
 	)
 	_delete_confirm.popup_centered()
 

@@ -270,9 +270,9 @@ func _refresh_race_display() -> void:
 	_refresh_track_preview_for(track_id)
 	var name := _track_display_name(track_id)
 	if name.is_empty() and not Net.race_track_document.is_empty():
-		name = str(Net.race_track_document.get("name", "Tracé"))
+		name = str(Net.race_track_document.get("name", "Piste"))
 	if name.is_empty():
-		name = "Tracé"
+		name = "Piste"
 	_race_summary.text = "%s — %s" % [name, _laps_phrase(laps)]
 
 
@@ -452,7 +452,7 @@ func _on_host_confirm() -> void:
 	if _busy:
 		return
 	if _track_ids.is_empty():
-		_status.text = "Aucun tracé enregistré — crée-en un d’abord."
+		_status.text = "Aucune piste enregistrée — crée-en une d’abord."
 		return
 	_apply_display_name("Host")
 	Net.race_track_id = _selected_track_id()
@@ -549,7 +549,7 @@ func _on_ready_pressed() -> void:
 
 func _on_start_pressed() -> void:
 	if _track_ids.is_empty():
-		_status.text = "Aucun tracé enregistré — crée-en un d’abord."
+		_status.text = "Aucune piste enregistrée — crée-en une d’abord."
 		return
 	_save_settings()
 	Net.start_race(int(_laps_spin.value), _selected_track_id())

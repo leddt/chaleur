@@ -9,7 +9,7 @@ var _spline: TrackSpline
 var _baked: PackedVector2Array = PackedVector2Array()
 var _ctx: SplineTrackPainter.Context = SplineTrackPainter.Context.new()
 var _opts: SplineTrackPainter.Options = SplineTrackPainter.preview_options()
-var _placeholder := "Sélectionne un tracé"
+var _placeholder := "Sélectionne une piste"
 ## flip_key -> true (same storage as the editor document).
 var _sector_flip_race_line: Dictionary = {}
 var _corners: Dictionary = {}

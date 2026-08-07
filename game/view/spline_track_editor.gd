@@ -216,7 +216,7 @@ func _sync_track_name_field() -> void:
 
 
 func _display_track_name() -> String:
-	return _track_name if not _track_name.is_empty() else "Nouveau tracé"
+	return _track_name if not _track_name.is_empty() else "Nouvelle piste"
 
 
 func _refresh_window_title() -> void:
@@ -525,7 +525,7 @@ func _try_init_spline() -> void:
 		_reset_spline()
 		return
 	if SplineTrackFile.is_builtin_path(path) and not SplineTrackFile.can_write_builtin():
-		_summary.text = "Les circuits intégrés ne sont éditables qu'en debug"
+		_summary.text = "Les pistes intégrées ne sont éditables qu'en debug"
 		_reset_spline()
 		return
 	if not _load_from_path(path):
@@ -560,7 +560,7 @@ func _on_save() -> void:
 		return
 	var wants_builtin := _wants_builtin_save()
 	if wants_builtin and not SplineTrackFile.can_write_builtin():
-		_summary.text = "Les tracés built-in ne sont éditables qu'en debug"
+		_summary.text = "Les pistes intégrées ne sont éditables qu'en debug"
 		return
 	var path := _resolve_save_path(wants_builtin)
 	var err := SplineTrackFile.save_document(path, _build_save_document())

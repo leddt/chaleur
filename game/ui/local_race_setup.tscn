@@ -53,12 +53,12 @@ text = "Partie locale"
 [node name="Title" type="Label" parent="Center/Panel/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Choisir un tracé"
+text = "Choisir une piste"
 
 [node name="HintLabel" type="Label" parent="Center/Panel/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Choisis un tracé et le nombre de tours."
+text = "Choisis une piste et le nombre de tours."
 autowrap_mode = 3
 
 [node name="Body" type="HBoxContainer" parent="Center/Panel/Margin/VBox"]
@@ -74,7 +74,7 @@ theme_override_constants/separation = 8
 [node name="EmptyLabel" type="Label" parent="Center/Panel/Margin/VBox/Body/ListCol"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Aucun tracé pour l’instant."
+text = "Aucune piste pour l’instant."
 autowrap_mode = 3
 
 [node name="TrackList" type="ItemList" parent="Center/Panel/Margin/VBox/Body/ListCol"]

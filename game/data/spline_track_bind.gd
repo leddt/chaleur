@@ -92,7 +92,7 @@ func display_name() -> String:
 		return name
 	if not path.is_empty():
 		return path.get_file().get_basename()
-	return "Tracé"
+	return "Piste"
 
 
 func space_count() -> int:

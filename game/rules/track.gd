@@ -21,7 +21,7 @@ func display_name() -> String:
 	if spline_bind != null:
 		return spline_bind.display_name()
 	if id.is_empty():
-		return "Tracé"
+		return "Piste"
 	return id.get_file().get_basename()
 
 

@@ -512,7 +512,7 @@ func start_race(laps: int = 1, track_id: String = "") -> void:
 			return
 	var use_track := track_id if not track_id.is_empty() else race_track_id
 	if use_track.is_empty() and race_track_document.is_empty():
-		net_error.emit("Aucun tracé sélectionné")
+		net_error.emit("Aucune piste sélectionnée")
 		return
 	if not use_track.is_empty():
 		race_track_id = use_track
@@ -520,7 +520,7 @@ func start_race(laps: int = 1, track_id: String = "") -> void:
 			race_track_document = SplineTrackFile.load_document(use_track)
 	var track := HeatTrack.from_document(race_track_document, maxi(1, laps), race_track_id)
 	if track == null:
-		net_error.emit("Tracé invalide")
+		net_error.emit("Piste invalide")
 		return
 	_assign_seats()
 	var names: Array[String] = []

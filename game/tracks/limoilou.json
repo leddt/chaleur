@@ -2,8 +2,8 @@
 	"corners": [
 		{
 			"offset": [
-				0.0,
-				0.0
+				3.4578857421875,
+				2.07571411132812
 			],
 			"outside": true,
 			"space": 15,
@@ -11,8 +11,8 @@
 		},
 		{
 			"offset": [
-				0.0,
-				0.0
+				-3.45793151855469,
+				4.84332275390625
 			],
 			"outside": true,
 			"space": 36,
@@ -20,8 +20,8 @@
 		},
 		{
 			"offset": [
-				0.0,
-				0.0
+				0.691650390625,
+				-3.45951461791992
 			],
 			"outside": true,
 			"space": 52,
@@ -29,12 +29,59 @@
 		},
 		{
 			"offset": [
-				0.0,
-				0.0
+				-5.53265380859375,
+				0.691925048828125
 			],
 			"outside": false,
 			"space": 60,
 			"speed_limit": 2
+		}
+	],
+	"kerbs": [
+		{
+			"inside": false,
+			"outside": true,
+			"space": 15
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 16
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 36
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 37
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 52
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 53
+		},
+		{
+			"inside": true,
+			"outside": false,
+			"space": 60
+		},
+		{
+			"inside": true,
+			"outside": false,
+			"space": 61
+		},
+		{
+			"inside": true,
+			"outside": false,
+			"space": 62
 		}
 	],
 	"name": "Limoilou",

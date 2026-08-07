@@ -14,7 +14,15 @@ const OUTER_SPOT_ALONG_OFFSET := 4.0
 const ASPHALT_COLOR := Color(0.28, 0.29, 0.31, 1.0)
 const ASPHALT_EDGE_COLOR := Color(0.18, 0.19, 0.21, 1.0)
 const RACE_LINE_EDGE_COLOR := Color(0.58, 0.59, 0.62, 1.0)
-const RACE_LINE_EDGE_WIDTH := 5.0
+## Red/cream vibeurs along geometric inside/outside edges (per-space).
+const KERB_THICKNESS := 5.5
+const KERB_STRIPE_LEN := 9.0
+const KERB_SLANT := 3.5
+const KERB_COLOR_A := Palette.RACE_RED
+const KERB_COLOR_B := Palette.CARDBOARD
+## Pale race-side edge; must exceed KERB_THICKNESS so a lip stays visible past vibeurs.
+const RACE_LINE_OVERHANG := 1.75
+const RACE_LINE_EDGE_WIDTH := KERB_THICKNESS + RACE_LINE_OVERHANG
 const ASPHALT_OUTER_EDGE_WIDTH := 1.5
 const CENTERLINE_COLOR := Color(0.95, 0.95, 0.97, 1.0)
 const CENTERLINE_WIDTH := 2.0
@@ -51,6 +59,8 @@ class Context:
 	var start_space: int = 0
 	## space_index -> {speed_limit, outside, offset: Vector2}
 	var corners: Dictionary = {}
+	## space_index -> {inside: bool, outside: bool} (geometric loop sides)
+	var kerbs: Dictionary = {}
 	## (space: int) -> bool
 	var race_line_flipped: Callable = func(_space: int) -> bool: return false
 	var font: Font
@@ -157,11 +167,14 @@ static func draw(
 	if canvas == null or ctx == null:
 		return
 	var options := opts if opts != null else default_options()
-	# Kerbs under asphalt (editor look): mitre spikes get covered by the band.
+	# Solid race-line edges under asphalt: mitre spikes get covered by the band.
+	# Race width extends past KERB_THICKNESS so the outer lip survives striped kerbs drawn later.
 	if options.race_line:
 		_draw_race_line_kerbs(canvas, ctx, xform)
 	if options.asphalt:
 		_draw_asphalt_band(canvas, baked, ctx.half_width, xform)
+		# Striped vibeurs sit just outside the asphalt edge.
+		_draw_striped_kerbs(canvas, ctx, xform)
 	if options.centerline:
 		_draw_centerline(canvas, baked, xform)
 	if (
@@ -310,6 +323,159 @@ static func _stroke_edge_run(canvas: CanvasItem, pts: PackedVector2Array, color:
 	for i in pts.size():
 		canvas.draw_circle(pts[i], r, color)
 	canvas.draw_polyline(pts, color, width, true)
+
+
+static func _kerb_sides(ctx: Context, space: int) -> Vector2i:
+	var entry: Variant = ctx.kerbs.get(space)
+	if not entry is Dictionary:
+		return Vector2i.ZERO
+	var d: Dictionary = entry
+	return Vector2i(
+		1 if bool(d.get("inside", false)) else 0,
+		1 if bool(d.get("outside", false)) else 0
+	)
+
+
+## Red/cream strips along geometric inside and/or outside asphalt edges.
+static func _draw_striped_kerbs(canvas: CanvasItem, ctx: Context, xform: Transform2D) -> void:
+	if ctx.seg == null or ctx.seg.samples.is_empty() or ctx.kerbs.is_empty():
+		return
+	var half := ctx.half_width
+	var inner_edge := PackedVector2Array()
+	var inner_out := PackedVector2Array()
+	var outer_edge := PackedVector2Array()
+	var outer_out := PackedVector2Array()
+	var prev_sides := Vector2i(-1, -1)
+	var have_prev := false
+	for s in ctx.seg.samples:
+		var inside: Vector2 = s.inside
+		if inside.length_squared() < 0.0001:
+			inside = Vector2.UP
+		else:
+			inside = inside.normalized()
+		var space := ctx.seg.space_index_at_offset(float(s.cum))
+		var sides := _kerb_sides(ctx, space)
+		if have_prev and sides != prev_sides:
+			if prev_sides.x != 0:
+				_stroke_striped_kerb_run(canvas, inner_edge, inner_out, xform)
+			if prev_sides.y != 0:
+				_stroke_striped_kerb_run(canvas, outer_edge, outer_out, xform)
+			inner_edge = PackedVector2Array()
+			inner_out = PackedVector2Array()
+			outer_edge = PackedVector2Array()
+			outer_out = PackedVector2Array()
+		have_prev = true
+		prev_sides = sides
+		var center: Vector2 = s.pos
+		if sides.x != 0:
+			inner_edge.append(center + inside * half)
+			inner_out.append(inside)
+		if sides.y != 0:
+			outer_edge.append(center - inside * half)
+			outer_out.append(-inside)
+	if prev_sides.x != 0:
+		_stroke_striped_kerb_run(canvas, inner_edge, inner_out, xform)
+	if prev_sides.y != 0:
+		_stroke_striped_kerb_run(canvas, outer_edge, outer_out, xform)
+
+
+## `edge` = asphalt lip; `outward` = unit normals pointing away from the road.
+static func _stroke_striped_kerb_run(
+	canvas: CanvasItem,
+	edge: PackedVector2Array,
+	outward: PackedVector2Array,
+	xform: Transform2D,
+) -> void:
+	var n := edge.size()
+	if n < 2 or outward.size() != n:
+		return
+	var cum := PackedFloat32Array()
+	cum.resize(n)
+	cum[0] = 0.0
+	for i in range(1, n):
+		cum[i] = cum[i - 1] + edge[i].distance_to(edge[i - 1])
+	var total := cum[n - 1]
+	if total < 0.5:
+		return
+	var thick := KERB_THICKNESS
+	var slant := KERB_SLANT
+	var t := 0.0
+	var stripe_i := 0
+	while t < total - 0.001:
+		var t1 := minf(t + KERB_STRIPE_LEN, total)
+		var a0 := _sample_along_edge(edge, outward, cum, t)
+		var a1 := _sample_along_edge(edge, outward, cum, t1)
+		var tang0 := _tangent_along_edge(edge, cum, t)
+		var tang1 := _tangent_along_edge(edge, cum, t1)
+		var b0: Vector2 = a0.pos + a0.out * thick + tang0 * slant
+		var b1: Vector2 = a1.pos + a1.out * thick + tang1 * slant
+		var poly := PackedVector2Array([
+			_tx(xform, a0.pos),
+			_tx(xform, a1.pos),
+			_tx(xform, b1),
+			_tx(xform, b0),
+		])
+		var col := KERB_COLOR_A if stripe_i % 2 == 0 else KERB_COLOR_B
+		canvas.draw_colored_polygon(poly, col)
+		t = t1
+		stripe_i += 1
+
+
+static func _sample_along_edge(
+	edge: PackedVector2Array,
+	outward: PackedVector2Array,
+	cum: PackedFloat32Array,
+	dist: float,
+) -> Dictionary:
+	var n := edge.size()
+	if dist <= 0.0:
+		return {"pos": edge[0], "out": outward[0]}
+	if dist >= cum[n - 1]:
+		return {"pos": edge[n - 1], "out": outward[n - 1]}
+	var lo := 0
+	var hi := n - 1
+	while hi - lo > 1:
+		var mid := (lo + hi) >> 1
+		if cum[mid] <= dist:
+			lo = mid
+		else:
+			hi = mid
+	var span := cum[hi] - cum[lo]
+	var u := 0.0 if span < 0.0001 else (dist - cum[lo]) / span
+	var out_n: Vector2 = (outward[lo] as Vector2).lerp(outward[hi] as Vector2, u)
+	if out_n.length_squared() < 0.0001:
+		out_n = outward[lo]
+	else:
+		out_n = out_n.normalized()
+	return {
+		"pos": (edge[lo] as Vector2).lerp(edge[hi] as Vector2, u),
+		"out": out_n,
+	}
+
+
+static func _tangent_along_edge(edge: PackedVector2Array, cum: PackedFloat32Array, dist: float) -> Vector2:
+	var n := edge.size()
+	if n < 2:
+		return Vector2.RIGHT
+	var lo := 0
+	var hi := n - 1
+	if dist <= 0.0:
+		hi = 1
+		lo = 0
+	elif dist >= cum[n - 1]:
+		lo = n - 2
+		hi = n - 1
+	else:
+		while hi - lo > 1:
+			var mid := (lo + hi) >> 1
+			if cum[mid] <= dist:
+				lo = mid
+			else:
+				hi = mid
+	var tang: Vector2 = edge[hi] - edge[lo]
+	if tang.length_squared() < 0.0001:
+		return Vector2.RIGHT
+	return tang.normalized()
 
 
 static func _draw_space_overlays(canvas: CanvasItem, ctx: Context, opts: Options, xform: Transform2D) -> void:

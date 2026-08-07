@@ -64,6 +64,9 @@ const FIT_MARGIN := 24.0
 @onready var _set_corner_button: Button = %SetCornerButton
 @onready var _corner_side_button: Button = %CornerSideButton
 @onready var _corner_details: Control = %CornerDetails
+@onready var _kerb_details: Control = %KerbDetails
+@onready var _kerb_inside_check: CheckBox = %KerbInsideCheck
+@onready var _kerb_outside_check: CheckBox = %KerbOutsideCheck
 
 var _spline: TrackSpline
 var _track_name: String = ""
@@ -76,6 +79,7 @@ var _updating_type_ui: bool = false
 var _updating_seg_ui: bool = false
 var _updating_mode_ui: bool = false
 var _updating_corner_ui: bool = false
+var _updating_kerb_ui: bool = false
 var _updating_name_ui: bool = false
 var _spline_ready: bool = false
 var _edit_mode: int = EditMode.TRACE
@@ -87,6 +91,8 @@ var _start_space_index: int = 0
 var _selected_space: int = -1
 ## space_index -> {speed_limit: int, outside: bool, offset: Vector2}
 var _corners: Dictionary = {}
+## space_index -> {inside: bool, outside: bool} (geometric loop sides)
+var _kerbs: Dictionary = {}
 ## Spaces-mode drag of a corner speed badge (-1 = none).
 var _drag_corner_space: int = -1
 ## World-space grab delta: mouse - badge center at press.
@@ -105,7 +111,6 @@ var _fit_zoom := 1.0
 var _panning := false
 var _reset_view_btn: Button
 
-
 func _ready() -> void:
 	theme = ThemeBuilder.build()
 	_apply_kit_chrome()
@@ -122,6 +127,7 @@ func _ready() -> void:
 	_setup_segmentation_ui()
 	_set_start_button.pressed.connect(_on_set_start_pressed)
 	_setup_corner_ui()
+	_setup_kerb_ui()
 	_setup_sector_ui()
 	_apply_edit_mode()
 	_ensure_preview_cars()
@@ -291,6 +297,7 @@ func _apply_edit_mode() -> void:
 	_sectors_section.visible = _edit_mode == EditMode.SECTORS
 	_refresh_set_start_button()
 	_refresh_corner_ui()
+	_refresh_kerb_ui()
 	_refresh_sector_ui()
 
 
@@ -405,6 +412,11 @@ func _setup_corner_ui() -> void:
 	_corner_side_button.pressed.connect(_on_corner_side_pressed)
 
 
+func _setup_kerb_ui() -> void:
+	_kerb_inside_check.toggled.connect(_on_kerb_inside_toggled)
+	_kerb_outside_check.toggled.connect(_on_kerb_outside_toggled)
+
+
 func _make_corner_entry(speed_limit: int) -> Dictionary:
 	return {
 		"speed_limit": speed_limit,
@@ -504,6 +516,66 @@ func _on_corner_side_pressed() -> void:
 	_dirty = true
 	_refresh_corner_ui()
 	_canvas.queue_redraw()
+
+
+func _space_kerb_inside(space: int) -> bool:
+	var entry: Variant = _kerbs.get(space)
+	if entry is Dictionary:
+		return bool(entry.get("inside", false))
+	return false
+
+
+func _space_kerb_outside(space: int) -> bool:
+	var entry: Variant = _kerbs.get(space)
+	if entry is Dictionary:
+		return bool(entry.get("outside", false))
+	return false
+
+
+func _set_space_kerb(space: int, inside: bool, outside: bool) -> void:
+	if space < 0:
+		return
+	if not inside and not outside:
+		_kerbs.erase(space)
+		return
+	_kerbs[space] = {"inside": inside, "outside": outside}
+
+
+func _on_kerb_inside_toggled(pressed: bool) -> void:
+	if _updating_kerb_ui:
+		return
+	if _selected_space < 0:
+		return
+	_set_space_kerb(_selected_space, pressed, _space_kerb_outside(_selected_space))
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_kerb_outside_toggled(pressed: bool) -> void:
+	if _updating_kerb_ui:
+		return
+	if _selected_space < 0:
+		return
+	_set_space_kerb(_selected_space, _space_kerb_inside(_selected_space), pressed)
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _refresh_kerb_ui() -> void:
+	if _kerb_details == null:
+		return
+	var has_sel := (
+		_edit_mode == EditMode.SPACES
+		and _selected_space >= 0
+		and _seg_result != null
+	)
+	_kerb_details.visible = has_sel
+	_updating_kerb_ui = true
+	_kerb_inside_check.disabled = not has_sel
+	_kerb_outside_check.disabled = not has_sel
+	_kerb_inside_check.button_pressed = has_sel and _space_kerb_inside(_selected_space)
+	_kerb_outside_check.button_pressed = has_sel and _space_kerb_outside(_selected_space)
+	_updating_kerb_ui = false
 
 
 func _on_canvas_resized() -> void:
@@ -606,6 +678,25 @@ func _build_save_document() -> Dictionary:
 	flips_data.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("key", 0)) < int(b.get("key", 0))
 	)
+	var kerbs_data: Array = []
+	for key in _kerbs.keys():
+		var space := int(key)
+		var entry: Variant = _kerbs[key]
+		if not entry is Dictionary:
+			continue
+		var kerb: Dictionary = entry
+		var want_in := bool(kerb.get("inside", false))
+		var want_out := bool(kerb.get("outside", false))
+		if not want_in and not want_out:
+			continue
+		kerbs_data.append({
+			"space": space,
+			"inside": want_in,
+			"outside": want_out,
+		})
+	kerbs_data.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("space", 0)) < int(b.get("space", 0))
+	)
 	return {
 		"version": SplineTrackFile.VERSION,
 		"name": _track_name,
@@ -618,6 +709,7 @@ func _build_save_document() -> Dictionary:
 		},
 		"start_space": _start_space_index,
 		"corners": corners_data,
+		"kerbs": kerbs_data,
 		"sector_flip_race_line": flips_data,
 	}
 
@@ -634,6 +726,7 @@ func _reset_spline() -> void:
 	_selected_space = -1
 	_start_space_index = 0
 	_corners.clear()
+	_kerbs.clear()
 	_drag_corner_space = -1
 	_selected_sector = -1
 	_sector_flip_race_line.clear()
@@ -706,6 +799,21 @@ func _load_from_path(path: String) -> bool:
 				"outside": bool(entry.get("outside", true)),
 				"offset": offset,
 			}
+	_kerbs.clear()
+	var kerbs_data: Variant = data.get("kerbs", [])
+	if kerbs_data is Array:
+		for k_item in kerbs_data:
+			if not k_item is Dictionary:
+				continue
+			var k_entry: Dictionary = k_item
+			var k_space := int(k_entry.get("space", -1))
+			if k_space < 0:
+				continue
+			var want_in := bool(k_entry.get("inside", false))
+			var want_out := bool(k_entry.get("outside", false))
+			if not want_in and not want_out:
+				continue
+			_kerbs[k_space] = {"inside": want_in, "outside": want_out}
 	_sector_flip_race_line.clear()
 	var flips_data: Variant = data.get("sector_flip_race_line", [])
 	if flips_data is Array:
@@ -768,6 +876,7 @@ func _clamp_space_indices() -> void:
 		_start_space_index = 0
 		_selected_space = -1
 		_corners.clear()
+		_kerbs.clear()
 		_selected_sector = -1
 		return
 	var n := _seg_result.space_count()
@@ -784,6 +893,19 @@ func _clamp_space_indices() -> void:
 			else:
 				kept[idx] = _make_corner_entry(int(entry))
 	_corners = kept
+	var kept_kerbs: Dictionary = {}
+	for k_key in _kerbs.keys():
+		var k_idx := int(k_key)
+		if k_idx < 0 or k_idx >= n:
+			continue
+		var k_entry: Variant = _kerbs[k_key]
+		if not k_entry is Dictionary:
+			continue
+		var want_in := bool(k_entry.get("inside", false))
+		var want_out := bool(k_entry.get("outside", false))
+		if want_in or want_out:
+			kept_kerbs[k_idx] = {"inside": want_in, "outside": want_out}
+	_kerbs = kept_kerbs
 	_prune_sector_flips()
 	_clamp_selected_sector()
 
@@ -1060,6 +1182,7 @@ func _refresh_info() -> void:
 	if _edit_mode == EditMode.SPACES:
 		_refresh_set_start_button()
 		_refresh_corner_ui()
+		_refresh_kerb_ui()
 		_refresh_summary()
 		return
 	if _edit_mode == EditMode.SECTORS:
@@ -1309,6 +1432,7 @@ func _paint_context(font: Font) -> SplineTrackPainter.Context:
 	ctx.seg = _seg_result
 	ctx.start_space = _start_space_index
 	ctx.corners = _corners
+	ctx.kerbs = _kerbs
 	ctx.race_line_flipped = _space_race_line_flipped
 	ctx.font = font
 	return ctx
@@ -1478,6 +1602,7 @@ func _on_spaces_gui_input(event: InputEvent) -> void:
 				_refresh_info()
 				_refresh_set_start_button()
 				_refresh_corner_ui()
+				_refresh_kerb_ui()
 				_canvas.queue_redraw()
 				_canvas.accept_event()
 				return
@@ -1486,6 +1611,7 @@ func _on_spaces_gui_input(event: InputEvent) -> void:
 			_refresh_info()
 			_refresh_set_start_button()
 			_refresh_corner_ui()
+			_refresh_kerb_ui()
 			_canvas.queue_redraw()
 		elif _drag_corner_space >= 0:
 			_drag_corner_space = -1

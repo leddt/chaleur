@@ -12,6 +12,8 @@ var seg_params: TrackSegmenter.Params = TrackSegmenter.Params.new()
 var start_space: int = 0
 ## Geometric space_index -> {speed_limit, outside, offset}
 var corners: Dictionary = {}
+## Geometric space_index -> {inside: bool, outside: bool}
+var kerbs: Dictionary = {}
 ## flip_key -> true
 var sector_flip_race_line: Dictionary = {}
 var half_width: float = SplineTrackPainter.HALF_WIDTH
@@ -75,6 +77,21 @@ static func from_document(data: Dictionary, path: String = "") -> SplineTrackBin
 				"outside": bool(entry.get("outside", true)),
 				"offset": offset,
 			}
+	bind.kerbs.clear()
+	var kerbs_data: Variant = data.get("kerbs", [])
+	if kerbs_data is Array:
+		for k_item in kerbs_data:
+			if not k_item is Dictionary:
+				continue
+			var k_entry: Dictionary = k_item
+			var k_space := int(k_entry.get("space", -1))
+			if k_space < 0 or k_space >= n:
+				continue
+			var want_in := bool(k_entry.get("inside", false))
+			var want_out := bool(k_entry.get("outside", false))
+			if not want_in and not want_out:
+				continue
+			bind.kerbs[k_space] = {"inside": want_in, "outside": want_out}
 	bind.sector_flip_race_line.clear()
 	var flips_data: Variant = data.get("sector_flip_race_line", [])
 	if flips_data is Array:
@@ -186,6 +203,7 @@ func paint_context(font: Font = null) -> SplineTrackPainter.Context:
 	ctx.seg = seg
 	ctx.start_space = start_space
 	ctx.corners = corners
+	ctx.kerbs = kerbs
 	ctx.race_line_flipped = space_race_line_flipped_geom
 	ctx.font = font if font != null else ThemeDB.fallback_font
 	return ctx

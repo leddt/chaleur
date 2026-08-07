@@ -55,3 +55,24 @@ func test_preview_options_omit_race_overlays() -> void:
 	assert_false(o.centerline)
 	assert_false(o.speed_limits)
 	assert_false(o.start_grid)
+
+
+func test_context_stores_striped_kerb_sides() -> void:
+	var ctx := SplineTrackPainter.Context.new()
+	ctx.kerbs = {
+		0: {"inside": true, "outside": false},
+		1: {"inside": false, "outside": true},
+		2: {"inside": true, "outside": true},
+	}
+	assert_eq(ctx.kerbs.size(), 3)
+	assert_true(bool(ctx.kerbs[0].get("inside", false)))
+	assert_false(bool(ctx.kerbs[0].get("outside", true)))
+	assert_false(bool(ctx.kerbs[1].get("inside", true)))
+	assert_true(bool(ctx.kerbs[1].get("outside", false)))
+	assert_gt(SplineTrackPainter.KERB_THICKNESS, 0.0)
+	assert_gt(SplineTrackPainter.KERB_STRIPE_LEN, 0.0)
+	assert_gt(
+		SplineTrackPainter.RACE_LINE_EDGE_WIDTH,
+		SplineTrackPainter.KERB_THICKNESS,
+		"race line must overhang past striped kerbs"
+	)

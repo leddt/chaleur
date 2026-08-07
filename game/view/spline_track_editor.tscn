@@ -348,6 +348,24 @@ disabled = true
 text = "Extérieur"
 tooltip_text = "Côté d'affichage de la limite (réinitialise le décalage)"
 
+[node name="KerbDetails" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="KerbInsideCheck" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/KerbDetails"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Kerb intérieur"
+tooltip_text = "Bande vibreurs rouge/crème sur le bord géométrique intérieur"
+
+[node name="KerbOutsideCheck" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/KerbDetails"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Kerb extérieur"
+tooltip_text = "Bande vibreurs rouge/crème sur le bord géométrique extérieur"
+
 [node name="SectorsSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
 unique_name_in_owner = true
 visible = false

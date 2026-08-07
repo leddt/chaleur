@@ -46,6 +46,58 @@
 			"speed_limit": 5
 		}
 	],
+	"kerbs": [
+		{
+			"inside": false,
+			"outside": true,
+			"space": 0
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 1
+		},
+		{
+			"inside": true,
+			"outside": false,
+			"space": 7
+		},
+		{
+			"inside": true,
+			"outside": false,
+			"space": 8
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 19
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 20
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 27
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 28
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 52
+		},
+		{
+			"inside": false,
+			"outside": true,
+			"space": 53
+		}
+	],
 	"name": "Orsainville",
 	"sector_flip_race_line": [
 		{
@@ -153,10 +205,10 @@
 					0.0,
 					0.0
 				],
-				"tension": 1.0,
-				"type": 0,
-				"x": 938.047058105469,
-				"y": 216.856033325195
+				"tension": 1.83199847956338,
+				"type": 1,
+				"x": 937.944702148438,
+				"y": 218.387878417969
 			},
 			{
 				"in": [

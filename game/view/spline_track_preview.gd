@@ -13,6 +13,7 @@ var _placeholder := "Sélectionne une piste"
 ## flip_key -> true (same storage as the editor document).
 var _sector_flip_race_line: Dictionary = {}
 var _corners: Dictionary = {}
+var _kerbs: Dictionary = {}
 
 
 func _ready() -> void:
@@ -32,6 +33,7 @@ func clear_track() -> void:
 	_baked = PackedVector2Array()
 	_ctx.seg = null
 	_corners.clear()
+	_kerbs.clear()
 	_sector_flip_race_line.clear()
 	queue_redraw()
 
@@ -79,6 +81,22 @@ func set_from_document(data: Dictionary) -> void:
 				"offset": offset,
 			}
 	_ctx.corners = _corners
+	_kerbs.clear()
+	var kerbs_data: Variant = data.get("kerbs", [])
+	if kerbs_data is Array:
+		for k_item in kerbs_data:
+			if not k_item is Dictionary:
+				continue
+			var k_entry: Dictionary = k_item
+			var k_space := int(k_entry.get("space", -1))
+			if k_space < 0:
+				continue
+			var want_in := bool(k_entry.get("inside", false))
+			var want_out := bool(k_entry.get("outside", false))
+			if not want_in and not want_out:
+				continue
+			_kerbs[k_space] = {"inside": want_in, "outside": want_out}
+	_ctx.kerbs = _kerbs
 	_sector_flip_race_line.clear()
 	var flips_data: Variant = data.get("sector_flip_race_line", [])
 	if flips_data is Array:

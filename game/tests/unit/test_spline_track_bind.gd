@@ -30,6 +30,10 @@ func _sample_document() -> Dictionary:
 			{"space": 5, "speed_limit": 4, "outside": true, "offset": [0.0, 0.0]},
 			{"space": 10, "speed_limit": 3, "outside": false, "offset": [0.0, 0.0]},
 		],
+		"kerbs": [
+			{"space": 5, "inside": true, "outside": true},
+			{"space": 8, "inside": false, "outside": true},
+		],
 		"sector_flip_race_line": [{"key": 5}],
 	}
 
@@ -62,6 +66,20 @@ func test_sample_at_returns_heading() -> void:
 	assert_true(sample.has("pos"))
 	assert_true(sample.has("heading"))
 	assert_gt((sample.heading as Vector2).length(), 0.01)
+
+
+func test_bind_loads_kerbs_into_paint_context() -> void:
+	var bind := SplineTrackBind.from_document(_sample_document())
+	assert_ne(bind, null)
+	assert_true(bind.kerbs.has(5))
+	assert_true(bool(bind.kerbs[5].get("inside", false)))
+	assert_true(bool(bind.kerbs[5].get("outside", false)))
+	assert_true(bind.kerbs.has(8))
+	assert_false(bool(bind.kerbs[8].get("inside", true)))
+	assert_true(bool(bind.kerbs[8].get("outside", false)))
+	var ctx := bind.paint_context()
+	assert_eq(ctx.kerbs.size(), 2)
+	assert_true(ctx.kerbs.has(5))
 
 
 func test_state_codec_preserves_spline_document() -> void:

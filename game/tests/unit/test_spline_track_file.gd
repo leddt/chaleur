@@ -35,6 +35,7 @@ func test_save_and_load_roundtrip() -> void:
 		"segmentation": {"algorithm": 1, "car_length": 36.0, "target_space_len": 36.0},
 		"start_space": 2,
 		"corners": [{"space": 4, "speed_limit": 3, "outside": true, "offset": [1.0, 2.0]}],
+		"kerbs": [{"space": 4, "inside": true, "outside": false}],
 		"sector_flip_race_line": [{"key": 4}],
 	}
 	assert_eq(SplineTrackFile.save_document(path, data), OK)
@@ -43,6 +44,10 @@ func test_save_and_load_roundtrip() -> void:
 	assert_eq(int(loaded.get("start_space", -1)), 2)
 	var corners: Array = loaded.get("corners", [])
 	assert_eq(corners.size(), 1)
+	var kerbs: Array = loaded.get("kerbs", [])
+	assert_eq(kerbs.size(), 1)
+	assert_true(bool(kerbs[0].get("inside", false)))
+	assert_false(bool(kerbs[0].get("outside", true)))
 
 
 func test_list_entries_includes_saved() -> void:

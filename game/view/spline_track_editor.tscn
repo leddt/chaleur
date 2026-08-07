@@ -45,10 +45,10 @@ size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
 text = "Créateur de tracé"
 
-[node name="ResetButton" type="Button" parent="Root/TopBar"]
+[node name="SaveButton" type="Button" parent="Root/TopBar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Réinitialiser"
+text = "Enregistrer"
 
 [node name="BackButton" type="Button" parent="Root/TopBar"]
 unique_name_in_owner = true
@@ -83,6 +83,20 @@ theme_override_constants/margin_bottom = 10
 [node name="PanelVBox" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin"]
 layout_mode = 2
 theme_override_constants/separation = 10
+
+[node name="NameSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="NameTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection"]
+layout_mode = 2
+text = "Nom du tracé"
+
+[node name="TrackNameEdit" type="LineEdit" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Nouveau tracé"
+caret_blink = true
 
 [node name="PrioSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
 layout_mode = 2

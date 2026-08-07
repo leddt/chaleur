@@ -206,6 +206,43 @@ func baked_points(bake_interval: float = 8.0) -> PackedVector2Array:
 	return curve.get_baked_points()
 
 
+func to_dict() -> Dictionary:
+	var points_data: Array = []
+	for i in points.size():
+		var cp := get_point(i)
+		points_data.append({
+			"x": cp.position.x,
+			"y": cp.position.y,
+			"type": int(cp.type),
+			"tension": cp.tension,
+			"in": [cp.in_handle.x, cp.in_handle.y],
+			"out": [cp.out_handle.x, cp.out_handle.y],
+		})
+	return {"points": points_data}
+
+
+static func from_dict(data: Dictionary) -> TrackSpline:
+	var spline := TrackSpline.new()
+	var points_data: Variant = data.get("points", [])
+	if points_data is Array:
+		for item in points_data:
+			if not item is Dictionary:
+				continue
+			var entry: Dictionary = item
+			var cp := ControlPoint.new()
+			cp.position = Vector2(float(entry.get("x", 0.0)), float(entry.get("y", 0.0)))
+			cp.type = int(entry.get("type", PointType.AUTO_SMOOTH))
+			cp.tension = float(entry.get("tension", DEFAULT_TENSION))
+			var hin: Variant = entry.get("in", [0.0, 0.0])
+			var hout: Variant = entry.get("out", [0.0, 0.0])
+			if hin is Array and hin.size() >= 2:
+				cp.in_handle = Vector2(float(hin[0]), float(hin[1]))
+			if hout is Array and hout.size() >= 2:
+				cp.out_handle = Vector2(float(hout[0]), float(hout[1]))
+			spline.points.append(cp)
+	return spline
+
+
 func _tension_from_handle_length(index: int, handle_len: float) -> float:
 	var natural := _neighbor_chord(index).length() * TENSION_TO_HANDLE
 	if natural < 0.001:

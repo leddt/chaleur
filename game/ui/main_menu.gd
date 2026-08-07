@@ -25,7 +25,7 @@ func _on_track_editor_pressed() -> void:
 func _on_spline_track_editor_pressed() -> void:
 	if not OS.is_debug_build():
 		return
-	get_tree().change_scene_to_file("res://view/spline_track_editor.tscn")
+	get_tree().change_scene_to_file("res://ui/spline_track_picker.tscn")
 
 
 func _on_quit_pressed() -> void:

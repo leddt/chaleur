@@ -14,33 +14,26 @@ const POINT_HIT_RADIUS := 14.0
 const CURVE_HIT_RADIUS := 14.0
 const MIN_CANVAS_SIZE := 32.0
 ## Half-width of the asphalt band around the centerline (pixels).
-const ROAD_HALF_WIDTH := 28.0
-const ASPHALT_COLOR := Color(0.28, 0.29, 0.31, 1.0)
-const ASPHALT_EDGE_COLOR := Color(0.18, 0.19, 0.21, 1.0)
-## Pale kerb on the race-line side of the asphalt (spot 0).
-const RACE_LINE_EDGE_COLOR := Color(0.58, 0.59, 0.62, 1.0)
-const RACE_LINE_EDGE_WIDTH := 5.0
-const ASPHALT_OUTER_EDGE_WIDTH := 1.5
-const CENTERLINE_COLOR := Color(0.95, 0.95, 0.97, 1.0)
-const SPACE_EDGE_COLOR := Color(0.05, 0.05, 0.06, 0.95)
-const START_LINE_COLOR := Color(0.9, 0.15, 0.12, 1.0)
-const CORNER_LINE_COLOR := Color(0.2, 0.85, 0.35, 1.0)
+const ROAD_HALF_WIDTH := SplineTrackPainter.HALF_WIDTH
+const CORNER_BADGE_RADIUS := SplineTrackPainter.CORNER_BADGE_RADIUS
+## Gap from asphalt edge to the badge's natural center.
+const CORNER_BADGE_GAP := SplineTrackPainter.CORNER_BADGE_GAP
+## Spaces immediately behind the start line that form the starting grid.
+const START_GRID_SPACES := SplineTrackPainter.START_GRID_SPACES
+const START_GRID_MARKER_COLOR := SplineTrackPainter.START_GRID_MARKER_COLOR
+## Outer lane sits this far back along the track relative to the inner spot.
+const OUTER_SPOT_ALONG_OFFSET := SplineTrackPainter.OUTER_SPOT_ALONG_OFFSET
 const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.1)
 const SECTOR_SELECTED_COLOR := Color(0.5, 0.78, 1.0, 0.1)
-const CORNER_BADGE_RADIUS := 11.0
-## Gap from asphalt edge to the badge's natural center.
-const CORNER_BADGE_GAP := 18.0
-## Spaces immediately behind the start line that form the starting grid.
-const START_GRID_SPACES := 5
-const START_GRID_MARKER_COLOR := Color(0.95, 0.95, 0.98, 0.6)
-## Outer lane sits this far back along the track relative to the inner spot.
-const OUTER_SPOT_ALONG_OFFSET := 4.0
+const START_LINE_COLOR := SplineTrackPainter.START_LINE_COLOR
+const CORNER_LINE_COLOR := SplineTrackPainter.CORNER_LINE_COLOR
 const MIN_VIEW_ZOOM := 0.25
 const MAX_VIEW_ZOOM := 4.0
 const VIEW_ZOOM_STEP := 1.12
 
 @onready var _canvas: Control = %Canvas
 @onready var _summary: Label = %SummaryLabel
+@onready var _track_name_edit: LineEdit = %TrackNameEdit
 @onready var _mode_trace: Button = %ModeTrace
 @onready var _mode_spaces: Button = %ModeSpaces
 @onready var _mode_sectors: Button = %ModeSectors
@@ -64,6 +57,9 @@ const VIEW_ZOOM_STEP := 1.12
 @onready var _corner_side_button: Button = %CornerSideButton
 
 var _spline: TrackSpline
+var _track_name: String = ""
+## user:// path when editing an existing document; empty for a new track.
+var _file_path: String = ""
 var _selected: int = 0
 var _drag_mode: String = "" ## "", "point", "out_handle", "in_handle"
 var _dirty: bool = false
@@ -71,6 +67,7 @@ var _updating_type_ui: bool = false
 var _updating_seg_ui: bool = false
 var _updating_mode_ui: bool = false
 var _updating_corner_ui: bool = false
+var _updating_name_ui: bool = false
 var _spline_ready: bool = false
 var _edit_mode: int = EditMode.TRACE
 var _seg_params: TrackSegmenter.Params = TrackSegmenter.Params.new()
@@ -99,11 +96,12 @@ var _panning := false
 func _ready() -> void:
 	theme = ThemeBuilder.build()
 	_apply_kit_chrome()
+	_setup_name_ui()
 	_canvas.draw.connect(_on_canvas_draw)
 	_canvas.gui_input.connect(_on_canvas_gui_input)
 	_canvas.resized.connect(_on_canvas_resized)
 	%BackButton.pressed.connect(_on_back)
-	%ResetButton.pressed.connect(_on_reset)
+	%SaveButton.pressed.connect(_on_save)
 	_setup_mode_ui()
 	_setup_type_ui()
 	_setup_segmentation_ui()
@@ -124,8 +122,8 @@ func _apply_kit_chrome() -> void:
 	if title != null:
 		title.theme_type_variation = &"TitleLabel"
 		title.remove_theme_font_size_override("font_size")
-	%BackButton.theme_type_variation = &"Primary"
-	%ResetButton.theme_type_variation = &"Compact"
+	%BackButton.theme_type_variation = &"Compact"
+	%SaveButton.theme_type_variation = &"Primary"
 	_mode_trace.theme_type_variation = &"Compact"
 	_mode_spaces.theme_type_variation = &"Compact"
 	_mode_sectors.theme_type_variation = &"Compact"
@@ -137,6 +135,7 @@ func _apply_kit_chrome() -> void:
 	if side != null:
 		side.theme_type_variation = &"Instrument"
 	for path in [
+		"Root/MainRow/SidePanel/Margin/PanelVBox/NameSection/NameTitle",
 		"Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/PrioTitle",
 		"Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/EditTitle",
 	]:
@@ -155,6 +154,36 @@ func _apply_kit_chrome() -> void:
 			caption.remove_theme_color_override("font_color")
 			caption.remove_theme_font_size_override("font_size")
 	_sector_info_label.theme_type_variation = &"Caption"
+
+
+func _setup_name_ui() -> void:
+	_track_name_edit.text_changed.connect(_on_track_name_changed)
+	_sync_track_name_field()
+
+
+func _on_track_name_changed(value: String) -> void:
+	if _updating_name_ui:
+		return
+	_track_name = value.strip_edges()
+	_dirty = true
+	_refresh_window_title()
+
+
+func _sync_track_name_field() -> void:
+	_updating_name_ui = true
+	_track_name_edit.text = _track_name
+	_updating_name_ui = false
+	_refresh_window_title()
+
+
+func _display_track_name() -> String:
+	return _track_name if not _track_name.is_empty() else "Nouveau tracé"
+
+
+func _refresh_window_title() -> void:
+	var title := get_node_or_null("Root/TopBar/Title") as Label
+	if title != null:
+		title.text = _display_track_name()
 
 
 func _setup_mode_ui() -> void:
@@ -381,10 +410,22 @@ func _canvas_ready_for_spline() -> bool:
 func _try_init_spline() -> void:
 	if _spline_ready or not _canvas_ready_for_spline():
 		return
-	_reset_spline()
+	var path := SplineTrackFile.editor_pending_path
+	SplineTrackFile.editor_pending_path = ""
+	if path.is_empty():
+		_reset_spline()
+		return
+	if not _load_from_path(path):
+		_reset_spline()
+		_summary.text = "Impossible de charger %s" % path
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_S and (event.ctrl_pressed or event.meta_pressed):
+			_on_save()
+			get_viewport().set_input_as_handled()
+			return
 	if _spline == null or _edit_mode != EditMode.TRACE:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -398,6 +439,62 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_3:
 				_set_selected_type(TrackSpline.PointType.FREE)
 				get_viewport().set_input_as_handled()
+
+
+func _on_save() -> void:
+	if _spline == null:
+		_summary.text = "Rien à enregistrer"
+		return
+	var path := _file_path
+	if path.is_empty():
+		path = SplineTrackFile.path_for_name(_display_track_name())
+	var err := SplineTrackFile.save_document(path, _build_save_document())
+	if err != OK:
+		_summary.text = "Échec de l'enregistrement"
+		return
+	_file_path = path
+	_dirty = false
+	_summary.text = "Enregistré : %s" % path
+
+
+func _build_save_document() -> Dictionary:
+	var corners_data: Array = []
+	for key in _corners.keys():
+		var space := int(key)
+		var entry: Variant = _corners[key]
+		if not entry is Dictionary:
+			entry = _make_corner_entry(int(entry))
+		var corner: Dictionary = entry
+		var offset: Vector2 = corner.get("offset", Vector2.ZERO)
+		corners_data.append({
+			"space": space,
+			"speed_limit": int(corner.get("speed_limit", 0)),
+			"outside": bool(corner.get("outside", false)),
+			"offset": [offset.x, offset.y],
+		})
+	corners_data.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("space", 0)) < int(b.get("space", 0))
+	)
+	var flips_data: Array = []
+	for key in _sector_flip_race_line.keys():
+		if bool(_sector_flip_race_line.get(key, false)):
+			flips_data.append({"key": int(key)})
+	flips_data.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("key", 0)) < int(b.get("key", 0))
+	)
+	return {
+		"version": SplineTrackFile.VERSION,
+		"name": _track_name,
+		"spline": _spline.to_dict(),
+		"segmentation": {
+			"algorithm": int(_seg_params.algorithm),
+			"car_length": _seg_params.car_length,
+			"target_space_len": _seg_params.target_space_len,
+		},
+		"start_space": _start_space_index,
+		"corners": corners_data,
+		"sector_flip_race_line": flips_data,
+	}
 
 
 func _reset_spline() -> void:
@@ -415,22 +512,93 @@ func _reset_spline() -> void:
 	_drag_corner_space = -1
 	_selected_sector = -1
 	_sector_flip_race_line.clear()
+	_track_name = ""
+	_file_path = ""
+	_sync_track_name_field()
 	_dirty = false
 	_spline_ready = true
 	_recompute_segmentation()
 	_refresh_status()
 	_refresh_info()
 	_refresh_set_start_button()
+	_sync_algo_radios()
+	_updating_seg_ui = true
+	_space_len_slider.value = _seg_params.car_length
+	_updating_seg_ui = false
+	_refresh_space_len_label()
 	_canvas.queue_redraw()
 
 
-func _on_reset() -> void:
-	_spline_ready = false
-	_reset_spline()
+func _load_from_path(path: String) -> bool:
+	var data := SplineTrackFile.load_document(path)
+	if data.is_empty():
+		return false
+	var spline_data: Variant = data.get("spline", {})
+	if not spline_data is Dictionary:
+		return false
+	var spline := TrackSpline.from_dict(spline_data)
+	if spline.point_count() < TrackSpline.MIN_POINTS:
+		return false
+	_spline = spline
+	_file_path = path
+	_track_name = str(data.get("name", "")).strip_edges()
+	_sync_track_name_field()
+	var seg: Variant = data.get("segmentation", {})
+	if seg is Dictionary:
+		_seg_params.algorithm = int(seg.get("algorithm", TrackSegmenter.Algorithm.INNER_UNIFORM))
+		_seg_params.car_length = float(seg.get("car_length", 36.0))
+		_seg_params.target_space_len = float(seg.get("target_space_len", _seg_params.car_length))
+	_start_space_index = int(data.get("start_space", 0))
+	_selected = 0
+	_selected_space = -1
+	_drag_corner_space = -1
+	_selected_sector = -1
+	_corners.clear()
+	var corners_data: Variant = data.get("corners", [])
+	if corners_data is Array:
+		for item in corners_data:
+			if not item is Dictionary:
+				continue
+			var entry: Dictionary = item
+			var space := int(entry.get("space", -1))
+			if space < 0:
+				continue
+			var offset := Vector2.ZERO
+			var off_v: Variant = entry.get("offset", [0.0, 0.0])
+			if off_v is Array and off_v.size() >= 2:
+				offset = Vector2(float(off_v[0]), float(off_v[1]))
+			elif off_v is Vector2:
+				offset = off_v
+			_corners[space] = {
+				"speed_limit": int(entry.get("speed_limit", 0)),
+				"outside": bool(entry.get("outside", true)),
+				"offset": offset,
+			}
+	_sector_flip_race_line.clear()
+	var flips_data: Variant = data.get("sector_flip_race_line", [])
+	if flips_data is Array:
+		for item2 in flips_data:
+			if item2 is Dictionary:
+				_sector_flip_race_line[int(item2.get("key", -1))] = true
+			elif item2 != null:
+				_sector_flip_race_line[int(item2)] = true
+	_dirty = false
+	_spline_ready = true
+	_recompute_segmentation()
+	_refresh_status()
+	_refresh_info()
+	_refresh_set_start_button()
+	_sync_algo_radios()
+	_updating_seg_ui = true
+	_space_len_slider.value = _seg_params.car_length
+	_updating_seg_ui = false
+	_refresh_space_len_label()
+	_canvas.queue_redraw()
+	return true
 
 
 func _on_back() -> void:
-	get_tree().change_scene_to_file("res://ui/main_menu.tscn")
+	get_tree().change_scene_to_file("res://ui/spline_track_picker.tscn")
 
 
 func _on_space_len_changed(value: float) -> void:
@@ -785,9 +953,7 @@ func _on_canvas_draw() -> void:
 
 	var baked := _spline.baked_points()
 	if baked.size() >= 2:
-		_draw_road(baked)
-		_draw_spaces()
-		_draw_centerline(baked)
+		_draw_track(baked, font)
 
 	if _edit_mode == EditMode.TRACE:
 		_draw_control_points(font)
@@ -915,6 +1081,42 @@ func _space_slot_poses(space_index: int) -> Array:
 	return [race, outer]
 
 
+func _paint_context(font: Font) -> SplineTrackPainter.Context:
+	var ctx := SplineTrackPainter.Context.new()
+	ctx.half_width = ROAD_HALF_WIDTH
+	ctx.spot_inset = _seg_params.spot_inset
+	ctx.seg = _seg_result
+	ctx.start_space = _start_space_index
+	ctx.corners = _corners
+	ctx.race_line_flipped = _space_race_line_flipped
+	ctx.font = font
+	return ctx
+
+
+func _draw_track(baked: PackedVector2Array, font: Font) -> void:
+	var ctx := _paint_context(font)
+	var body := SplineTrackPainter.Options.new()
+	body.asphalt = true
+	body.race_line = true
+	body.centerline = true
+	SplineTrackPainter.draw(_canvas, baked, ctx, body)
+	_draw_selection_fills()
+	var overlays := SplineTrackPainter.editor_roadmap_options(_hide_space_numbers.button_pressed)
+	overlays.asphalt = false
+	overlays.race_line = false
+	overlays.centerline = false
+	SplineTrackPainter.draw(_canvas, baked, ctx, overlays)
+
+
+func _draw_selection_fills() -> void:
+	if _seg_result == null or _seg_result.space_count() < 2:
+		return
+	if _edit_mode == EditMode.SPACES and _selected_space >= 0:
+		_draw_space_fill(_selected_space, SPACE_SELECTED_COLOR)
+	elif _edit_mode == EditMode.SECTORS and _selected_sector >= 0:
+		_draw_selected_sector_highlight()
+
+
 func _draw_control_points(font: Font) -> void:
 	for i in _spline.point_count():
 		var cp := _spline.get_point(i)
@@ -943,52 +1145,6 @@ func _draw_control_points(font: Font) -> void:
 			13,
 			Color(1, 1, 1, 0.85)
 		)
-
-
-func _draw_spaces() -> void:
-	if _seg_result == null or _seg_result.space_count() < 2:
-		return
-	var font := ThemeDB.fallback_font
-	var n := _seg_result.space_count()
-	# Selection fill under separators (curved asphalt ribbon, not a flat quad).
-	if _edit_mode == EditMode.SPACES and _selected_space >= 0:
-		_draw_space_fill(_selected_space, SPACE_SELECTED_COLOR)
-	elif _edit_mode == EditMode.SECTORS and _selected_sector >= 0:
-		_draw_selected_sector_highlight()
-	for i in n:
-		var a: TrackSegmenter.Frontier = _seg_result.frontiers[i]
-		var inner_edge := a.center + a.inside_normal * ROAD_HALF_WIDTH
-		var outer_edge := a.center - a.inside_normal * ROAD_HALF_WIDTH
-		var is_start_line := i == _start_space_index
-		# Line that follows space (i-1): exit of a corner space.
-		var space_before := posmod(i - 1, n)
-		var is_corner_exit := _corners.has(space_before)
-		var col := SPACE_EDGE_COLOR
-		var width := 2.0
-		if is_start_line:
-			col = START_LINE_COLOR
-			width = 3.5
-		elif is_corner_exit:
-			col = CORNER_LINE_COLOR
-			width = 3.5
-		_canvas.draw_line(inner_edge, outer_edge, col, width)
-		if is_corner_exit:
-			var badge_c := _corner_badge_center(space_before, a)
-			_draw_corner_limit_badge(font, badge_c, _corner_speed(space_before))
-		if not _hide_space_numbers.button_pressed:
-			# Label the space that begins after this frontier (display number from start).
-			var b: TrackSegmenter.Frontier = _seg_result.frontiers[(i + 1) % n]
-			var label_pos := a.center.lerp(b.center, 0.35) + a.inside_normal * 10.0
-			_canvas.draw_string(
-				font,
-				label_pos,
-				str(_display_space_number(i)),
-				HORIZONTAL_ALIGNMENT_LEFT,
-				-1,
-				11,
-				Color(1, 1, 1, 0.7)
-			)
-	_draw_start_grid_markers()
 
 
 func _draw_selected_sector_highlight() -> void:
@@ -1024,204 +1180,16 @@ func _draw_fill_tri(a: Vector2, b: Vector2, c: Vector2, color: Color) -> void:
 	_canvas.draw_colored_polygon(PackedVector2Array([a, b, c]), color)
 
 
-## White "]" pads on the five spaces behind the start/finish line (2 spots each).
-func _draw_start_grid_markers() -> void:
-	if _seg_result == null or _seg_result.space_count() < 2:
-		return
-	var n := _seg_result.space_count()
-	var rows := mini(START_GRID_SPACES, n)
-	var lateral := ROAD_HALF_WIDTH * _seg_params.spot_inset
-	for row in rows:
-		var space := posmod(_start_space_index - 1 - row, n)
-		var exit_i := posmod(space + 1, n)
-		var fr: TrackSegmenter.Frontier = _seg_result.frontiers[exit_i]
-		var fwd := fr.tangent
-		if fwd.length_squared() < 0.0001:
-			continue
-		fwd = fwd.normalized()
-		# Behind the exit line = into this space (anti-racing direction).
-		# Spot 0 (race line) follows sector flip; spot 1 stays nudged back.
-		var flipped := _space_race_line_flipped(space)
-		var race_side := fr.inside_normal if not flipped else -fr.inside_normal
-		_draw_start_grid_marker(fr.center - fwd * 4.0 + race_side * lateral, fwd)
-		_draw_start_grid_marker(
-			fr.center - fwd * (4.0 + OUTER_SPOT_ALONG_OFFSET) - race_side * lateral,
-			fwd
-		)
-
-
-## Bracket "]" : spine parallel to the start line, short arms rearward.
-func _draw_start_grid_marker(center: Vector2, heading: Vector2) -> void:
-	var fwd := heading.normalized()
-	var right := Vector2(-fwd.y, fwd.x)
-	var half_w := 8.5
-	var arm := 5.0
-	var t := 1.0 # half stroke thickness
-	# Non-overlapping quads so alpha stays even at the corners.
-	_draw_start_grid_quad(
-		center, right, fwd,
-		-half_w + t, half_w - t, -t, t
-	) # spine (between the arms)
-	_draw_start_grid_quad(
-		center, right, fwd,
-		-half_w - t, -half_w + t, -arm, t
-	) # arm A + its corner
-	_draw_start_grid_quad(
-		center, right, fwd,
-		half_w - t, half_w + t, -arm, t
-	) # arm B + its corner
-
-
-func _draw_start_grid_quad(
-	origin: Vector2, right: Vector2, fwd: Vector2,
-	r0: float, r1: float, f0: float, f1: float
-) -> void:
-	_canvas.draw_colored_polygon(
-		PackedVector2Array([
-			origin + right * r0 + fwd * f0,
-			origin + right * r1 + fwd * f0,
-			origin + right * r1 + fwd * f1,
-			origin + right * r0 + fwd * f1,
-		]),
-		START_GRID_MARKER_COLOR
-	)
-
-
-## Natural badge center on the outside or inside shoulder of the exit frontier.
 func _corner_badge_natural(frontier: TrackSegmenter.Frontier, outside: bool) -> Vector2:
-	var lateral := ROAD_HALF_WIDTH + CORNER_BADGE_GAP
-	if outside:
-		return frontier.center - frontier.inside_normal * lateral
-	return frontier.center + frontier.inside_normal * lateral
+	return SplineTrackPainter.corner_badge_natural(frontier, outside, ROAD_HALF_WIDTH)
 
 
 func _corner_badge_center(space: int, frontier: Variant = null) -> Vector2:
-	if frontier == null:
-		if _seg_result == null or _seg_result.space_count() == 0:
-			return Vector2.ZERO
-		var exit_i := posmod(space + 1, _seg_result.space_count())
-		frontier = _seg_result.frontiers[exit_i]
-	return _corner_badge_natural(frontier as TrackSegmenter.Frontier, _corner_outside(space)) + _corner_offset(space)
-
-
-## Green ring, white fill, black digits — reads as a speed-limit disc beside the exit line.
-func _draw_corner_limit_badge(font: Font, center: Vector2, limit: int) -> void:
-	var r := CORNER_BADGE_RADIUS
-	var font_size := 12
-	_canvas.draw_circle(center, r, Color.WHITE)
-	_canvas.draw_arc(center, r - 1.5, 0.0, TAU, 28, CORNER_LINE_COLOR, 2.5, true)
-	var text := str(limit)
-	var extent := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-	_canvas.draw_string(
-		font,
-		center + Vector2(-extent.x * 0.5, extent.y * 0.34),
-		text,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1,
-		font_size,
-		Color.BLACK
-	)
+	return SplineTrackPainter.corner_badge_center(_paint_context(ThemeDB.fallback_font), space, frontier)
 
 
 func _display_space_number(space_index: int) -> int:
-	if _seg_result == null or _seg_result.space_count() == 0:
-		return space_index + 1
-	var n := _seg_result.space_count()
-	return posmod(space_index - _start_space_index, n) + 1
-
-
-func _draw_road(baked: PackedVector2Array) -> void:
-	var pts := _unique_loop_points(baked)
-	if pts.size() < 3:
-		return
-	var loop := PackedVector2Array()
-	loop.resize(pts.size() + 1)
-	for i in pts.size():
-		loop[i] = pts[i]
-	loop[pts.size()] = pts[0]
-
-	# Kerbs first (under asphalt): thick pale race-line side, thin dark outer.
-	# Asphalt then hides mitre spikes that poke inward at sharp bends / flip joins.
-	_draw_asphalt_side_edges()
-	_stroke_closed_band(pts, loop, ROAD_HALF_WIDTH, ASPHALT_COLOR)
-
-
-## Dark thin outer kerb + pale thick race-line kerb (honours per-sector flip).
-func _draw_asphalt_side_edges() -> void:
-	if _seg_result == null or _seg_result.samples.is_empty():
-		return
-	var race_half := RACE_LINE_EDGE_WIDTH * 0.5
-	var outer_half := ASPHALT_OUTER_EDGE_WIDTH * 0.5
-	var race_run := PackedVector2Array()
-	var outer_run := PackedVector2Array()
-	var prev_flipped := false
-	var have_prev := false
-	for s in _seg_result.samples:
-		var inside: Vector2 = s.inside
-		if inside.length_squared() < 0.0001:
-			inside = Vector2.UP
-		else:
-			inside = inside.normalized()
-		var space := _seg_result.space_index_at_offset(float(s.cum))
-		var flipped := _space_race_line_flipped(space)
-		if have_prev and flipped != prev_flipped:
-			_stroke_asphalt_edge_run(race_run, RACE_LINE_EDGE_COLOR, RACE_LINE_EDGE_WIDTH)
-			_stroke_asphalt_edge_run(outer_run, ASPHALT_EDGE_COLOR, ASPHALT_OUTER_EDGE_WIDTH)
-			race_run = PackedVector2Array()
-			outer_run = PackedVector2Array()
-		have_prev = true
-		prev_flipped = flipped
-		var race_n := -inside if flipped else inside
-		var center: Vector2 = s.pos
-		# Centre the stroke on the asphalt lip so half sits outside (visible kerb)
-		# and half sits under asphalt (absorbs sharp mitres at corners).
-		race_run.append(center + race_n * (ROAD_HALF_WIDTH + race_half))
-		outer_run.append(center - race_n * (ROAD_HALF_WIDTH + outer_half))
-	_stroke_asphalt_edge_run(race_run, RACE_LINE_EDGE_COLOR, RACE_LINE_EDGE_WIDTH)
-	_stroke_asphalt_edge_run(outer_run, ASPHALT_EDGE_COLOR, ASPHALT_OUTER_EDGE_WIDTH)
-
-
-func _stroke_asphalt_edge_run(pts: PackedVector2Array, color: Color, width: float) -> void:
-	if pts.size() < 2:
-		return
-	var r := width * 0.5
-	# Circle stamps give round joins; polyline fills gaps between samples.
-	for i in pts.size():
-		_canvas.draw_circle(pts[i], r, color)
-	_canvas.draw_polyline(pts, color, width, true)
-
-
-func _draw_centerline(baked: PackedVector2Array) -> void:
-	var pts := _unique_loop_points(baked)
-	if pts.size() < 3:
-		return
-	var loop := PackedVector2Array()
-	loop.resize(pts.size() + 1)
-	for i in pts.size():
-		loop[i] = pts[i]
-	loop[pts.size()] = pts[0]
-	_canvas.draw_polyline(loop, CENTERLINE_COLOR, 2.0, true)
-
-
-func _stroke_closed_band(pts: PackedVector2Array, loop: PackedVector2Array, radius: float, color: Color) -> void:
-	for i in pts.size():
-		_canvas.draw_circle(pts[i], radius, color)
-	_canvas.draw_polyline(loop, color, radius * 2.0, true)
-
-
-## Distinct samples of a closed centerline (first point not duplicated at the end).
-func _unique_loop_points(baked: PackedVector2Array) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	if baked.is_empty():
-		return pts
-	pts.append(baked[0])
-	for i in range(1, baked.size()):
-		if baked[i].distance_squared_to(pts[pts.size() - 1]) > 0.25:
-			pts.append(baked[i])
-	# Bake often repeats the start at the end — drop it so the loop closure is explicit.
-	if pts.size() >= 2 and pts[0].distance_squared_to(pts[pts.size() - 1]) <= 0.25:
-		pts.resize(pts.size() - 1)
-	return pts
+	return SplineTrackPainter.display_space_number(_paint_context(ThemeDB.fallback_font), space_index)
 
 
 func _point_fill_color(type: int, selected: bool) -> Color:

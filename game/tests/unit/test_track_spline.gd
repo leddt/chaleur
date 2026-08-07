@@ -126,6 +126,19 @@ func test_type_roundtrip_tension_free_tension() -> void:
 	assert_almost_eq(spline.get_point(2).tension, t0, 0.08)
 
 
+func test_to_dict_from_dict_roundtrip() -> void:
+	var spline := TrackSpline.make_default_triangle(Vector2(50, 60), 80.0)
+	spline.set_point_type(1, TrackSpline.PointType.FREE)
+	spline.set_out_handle_world(1, spline.get_point(1).position + Vector2(12, -8))
+	spline.set_in_handle_world(1, spline.get_point(1).position + Vector2(-5, 9))
+	var restored := TrackSpline.from_dict(spline.to_dict())
+	assert_eq(restored.point_count(), 3)
+	assert_eq(restored.get_point(1).type, TrackSpline.PointType.FREE)
+	assert_almost_eq(restored.get_point(1).out_handle.x, 12.0, 0.01)
+	assert_almost_eq(restored.get_point(1).in_handle.y, 9.0, 0.01)
+	assert_almost_eq(restored.get_point(0).position.x, spline.get_point(0).position.x, 0.01)
+
+
 func test_insert_defaults_to_auto() -> void:
 	var spline := TrackSpline.make_default_triangle(Vector2.ZERO, 80.0)
 	var on_curve: Vector2 = spline.closest_on_curve(Vector2(80, 0)).point

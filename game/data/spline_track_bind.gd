@@ -46,6 +46,7 @@ static func from_document(data: Dictionary, path: String = "") -> SplineTrackBin
 		bind.seg_params.target_space_len = float(
 			seg_data.get("target_space_len", bind.seg_params.car_length)
 		)
+		bind.seg_params.forced_space_count = int(seg_data.get("forced_space_count", 0))
 	bind.half_width = bind.seg_params.road_half_width
 	bind.spot_inset = bind.seg_params.spot_inset
 	bind.seg = TrackSegmenter.segment(bind.spline, bind.seg_params)

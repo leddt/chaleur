@@ -1,8 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://view/spline_track_editor.gd" id="1_script"]
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_algo"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_seg_mode"]
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_mode"]
 
@@ -113,7 +115,7 @@ theme_override_constants/separation = 6
 [node name="PrioTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
-text = "Prio des cases"
+text = "Segmentation"
 
 [node name="AlgoRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
 layout_mode = 2
@@ -138,7 +140,30 @@ layout_mode = 2
 button_group = SubResource("ButtonGroup_algo")
 text = "Adaptatif"
 
+[node name="SegModeRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SegModeAuto" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/SegModeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("ButtonGroup_seg_mode")
+text = "Automatique"
+
+[node name="SegModeFixed" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/SegModeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_group = SubResource("ButtonGroup_seg_mode")
+text = "Fixe"
+
 [node name="LenRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 6
 
@@ -163,6 +188,26 @@ layout_mode = 2
 custom_minimum_size = Vector2(44, 0)
 text = "36 px"
 horizontal_alignment = 2
+
+[node name="CountRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CountLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/CountRow"]
+layout_mode = 2
+text = "Cases"
+
+[node name="SpaceCountSpin" type="SpinBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/CountRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 8.0
+max_value = 180.0
+value = 24.0
+rounded = true
+suffix = "cases"
 
 [node name="HideSpaceNumbers" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
 unique_name_in_owner = true

@@ -40,6 +40,19 @@ func test_shorter_car_length_yields_more_spaces() -> void:
 	assert_gt(fine.space_count(), coarse.space_count())
 
 
+func test_forced_space_count_is_respected() -> void:
+	var spline := TrackSpline.make_default_triangle(Vector2(400, 300), 160.0)
+	for algo in [
+		TrackSegmenter.Algorithm.CENTER_UNIFORM,
+		TrackSegmenter.Algorithm.INNER_UNIFORM,
+		TrackSegmenter.Algorithm.ADAPTIVE_INNER,
+	]:
+		var p := _params(algo, 40.0)
+		p.forced_space_count = 20
+		var result := TrackSegmenter.segment(spline, p)
+		assert_eq(result.space_count(), 20, "algo %s" % algo)
+
+
 func test_inner_spots_lie_toward_centroid() -> void:
 	var spline := TrackSpline.make_default_triangle(Vector2(200, 200), 120.0)
 	var result := TrackSegmenter.segment(

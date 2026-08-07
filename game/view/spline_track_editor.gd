@@ -51,8 +51,13 @@ const FIT_MARGIN := 24.0
 @onready var _algo_center: BaseButton = %AlgoCenter
 @onready var _algo_inner: BaseButton = %AlgoInner
 @onready var _algo_adaptive: BaseButton = %AlgoAdaptive
+@onready var _seg_mode_auto: Button = %SegModeAuto
+@onready var _seg_mode_fixed: Button = %SegModeFixed
+@onready var _len_row: Control = %LenRow
+@onready var _count_row: Control = %CountRow
 @onready var _space_len_slider: HSlider = %SpaceLenSlider
 @onready var _space_len_value: Label = %SpaceLenValue
+@onready var _space_count_spin: SpinBox = %SpaceCountSpin
 @onready var _hide_space_numbers: CheckBox = %HideSpaceNumbers
 @onready var _set_start_button: Button = %SetStartButton
 @onready var _corner_speed_spin: SpinBox = %CornerSpeedSpin
@@ -138,6 +143,8 @@ func _apply_kit_chrome() -> void:
 	%SaveButton.theme_type_variation = &"Primary"
 	_builtin_check.visible = SplineTrackFile.can_write_builtin()
 	_builtin_check.disabled = not SplineTrackFile.can_write_builtin()
+	_seg_mode_auto.theme_type_variation = &"Compact"
+	_seg_mode_fixed.theme_type_variation = &"Compact"
 	_mode_trace.theme_type_variation = &"Compact"
 	_mode_spaces.theme_type_variation = &"Compact"
 	_mode_sectors.theme_type_variation = &"Compact"
@@ -292,6 +299,7 @@ func _setup_segmentation_ui() -> void:
 	_seg_params.algorithm = TrackSegmenter.Algorithm.INNER_UNIFORM
 	_seg_params.car_length = 36.0
 	_seg_params.target_space_len = 36.0
+	_seg_params.forced_space_count = 0
 	_algo_center.toggled.connect(func(pressed: bool) -> void:
 		if pressed:
 			_on_algo_radio(TrackSegmenter.Algorithm.CENTER_UNIFORM)
@@ -304,18 +312,86 @@ func _setup_segmentation_ui() -> void:
 		if pressed:
 			_on_algo_radio(TrackSegmenter.Algorithm.ADAPTIVE_INNER)
 	)
+	_seg_mode_auto.toggled.connect(_on_seg_mode_auto_toggled)
+	_seg_mode_fixed.toggled.connect(_on_seg_mode_fixed_toggled)
 	_space_len_slider.min_value = 20.0
 	_space_len_slider.max_value = 80.0
 	_space_len_slider.step = 1.0
+	_space_count_spin.min_value = float(_seg_params.min_spaces)
+	_space_count_spin.max_value = float(_seg_params.max_spaces)
+	_space_count_spin.step = 1.0
+	_space_count_spin.rounded = true
 	_updating_seg_ui = true
 	_sync_algo_radios()
 	_space_len_slider.value = _seg_params.car_length
+	_space_count_spin.value = 24.0
+	_seg_mode_auto.button_pressed = true
 	_updating_seg_ui = false
 	_space_len_slider.value_changed.connect(_on_space_len_changed)
+	_space_count_spin.value_changed.connect(_on_space_count_changed)
 	_refresh_space_len_label()
+	_refresh_seg_mode_ui()
 	_hide_space_numbers.toggled.connect(func(_pressed: bool) -> void:
 		_canvas.queue_redraw()
 	)
+
+
+func _is_seg_mode_fixed() -> bool:
+	return _seg_mode_fixed.button_pressed
+
+
+func _on_seg_mode_auto_toggled(pressed: bool) -> void:
+	if _updating_seg_ui or not pressed:
+		return
+	_seg_params.forced_space_count = 0
+	_refresh_seg_mode_ui()
+	_recompute_segmentation()
+	_refresh_status()
+	_refresh_info()
+	_canvas.queue_redraw()
+
+
+func _on_seg_mode_fixed_toggled(pressed: bool) -> void:
+	if _updating_seg_ui or not pressed:
+		return
+	var count := int(_space_count_spin.value)
+	if _seg_result != null and _seg_result.space_count() >= _seg_params.min_spaces:
+		count = _seg_result.space_count()
+		_updating_seg_ui = true
+		_space_count_spin.set_value_no_signal(float(count))
+		_updating_seg_ui = false
+	_seg_params.forced_space_count = clampi(count, _seg_params.min_spaces, _seg_params.max_spaces)
+	_refresh_seg_mode_ui()
+	_recompute_segmentation()
+	_refresh_status()
+	_refresh_info()
+	_canvas.queue_redraw()
+
+
+func _on_space_count_changed(value: float) -> void:
+	if _updating_seg_ui or not _is_seg_mode_fixed():
+		return
+	_seg_params.forced_space_count = clampi(
+		int(value), _seg_params.min_spaces, _seg_params.max_spaces
+	)
+	_recompute_segmentation()
+	_refresh_status()
+	_refresh_info()
+	_canvas.queue_redraw()
+
+
+func _refresh_seg_mode_ui() -> void:
+	var fixed := _is_seg_mode_fixed()
+	_len_row.visible = not fixed
+	_count_row.visible = fixed
+
+
+func _sync_seg_mode_buttons() -> void:
+	var fixed := _seg_params.forced_space_count > 0
+	_seg_mode_fixed.button_pressed = fixed
+	_seg_mode_auto.button_pressed = not fixed
+	if fixed:
+		_space_count_spin.set_value_no_signal(float(_seg_params.forced_space_count))
 
 
 func _setup_corner_ui() -> void:
@@ -534,6 +610,7 @@ func _build_save_document() -> Dictionary:
 			"algorithm": int(_seg_params.algorithm),
 			"car_length": _seg_params.car_length,
 			"target_space_len": _seg_params.target_space_len,
+			"forced_space_count": int(_seg_params.forced_space_count),
 		},
 		"start_space": _start_space_index,
 		"corners": corners_data,
@@ -558,6 +635,7 @@ func _reset_spline() -> void:
 	_sector_flip_race_line.clear()
 	_track_name = ""
 	_file_path = ""
+	_seg_params.forced_space_count = 0
 	_sync_track_name_field()
 	_sync_builtin_check()
 	_dirty = false
@@ -569,8 +647,10 @@ func _reset_spline() -> void:
 	_sync_algo_radios()
 	_updating_seg_ui = true
 	_space_len_slider.value = _seg_params.car_length
+	_sync_seg_mode_buttons()
 	_updating_seg_ui = false
 	_refresh_space_len_label()
+	_refresh_seg_mode_ui()
 	_fit_view()
 	_canvas.queue_redraw()
 
@@ -595,6 +675,7 @@ func _load_from_path(path: String) -> bool:
 		_seg_params.algorithm = int(seg.get("algorithm", TrackSegmenter.Algorithm.INNER_UNIFORM))
 		_seg_params.car_length = float(seg.get("car_length", 36.0))
 		_seg_params.target_space_len = float(seg.get("target_space_len", _seg_params.car_length))
+		_seg_params.forced_space_count = int(seg.get("forced_space_count", 0))
 	_start_space_index = int(data.get("start_space", 0))
 	_selected = 0
 	_selected_space = -1
@@ -638,8 +719,10 @@ func _load_from_path(path: String) -> bool:
 	_sync_algo_radios()
 	_updating_seg_ui = true
 	_space_len_slider.value = _seg_params.car_length
+	_sync_seg_mode_buttons()
 	_updating_seg_ui = false
 	_refresh_space_len_label()
+	_refresh_seg_mode_ui()
 	_fit_view()
 	_canvas.queue_redraw()
 	return true

@@ -29,6 +29,8 @@ class Params:
 	var bake_interval: float = 4.0
 	## If > 0, preferred centerline step for CENTER_UNIFORM (else car_length).
 	var target_space_len: float = 0.0
+	## If > 0, force exactly this many spaces (clamped to min/max); length params ignored for count.
+	var forced_space_count: int = 0
 	var min_spaces: int = 8
 	var max_spaces: int = 180
 
@@ -405,6 +407,8 @@ static func _unique_loop(baked: PackedVector2Array) -> PackedVector2Array:
 
 
 static func _space_count_for_length(total: float, step: float, p: Params) -> int:
+	if p.forced_space_count > 0:
+		return clampi(p.forced_space_count, p.min_spaces, p.max_spaces)
 	var raw := int(round(total / maxf(step, 1.0)))
 	return clampi(raw, p.min_spaces, p.max_spaces)
 
@@ -465,33 +469,55 @@ static func _center_offset_for_inner(
 
 
 static func _offsets_adaptive_inner(samples: Array, total: float, p: Params) -> PackedFloat32Array:
+	var forced_count := (
+		clampi(p.forced_space_count, p.min_spaces, p.max_spaces) if p.forced_space_count > 0 else 0
+	)
 	var offsets: Array[float] = [0.0]
 	var s := 0.0
 	var guard := 0
 	while guard < p.max_spaces * 2:
 		guard += 1
+		if forced_count > 0 and offsets.size() >= forced_count:
+			break
 		var step := _adaptive_step_at(samples, s, total, p)
-		if s + step >= total - p.car_length * 0.35:
+		if forced_count <= 0 and s + step >= total - p.car_length * 0.35:
 			break
 		s += step
+		if s >= total - 0.001:
+			break
 		offsets.append(s)
+		if forced_count <= 0 and offsets.size() >= p.max_spaces:
+			break
 	# Ensure enough spaces; if too few, fall back to inner uniform.
 	if offsets.size() < p.min_spaces:
 		return _offsets_inner_uniform(samples, total, p)
-	# Redistribute slightly so the last gap closes evenly: scale offsets into [0, total).
-	# Keep relative spacing, map max offset to leave one average gap at the end.
 	var last := offsets[offsets.size() - 1]
 	if last <= 0.0001:
 		return _offsets_inner_uniform(samples, total, p)
-	# Target: equalize remaining ring so average step matches.
-	var count := offsets.size()
+	# Normalize adaptive sample to unit shape, optionally resample for a fixed count.
+	var shape: Array[float] = []
+	shape.resize(offsets.size())
+	for i in offsets.size():
+		shape[i] = float(offsets[i]) / last
+	var count := forced_count if forced_count > 0 else offsets.size()
+	var densified: Array[float] = []
+	densified.resize(count)
+	if count == shape.size():
+		for i in count:
+			densified[i] = shape[i]
+	else:
+		for i in count:
+			# Sample count frontiers on [0,1) of the adaptive shape before close.
+			var t := float(i) / float(count) * float(shape.size() - 1)
+			var i0 := int(floor(t))
+			var i1 := mini(i0 + 1, shape.size() - 1)
+			var u := t - float(i0)
+			densified[i] = lerpf(shape[i0], shape[i1], u)
 	var ring_step := total / float(count)
-	# Blend original relative positions with a uniform ring for clean closure.
 	var out := PackedFloat32Array()
 	out.resize(count)
 	for i in count:
-		var rel := float(offsets[i]) / last if i > 0 else 0.0
-		# Map so frontier i sits at i * ring_step, weighted with adaptive shape.
+		var rel := densified[i]
 		var adaptive_pos := rel * (total - ring_step)
 		var uniform_pos := ring_step * float(i)
 		out[i] = lerpf(uniform_pos, adaptive_pos, 0.65)

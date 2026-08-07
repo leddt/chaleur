@@ -73,7 +73,11 @@ func _on_net_state() -> void:
 			max_prog = maxi(max_prog, p.progress)
 		snap = max_prog == 0
 	_track.set_engine(_engine, snap)
-	_rebuild_log()
+	# Fresh race / new bind: reset the journal. Mid-race snapshots only append so
+	# Sfx.play_for_log_line still runs for new engine lines.
+	if snap:
+		_log_cursor = 0
+		_log.clear()
 	_refresh_all()
 
 

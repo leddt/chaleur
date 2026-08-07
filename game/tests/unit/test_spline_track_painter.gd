@@ -35,9 +35,23 @@ func test_bake_rejects_empty_spline() -> void:
 	assert_eq(SplineTrackPainter.bake_spline(empty).size(), 0)
 
 
-func test_game_options_are_asphalt_plus_race_line() -> void:
+func test_game_options_include_race_overlays() -> void:
 	var o := SplineTrackPainter.game_options()
 	assert_true(o.asphalt)
 	assert_true(o.race_line)
+	assert_true(o.spaces)
+	assert_true(o.centerline)
+	assert_true(o.start_grid)
+	assert_true(o.speed_limits)
+
+
+func test_preview_options_omit_race_overlays() -> void:
+	var o := SplineTrackPainter.preview_options()
+	assert_true(o.asphalt)
+	assert_true(o.race_line)
+	assert_true(o.start_line)
+	assert_true(o.corner_lines)
 	assert_false(o.spaces)
 	assert_false(o.centerline)
+	assert_false(o.speed_limits)
+	assert_false(o.start_grid)

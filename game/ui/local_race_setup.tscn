@@ -1,0 +1,122 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/local_race_setup.gd" id="1_script"]
+[ext_resource type="Script" path="res://view/spline_track_preview.gd" id="2_preview"]
+
+[node name="LocalRaceSetup" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.106, 0.114, 0.129, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(720, 480)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="VBox" type="VBoxContainer" parent="Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Eyebrow" type="Label" parent="Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Partie locale"
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Choisir un tracé"
+
+[node name="HintLabel" type="Label" parent="Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Choisis un tracé et le nombre de tours."
+autowrap_mode = 3
+
+[node name="Body" type="HBoxContainer" parent="Center/Panel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="ListCol" type="VBoxContainer" parent="Center/Panel/Margin/VBox/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EmptyLabel" type="Label" parent="Center/Panel/Margin/VBox/Body/ListCol"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Aucun tracé pour l’instant."
+autowrap_mode = 3
+
+[node name="TrackList" type="ItemList" parent="Center/Panel/Margin/VBox/Body/ListCol"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 220)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LapsRow" type="HBoxContainer" parent="Center/Panel/Margin/VBox/Body/ListCol"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LapsLabel" type="Label" parent="Center/Panel/Margin/VBox/Body/ListCol/LapsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Tours"
+
+[node name="LapsSpin" type="SpinBox" parent="Center/Panel/Margin/VBox/Body/ListCol/LapsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 6.0
+value = 1.0
+
+[node name="PreviewCol" type="VBoxContainer" parent="Center/Panel/Margin/VBox/Body"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Preview" type="Control" parent="Center/Panel/Margin/VBox/Body/PreviewCol"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 280)
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("2_preview")
+
+[node name="StartButton" type="Button" parent="Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Démarrer"
+
+[node name="BackButton" type="Button" parent="Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Retour"

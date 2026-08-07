@@ -7,7 +7,7 @@ static func make_engine(player_count: int = 2, seed: int = 42, laps: int = 1) ->
 	for i in player_count:
 		names.append("P%d" % i)
 	var engine := HeatGameEngine.new()
-	engine.setup(names, HeatTrack.usa_simplified(laps), seed)
+	engine.setup(names, HeatTrack.for_tests(laps), seed)
 	return engine
 
 

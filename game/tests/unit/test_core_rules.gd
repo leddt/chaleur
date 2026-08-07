@@ -342,7 +342,7 @@ func test_replenish_to_seven_and_recycle_discard() -> void:
 
 
 func test_same_round_finish_ranked_by_distance() -> void:
-	var track := HeatTrack.usa_simplified(1)
+	var track := HeatTrack.for_tests(1)
 	track.space_count = 10
 	track.spots = [6, 2, 2, 2, 2, 2, 2, 2, 2, 2] as Array[int]
 	track.corners.clear()
@@ -394,7 +394,7 @@ func test_same_round_finish_ranked_by_distance() -> void:
 
 
 func test_first_finisher_still_pending_then_others_continue() -> void:
-	var track := HeatTrack.usa_simplified(1)
+	var track := HeatTrack.for_tests(1)
 	track.space_count = 10
 	track.spots = [6, 2, 2, 2, 2, 2, 2, 2, 2, 2] as Array[int]
 	track.corners.clear()
@@ -433,7 +433,7 @@ func test_first_finisher_still_pending_then_others_continue() -> void:
 
 
 func test_short_race_can_finish() -> void:
-	var track := HeatTrack.usa_simplified(1)
+	var track := HeatTrack.for_tests(1)
 	track.space_count = 5
 	track.spots = [6, 2, 2, 2, 2] as Array[int]
 	track.corners.clear()
@@ -478,13 +478,13 @@ func test_short_race_can_finish() -> void:
 	assert_eq(engine.ranking().size(), 2)
 
 
-func test_track1_starts_behind_line_two_per_space() -> void:
+func test_grid_starts_behind_line_two_per_space() -> void:
 	var engine := HeatGameEngine.new()
-	engine.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 1)
+	engine.setup(["A", "B", "C", "D"], HeatTrack.for_tests(1), 1)
 	assert_true(engine.track.start_behind_finish_line)
-	assert_eq(engine.track.space_count, 69)
-	assert_eq(engine.track.space_of_progress(-1), 68)
-	assert_eq(engine.track.space_of_progress(-2), 67)
+	assert_eq(engine.track.space_count, 24)
+	assert_eq(engine.track.space_of_progress(-1), 23)
+	assert_eq(engine.track.space_of_progress(-2), 22)
 	var front: Array[PlayerState] = []
 	var second: Array[PlayerState] = []
 	for p in engine.players:
@@ -502,8 +502,8 @@ func test_track1_starts_behind_line_two_per_space() -> void:
 func test_starting_grid_order_follows_seed_not_seat_order() -> void:
 	var same_a := HeatGameEngine.new()
 	var same_b := HeatGameEngine.new()
-	same_a.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 7)
-	same_b.setup(["A", "B", "C", "D"], HeatTrack.track1(1), 7)
+	same_a.setup(["A", "B", "C", "D"], HeatTrack.for_tests(1), 7)
+	same_b.setup(["A", "B", "C", "D"], HeatTrack.for_tests(1), 7)
 	for i in 4:
 		assert_eq(same_a.players[i].progress, same_b.players[i].progress)
 		assert_eq(same_a.players[i].spot, same_b.players[i].spot)
@@ -513,7 +513,7 @@ func test_starting_grid_order_follows_seed_not_seat_order() -> void:
 	var broke_seat_order := false
 	for seed in range(1, 80):
 		var engine := HeatGameEngine.new()
-		engine.setup(["A", "B", "C", "D"], HeatTrack.track1(1), seed)
+		engine.setup(["A", "B", "C", "D"], HeatTrack.for_tests(1), seed)
 		if engine.players[0].progress != -1 or engine.players[1].progress != -1:
 			broke_seat_order = true
 			break
@@ -524,8 +524,8 @@ func test_starting_grid_order_follows_seed_not_seat_order() -> void:
 
 
 func test_next_landmark_shows_finish_in_last_sector() -> void:
-	# usa_simplified: corners at 5, 11, 17, 21 — last sector wraps past finish.
-	var track := HeatTrack.usa_simplified(1)
+	# for_tests oval: corners at 5, 11, 17, 21 — last sector wraps past finish.
+	var track := HeatTrack.for_tests(1)
 	var mid := track.next_landmark(10)
 	assert_eq(str(mid["kind"]), "corner")
 	assert_eq(int(mid["distance"]), 1) # next corner at 11
@@ -533,7 +533,7 @@ func test_next_landmark_shows_finish_in_last_sector() -> void:
 	assert_eq(str(last_sector["kind"]), "finish")
 	assert_eq(int(last_sector["distance"]), 2) # finish at 24
 	# Multi-lap: same space mid-race still points at the next corner, not finish.
-	var two_laps := HeatTrack.usa_simplified(2)
+	var two_laps := HeatTrack.for_tests(2)
 	var first_lap_end := two_laps.next_landmark(22)
 	assert_eq(str(first_lap_end["kind"]), "corner")
 	assert_eq(int(first_lap_end["distance"]), 7) # wrap to corner 5

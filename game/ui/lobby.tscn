@@ -1,6 +1,7 @@
-[gd_scene format=3 uid="uid://bdguu0nyhyih7"]
+[gd_scene load_steps=3 format=3 uid="uid://bdguu0nyhyih7"]
 
 [ext_resource type="Script" uid="uid://8dymtqte2kvr" path="res://ui/lobby.gd" id="1_script"]
+[ext_resource type="Script" path="res://view/spline_track_preview.gd" id="2_preview"]
 
 [node name="Lobby" type="Control" unique_id=1016679419]
 layout_mode = 3
@@ -239,12 +240,11 @@ text = "Piste"
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="TrackPreview" type="TextureRect" parent="Margin/VBox/SessionPanel/RacePanel" unique_id=533607063]
+[node name="TrackPreview" type="Control" parent="Margin/VBox/SessionPanel/RacePanel" unique_id=533607063]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 160)
 layout_mode = 2
-expand_mode = 1
-stretch_mode = 5
+script = ExtResource("2_preview")
 
 [node name="LapsRow" type="HBoxContainer" parent="Margin/VBox/SessionPanel/RacePanel" unique_id=27676375]
 layout_mode = 2

@@ -64,12 +64,20 @@ static func game_options() -> Options:
 	var o := Options.new()
 	o.asphalt = true
 	o.race_line = true
+	o.centerline = true
+	o.spaces = true
+	o.start_line = true
+	o.corner_lines = true
+	o.speed_limits = true
+	o.start_grid = true
 	return o
 
 
+## Lighter look for track pickers (no case grid / badges / starting pads).
 static func preview_options() -> Options:
-	var o := game_options()
-	o.centerline = true
+	var o := Options.new()
+	o.asphalt = true
+	o.race_line = true
 	o.start_line = true
 	o.corner_lines = true
 	return o

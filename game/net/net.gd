@@ -17,8 +17,11 @@ signal return_to_lobby_requested
 ## peer_id -> {name: String, ready: bool, seat: int}
 var lobby: Dictionary = {}
 var local_display_name: String = "Player"
+var race_track_id: String = ""
 var race_laps: int = 1
-var race_track_id: String = "track1"
+## Host-selected spline document; broadcast to clients for preview + race start.
+var race_track_document: Dictionary = {}
+
 var _port: int = DEFAULT_PORT
 var upnp_status: String = ""
 var upnp_external_ip: String = ""
@@ -488,12 +491,15 @@ func set_ready(is_ready: bool) -> void:
 func set_race_settings(track_id: String, laps: int) -> void:
 	if not is_server():
 		return
-	race_track_id = track_id if not track_id.is_empty() else "track1"
+	race_track_id = track_id
 	race_laps = maxi(1, laps)
+	race_track_document = {}
+	if not track_id.is_empty():
+		race_track_document = SplineTrackFile.load_document(track_id)
 	_broadcast_lobby()
 
 
-func start_race(laps: int = 1, track_id: String = "track1") -> void:
+func start_race(laps: int = 1, track_id: String = "") -> void:
 	if not is_server():
 		net_error.emit("Seul l'hôte peut démarrer")
 		return
@@ -504,15 +510,26 @@ func start_race(laps: int = 1, track_id: String = "track1") -> void:
 		if not bool(lobby[peer_id].get("ready", false)):
 			net_error.emit("Tous les joueurs doivent être prêts")
 			return
+	var use_track := track_id if not track_id.is_empty() else race_track_id
+	if use_track.is_empty() and race_track_document.is_empty():
+		net_error.emit("Aucun tracé sélectionné")
+		return
+	if not use_track.is_empty():
+		race_track_id = use_track
+		if race_track_document.is_empty():
+			race_track_document = SplineTrackFile.load_document(use_track)
+	var track := HeatTrack.from_document(race_track_document, maxi(1, laps), race_track_id)
+	if track == null:
+		net_error.emit("Tracé invalide")
+		return
 	_assign_seats()
 	var names: Array[String] = []
 	for peer_id in _peers_by_seat():
 		names.append(str(lobby[peer_id]["name"]))
 	var seed := int(Time.get_unix_time_from_system())
 	race_laps = maxi(1, laps)
-	race_track_id = track_id if not track_id.is_empty() else "track1"
 	Game.engine = HeatGameEngine.new()
-	Game.engine.setup(names, HeatTrack.from_id(race_track_id, race_laps), seed)
+	Game.engine.setup(names, track, seed)
 	Game.local_player_id = my_seat()
 	_broadcast_lobby()
 	for peer_id in lobby:
@@ -587,10 +604,19 @@ func rpc_set_ready(is_ready: bool) -> void:
 
 
 @rpc("authority", "reliable")
-func rpc_lobby_sync(lobby_data: Dictionary, track_id: String = "track1", laps: int = 1) -> void:
+func rpc_lobby_sync(
+	lobby_data: Dictionary,
+	track_id: String = "",
+	laps: int = 1,
+	track_document: Dictionary = {},
+) -> void:
 	lobby = lobby_data
-	race_track_id = track_id if not track_id.is_empty() else "track1"
+	race_track_id = track_id
 	race_laps = maxi(1, laps)
+	if not track_document.is_empty():
+		race_track_document = track_document
+	elif not track_id.is_empty() and race_track_document.is_empty():
+		race_track_document = SplineTrackFile.load_document(track_id)
 	if Game.mode == Game.Mode.CLIENT:
 		Game.local_player_id = my_seat()
 	lobby_changed.emit()
@@ -726,7 +752,7 @@ func _peers_by_seat() -> Array:
 
 
 func _broadcast_lobby() -> void:
-	rpc_lobby_sync.rpc(lobby.duplicate(true), race_track_id, race_laps)
+	rpc_lobby_sync.rpc(lobby.duplicate(true), race_track_id, race_laps, race_track_document.duplicate(true))
 	lobby_changed.emit()
 
 

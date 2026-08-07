@@ -13,7 +13,7 @@ func _ready() -> void:
 
 func _on_setup() -> void:
 	_engine = HeatGameEngine.new()
-	_engine.setup(["Alice", "Bob"], HeatTrack.usa_simplified(1), 42)
+	_engine.setup(["Alice", "Bob"], HeatTrack.for_tests(1), 42)
 	_append(_engine.dump_state())
 	_append("--- log ---")
 	for line in _engine.event_log:

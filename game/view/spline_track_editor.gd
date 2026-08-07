@@ -1070,25 +1070,16 @@ func _sync_preview_cars() -> void:
 ## Outer is nudged rearward so the two cars don't sit side-by-side flush.
 ## A flipped sector swaps which geometric side is the race line.
 func _space_slot_poses(space_index: int) -> Array:
-	if _seg_result == null or _seg_result.space_count() < 2:
-		return []
-	var poses := _seg_result.space_slot_poses(
-		space_index,
-		_seg_params.road_half_width,
-		_seg_params.spot_inset
-	)
-	if poses.size() < 2:
-		return poses
-	var race: Dictionary = (poses[0] as Dictionary).duplicate()
-	var outer: Dictionary = (poses[1] as Dictionary).duplicate()
-	if _space_race_line_flipped(space_index):
-		var tmp_pos: Vector2 = race.pos
-		race["pos"] = outer.pos
-		outer["pos"] = tmp_pos
-	var heading: Vector2 = outer.heading
-	if heading.length_squared() > 0.0001:
-		outer["pos"] = (outer.pos as Vector2) - heading.normalized() * OUTER_SPOT_ALONG_OFFSET
-	return [race, outer]
+	# Temporary play-index identity: editor works in geometric indices.
+	var bind := SplineTrackBind.new()
+	bind.seg = _seg_result
+	bind.seg_params = _seg_params
+	bind.half_width = ROAD_HALF_WIDTH
+	bind.spot_inset = _seg_params.spot_inset
+	bind.start_space = 0
+	bind.corners = _corners
+	bind.sector_flip_race_line = _sector_flip_race_line
+	return bind.space_slot_poses(space_index)
 
 
 func _paint_context(font: Font) -> SplineTrackPainter.Context:

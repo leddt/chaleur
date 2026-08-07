@@ -50,7 +50,7 @@ static func _encode_track(track: HeatTrack) -> Dictionary:
 	var corners: Array = []
 	for c in track.corners:
 		corners.append({"from_space": c.from_space, "speed_limit": c.speed_limit, "id": c.id})
-	return {
+	var data := {
 		"id": track.id,
 		"space_count": track.space_count,
 		"spots": track.spots.duplicate(),
@@ -61,18 +61,41 @@ static func _encode_track(track: HeatTrack) -> Dictionary:
 		"start_behind_finish_line": track.start_behind_finish_line,
 		"start_max_per_space": track.start_max_per_space,
 	}
+	if track.spline_bind != null and not track.spline_bind.document.is_empty():
+		data["spline_document"] = track.spline_bind.document
+		data["spline_path"] = track.spline_bind.path
+	return data
 
 
 static func _decode_track(data: Dictionary) -> HeatTrack:
+	var doc: Variant = data.get("spline_document", {})
+	var path := str(data.get("spline_path", data.get("id", "")))
+	if doc is Dictionary and SplineTrackFile.is_valid_document(doc):
+		var from_doc := HeatTrack.from_document(doc, int(data.get("laps", 1)), path)
+		if from_doc != null:
+			# Preserve encoded rules fields that matter for mid-race snapshots.
+			from_doc.id = str(data.get("id", from_doc.id))
+			from_doc.laps = int(data.get("laps", from_doc.laps))
+			from_doc.start_heat = int(data.get("start_heat", from_doc.start_heat))
+			from_doc.start_stress = int(data.get("start_stress", from_doc.start_stress))
+			from_doc.start_behind_finish_line = bool(
+				data.get("start_behind_finish_line", from_doc.start_behind_finish_line)
+			)
+			from_doc.start_max_per_space = int(
+				data.get("start_max_per_space", from_doc.start_max_per_space)
+			)
+			return from_doc
 	var track := HeatTrack.new()
-	track.id = str(data.get("id", "usa_simplified"))
-	track.space_count = int(data.get("space_count", 24))
+	track.id = str(data.get("id", ""))
+	track.space_count = int(data.get("space_count", 0))
 	track.spots.clear()
 	for s in data.get("spots", []):
 		track.spots.append(int(s))
 	track.corners.clear()
 	for c in data.get("corners", []):
-		track.corners.append(HeatCorner.new(int(c.get("from_space", 0)), int(c.get("speed_limit", 0)), str(c.get("id", ""))))
+		track.corners.append(
+			HeatCorner.new(int(c.get("from_space", 0)), int(c.get("speed_limit", 0)), str(c.get("id", "")))
+		)
 	track.laps = int(data.get("laps", 1))
 	track.start_heat = int(data.get("start_heat", 6))
 	track.start_stress = int(data.get("start_stress", 3))

@@ -28,7 +28,7 @@ const SETTINGS_PATH := "user://chaleur_settings.cfg"
 @onready var _session_panel: VBoxContainer = %SessionPanel
 @onready var _race_panel: VBoxContainer = %RacePanel
 @onready var _track_option: OptionButton = %TrackOption
-@onready var _track_preview: TextureRect = %TrackPreview
+@onready var _track_preview: SplineTrackPreview = %TrackPreview
 @onready var _laps_spin: SpinBox = %LapsSpin
 @onready var _laps_label: Label = %LapsLabel
 @onready var _race_summary: Label = %RaceSummary
@@ -108,6 +108,7 @@ func _setup_track_options() -> void:
 		_track_option.set_item_metadata(_track_option.item_count - 1, track_id)
 	if _track_option.item_count > 0:
 		_track_option.select(0)
+	_refresh_track_preview()
 
 
 func _set_step(step: Step) -> void:
@@ -187,7 +188,7 @@ func _load_settings() -> void:
 	_host_direct.button_pressed = prefer_direct
 	_join_internet.button_pressed = not prefer_direct
 	_join_direct.button_pressed = prefer_direct
-	var saved_track := str(cfg.get_value("race", "track_id", "track1"))
+	var saved_track := str(cfg.get_value("race", "track_id", ""))
 	_select_track_id(saved_track)
 	var saved_laps := int(cfg.get_value("race", "laps", 1))
 	_laps_spin.value = clampf(float(saved_laps), _laps_spin.min_value, _laps_spin.max_value)
@@ -228,7 +229,7 @@ func _select_track_id(track_id: String) -> void:
 func _selected_track_id() -> String:
 	var idx := _track_option.selected
 	if idx < 0 or idx >= _track_ids.size():
-		return "track1"
+		return ""
 	return _track_ids[idx]
 
 
@@ -265,19 +266,24 @@ func _refresh_race_display() -> void:
 	_laps_spin.value = clampf(float(laps), _laps_spin.min_value, _laps_spin.max_value)
 	_syncing_race_ui = false
 	_refresh_track_preview_for(track_id)
-	_race_summary.text = "%s — %s" % [_track_display_name(track_id), _laps_phrase(laps)]
+	var name := _track_display_name(track_id)
+	if name.is_empty() and not Net.race_track_document.is_empty():
+		name = str(Net.race_track_document.get("name", "Tracé"))
+	if name.is_empty():
+		name = "Tracé"
+	_race_summary.text = "%s — %s" % [name, _laps_phrase(laps)]
 
 
 func _refresh_track_preview_for(track_id: String) -> void:
-	var preview_path := ""
-	for entry in HeatTrack.catalog():
-		if str(entry.get("id", "")) == track_id:
-			preview_path = str(entry.get("preview", ""))
-			break
-	if preview_path.is_empty() or not ResourceLoader.exists(preview_path):
-		_track_preview.texture = null
+	if not Net.race_track_document.is_empty() and (
+		track_id.is_empty() or track_id == Net.race_track_id
+	):
+		_track_preview.set_from_document(Net.race_track_document)
 		return
-	_track_preview.texture = load(preview_path) as Texture2D
+	if track_id.is_empty():
+		_track_preview.clear_track()
+		return
+	_track_preview.set_from_path(track_id)
 
 
 func _publish_race_settings() -> void:
@@ -443,9 +449,13 @@ func _on_setup_cancel() -> void:
 func _on_host_confirm() -> void:
 	if _busy:
 		return
+	if _track_ids.is_empty():
+		_status.text = "Aucun tracé enregistré — crée-en un d’abord."
+		return
 	_apply_display_name("Host")
 	Net.race_track_id = _selected_track_id()
 	Net.race_laps = int(_laps_spin.value)
+	Net.race_track_document = SplineTrackFile.load_document(Net.race_track_id)
 	_busy = true
 	if not _host_internet_mode():
 		var err := Net.host(_port_from(_host_port))
@@ -536,6 +546,9 @@ func _on_ready_pressed() -> void:
 
 
 func _on_start_pressed() -> void:
+	if _track_ids.is_empty():
+		_status.text = "Aucun tracé enregistré — crée-en un d’abord."
+		return
 	_save_settings()
 	Net.start_race(int(_laps_spin.value), _selected_track_id())
 

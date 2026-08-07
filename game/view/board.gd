@@ -34,7 +34,8 @@ func _ready() -> void:
 	_actions.setup(_hand, _sidebar)
 	_actions.action_requested.connect(_dispatch)
 	if Game.engine == null and not Game.is_online():
-		Game.start_local_race()
+		get_tree().change_scene_to_file("res://ui/local_race_setup.tscn")
+		return
 	_engine = Game.engine
 	if _engine != null:
 		_track.set_engine(_engine, true)
@@ -463,7 +464,7 @@ func _on_rematch() -> void:
 	var names: Array[String] = []
 	for p in _engine.players:
 		names.append(p.display_name)
-	Game.start_local_race(names, _engine.track.laps)
+	Game.start_local_race(names, _engine.track.laps, 0, _engine.track.id)
 	_engine = Game.engine
 	_track.set_engine(_engine, true)
 	_revealed_seat = -1

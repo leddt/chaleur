@@ -13,6 +13,8 @@ var start_stress: int = 3
 var start_behind_finish_line: bool = false
 ## Max cars sharing one space on the starting grid (and typically the whole track).
 var start_max_per_space: int = 2
+## Spline runtime for painting / car poses. Required for playable races.
+var spline_bind: SplineTrackBind = null
 
 
 func spot_count(space: int) -> int:
@@ -63,10 +65,6 @@ func distance_to_finish(progress: int) -> int:
 	return finish_progress() - progress
 
 
-## HUD helper: prefer finish distance once the next corner would wrap past the finish
-## (last sector of the race). Returns {"kind": "corner"|"finish"|"none", "distance": int}.
-## The corner `distance_to_next_corner` measured against, so the UI can show its
-## speed limit without re-deriving which corner is next.
 func next_corner(progress: int) -> HeatCorner:
 	if corners.is_empty() or space_count <= 0:
 		return null
@@ -91,63 +89,63 @@ func next_landmark(progress: int) -> Dictionary:
 	return {"kind": "corner", "distance": to_corner}
 
 
-## Hand-drawn track1.jpg layout (see res://data/track1_layout.json).
-static func track1(p_laps: int = 1) -> HeatTrack:
-	var layout := TrackLayout.for_track_id("track1")
-	if layout == null or layout.space_count() <= 0:
-		push_warning("track1 layout missing — falling back to usa_simplified")
-		return usa_simplified(p_laps)
-	return layout.to_heat_track(p_laps)
-
-
-## Default playable track.
-static func default_track(p_laps: int = 1) -> HeatTrack:
-	return track1(p_laps)
-
-
-## Build a track by id for lobby / net race setup.
-static func from_id(track_id: String, p_laps: int = 1) -> HeatTrack:
-	match track_id:
-		"track1":
-			return track1(p_laps)
-		"usa_simplified":
-			return usa_simplified(p_laps)
-		_:
-			push_warning("Unknown track id '%s' — using default" % track_id)
-			return default_track(p_laps)
-
-
-## Lobby catalog: id, display name, preview texture path.
+## User-saved spline tracks (`user://tracks/*.json`).
 static func catalog() -> Array[Dictionary]:
-	return [
-		{
-			"id": "track1",
-			"name": "Piste 1",
-			"preview": "res://assets/track1.jpg",
-		},
-	]
+	var out: Array[Dictionary] = []
+	for entry in SplineTrackFile.list_entries():
+		if not entry is Dictionary:
+			continue
+		out.append({
+			"id": str(entry.get("path", "")),
+			"name": str(entry.get("name", "")),
+		})
+	return out
 
 
-## Build a simplified USA-like track for tests (abstract oval).
-static func usa_simplified(p_laps: int = 1) -> HeatTrack:
+static func from_id(track_id: String, p_laps: int = 1) -> HeatTrack:
+	if track_id.is_empty():
+		return null
+	var bind := SplineTrackBind.from_path(track_id)
+	if bind == null:
+		push_warning("HeatTrack: cannot load spline track '%s'" % track_id)
+		return null
+	return bind.to_heat_track(p_laps)
+
+
+static func from_document(data: Dictionary, p_laps: int = 1, path: String = "") -> HeatTrack:
+	var bind := SplineTrackBind.from_document(data, path)
+	if bind == null:
+		return null
+	return bind.to_heat_track(p_laps)
+
+
+static func default_track(p_laps: int = 1) -> HeatTrack:
+	var entries := catalog()
+	if entries.is_empty():
+		return null
+	return from_id(str(entries[0].get("id", "")), p_laps)
+
+
+## Abstract oval for unit tests only (no spline bind / board painting).
+static func for_tests(p_laps: int = 1) -> HeatTrack:
 	var track := HeatTrack.new()
-	track.id = "usa_simplified"
+	track.id = "test_oval"
 	track.space_count = 24
 	track.laps = p_laps
 	track.start_heat = 6
 	track.start_stress = 3
+	track.start_behind_finish_line = true
+	track.start_max_per_space = 2
 	track.spots = []
 	for i in track.space_count:
-		if i == 0:
-			track.spots.append(6) # starting grid
-		elif i == 8 or i == 15:
-			track.spots.append(1) # chokepoints for block tests
+		if i == 8 or i == 15:
+			track.spots.append(1)
 		else:
 			track.spots.append(2)
 	track.corners = [
-		HeatCorner.new(5, 4, "usa_c1"),
-		HeatCorner.new(11, 5, "usa_c2"),
-		HeatCorner.new(17, 3, "usa_c3"),
-		HeatCorner.new(21, 6, "usa_c4"),
+		HeatCorner.new(5, 4, "test_c1"),
+		HeatCorner.new(11, 5, "test_c2"),
+		HeatCorner.new(17, 3, "test_c3"),
+		HeatCorner.new(21, 6, "test_c4"),
 	]
 	return track

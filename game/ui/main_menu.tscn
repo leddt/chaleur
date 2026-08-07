@@ -60,12 +60,6 @@ visible = false
 layout_mode = 2
 text = "Créateur de tracé"
 
-[node name="TrackEditorButton" type="Button" parent="Center" unique_id=500398355]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-text = "Éditeur de spots"
-
 [node name="QuitButton" type="Button" parent="Center" unique_id=1417786205]
 layout_mode = 2
 text = "Quitter"
@@ -73,5 +67,4 @@ text = "Quitter"
 [connection signal="pressed" from="Center/PlayButton" to="." method="_on_play_pressed"]
 [connection signal="pressed" from="Center/LobbyButton" to="." method="_on_lobby_pressed"]
 [connection signal="pressed" from="Center/SplineTrackEditorButton" to="." method="_on_spline_track_editor_pressed"]
-[connection signal="pressed" from="Center/TrackEditorButton" to="." method="_on_track_editor_pressed"]
 [connection signal="pressed" from="Center/QuitButton" to="." method="_on_quit_pressed"]

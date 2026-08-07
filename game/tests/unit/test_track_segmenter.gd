@@ -55,6 +55,25 @@ func test_inner_spots_lie_toward_centroid() -> void:
 	assert_lt(d_inner, d_outer, "race line should be closer to track center")
 
 
+func test_inside_normals_are_continuous_along_loop() -> void:
+	# Elongated / bent loop used to flip centroid.dot(left) mid-track.
+	var spline := TrackSpline.make_default_triangle(Vector2(200, 200), 120.0)
+	spline.set_point_position(0, Vector2(40, 200))
+	spline.set_point_position(1, Vector2(360, 80))
+	spline.set_point_position(2, Vector2(360, 320))
+	var result := TrackSegmenter.segment(
+		spline, _params(TrackSegmenter.Algorithm.INNER_UNIFORM, 28.0)
+	)
+	assert_gte(result.samples.size(), 4)
+	for i in range(1, result.samples.size()):
+		var a: Vector2 = result.samples[i - 1].inside
+		var b: Vector2 = result.samples[i].inside
+		assert_gt(
+			a.dot(b), 0.0,
+			"inside normal flipped between samples %d and %d" % [i - 1, i]
+		)
+
+
 func test_empty_spline_returns_empty_result() -> void:
 	var spline := TrackSpline.new()
 	var result := TrackSegmenter.segment(spline, _params(TrackSegmenter.Algorithm.CENTER_UNIFORM))

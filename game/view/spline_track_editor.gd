@@ -25,8 +25,8 @@ const CENTERLINE_COLOR := Color(0.95, 0.95, 0.97, 1.0)
 const SPACE_EDGE_COLOR := Color(0.05, 0.05, 0.06, 0.95)
 const START_LINE_COLOR := Color(0.9, 0.15, 0.12, 1.0)
 const CORNER_LINE_COLOR := Color(0.2, 0.85, 0.35, 1.0)
-const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.22)
-const SECTOR_SELECTED_COLOR := Color(0.35, 0.7, 1.0, 0.2)
+const SPACE_SELECTED_COLOR := Color(1.0, 0.85, 0.2, 0.1)
+const SECTOR_SELECTED_COLOR := Color(0.5, 0.78, 1.0, 0.1)
 const CORNER_BADGE_RADIUS := 11.0
 ## Gap from asphalt edge to the badge's natural center.
 const CORNER_BADGE_GAP := 18.0
@@ -909,9 +909,7 @@ func _draw_spaces() -> void:
 	var n := _seg_result.space_count()
 	# Selection fill under separators (curved asphalt ribbon, not a flat quad).
 	if _edit_mode == EditMode.SPACES and _selected_space >= 0:
-		var ribbon := _seg_result.space_ribbon(_selected_space, ROAD_HALF_WIDTH)
-		if ribbon.size() >= 3:
-			_canvas.draw_colored_polygon(ribbon, SPACE_SELECTED_COLOR)
+		_draw_space_fill(_selected_space, SPACE_SELECTED_COLOR)
 	elif _edit_mode == EditMode.SECTORS and _selected_sector >= 0:
 		_draw_selected_sector_highlight()
 	for i in n:
@@ -958,12 +956,29 @@ func _draw_selected_sector_highlight() -> void:
 	var n := _seg_result.space_count()
 	var space := int(sector.from)
 	while true:
-		var ribbon := _seg_result.space_ribbon(space, ROAD_HALF_WIDTH)
-		if ribbon.size() >= 3:
-			_canvas.draw_colored_polygon(ribbon, SECTOR_SELECTED_COLOR)
+		_draw_space_fill(space, SECTOR_SELECTED_COLOR)
 		if space == int(sector.to):
 			break
 		space = posmod(space + 1, n)
+
+
+## Fills one space with triangles clamped to its frontiers (no round-cap bleed).
+func _draw_space_fill(space: int, color: Color) -> void:
+	var quads: Array = _seg_result.space_fill_quads(space, ROAD_HALF_WIDTH)
+	for q in quads:
+		var p: PackedVector2Array = q
+		if p.size() < 4:
+			continue
+		_draw_fill_tri(p[0], p[1], p[2], color)
+		_draw_fill_tri(p[0], p[2], p[3], color)
+
+
+func _draw_fill_tri(a: Vector2, b: Vector2, c: Vector2, color: Color) -> void:
+	# Skip collapsed slivers that Godot may refuse to fill.
+	var area2 := absf((b - a).cross(c - a))
+	if area2 < 0.05:
+		return
+	_canvas.draw_colored_polygon(PackedVector2Array([a, b, c]), color)
 
 
 ## White "]" pads on the five spaces behind the start/finish line (2 spots each).

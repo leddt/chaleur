@@ -59,6 +59,7 @@ class Result:
 
 
 	## Asphalt ribbon polygon for one space (follows the curve — OK in tight corners).
+	## May be concave / self-intersecting in S-bends; prefer `space_fill_quads` for fills.
 	func space_ribbon(space_index: int, half_width: float) -> PackedVector2Array:
 		var pts := _space_centerline_samples(space_index)
 		if pts.size() < 2:
@@ -67,10 +68,16 @@ class Result:
 		var right := PackedVector2Array()
 		left.resize(pts.size())
 		right.resize(pts.size())
+		var prev_inside := Vector2.ZERO
 		for i in pts.size():
 			var s: Dictionary = pts[i]
 			var pos: Vector2 = s.pos
 			var inside: Vector2 = s.inside
+			if inside.length_squared() > 0.0001:
+				inside = inside.normalized()
+			if i > 0 and inside.dot(prev_inside) < 0.0:
+				inside = -inside
+			prev_inside = inside
 			left[i] = pos + inside * half_width
 			right[i] = pos - inside * half_width
 		var poly := PackedVector2Array()
@@ -80,6 +87,57 @@ class Result:
 		for i in pts.size():
 			poly[pts.size() + i] = right[pts.size() - 1 - i]
 		return poly
+
+
+	## Consecutive convex quads covering a space band. Densified so S-bends stay fillable.
+	func space_fill_quads(space_index: int, half_width: float) -> Array:
+		var raw := _space_centerline_samples(space_index)
+		if raw.size() < 2:
+			return []
+		var path_len := 0.0
+		for i in raw.size() - 1:
+			path_len += (raw[i].pos as Vector2).distance_to(raw[i + 1].pos as Vector2)
+		var steps := maxi(1, int(ceil(path_len / 4.0)))
+		var pts: Array = []
+		pts.resize(steps + 1)
+		for i in steps + 1:
+			pts[i] = _interpolate_along_path(raw, float(i) / float(steps))
+		var insides: Array[Vector2] = []
+		insides.resize(pts.size())
+		var prev_inside := Vector2.ZERO
+		for i in pts.size():
+			var inside: Vector2 = pts[i].inside
+			if inside.length_squared() > 0.0001:
+				inside = inside.normalized()
+			else:
+				inside = Vector2.UP
+			if i > 0 and inside.dot(prev_inside) < 0.0:
+				inside = -inside
+			prev_inside = inside
+			insides[i] = inside
+		var quads: Array = []
+		for i in pts.size() - 1:
+			var a: Vector2 = pts[i].pos
+			var b: Vector2 = pts[i + 1].pos
+			var ia: Vector2 = insides[i]
+			var ib: Vector2 = insides[i + 1]
+			quads.append(PackedVector2Array([
+				a + ia * half_width,
+				b + ib * half_width,
+				b - ib * half_width,
+				a - ia * half_width,
+			]))
+		return quads
+
+
+	## Centerline points for one space (entry → samples → exit), for stroke-style fills.
+	func space_centerline_points(space_index: int) -> PackedVector2Array:
+		var pts := _space_centerline_samples(space_index)
+		var out := PackedVector2Array()
+		out.resize(pts.size())
+		for i in pts.size():
+			out[i] = pts[i].pos as Vector2
+		return out
 
 
 	## Space index under `world_pos`, or -1 if outside the asphalt band.
@@ -285,10 +343,16 @@ static func _build_samples(spline: TrackSpline, p: Params) -> Array:
 	if n < 3:
 		return []
 
-	var centroid := Vector2.ZERO
+	# Winding decides "inside" once for the whole loop. Centroid.dot(left) flips mid-track
+	# on elongated / concave shapes (race-line kerb would jump sides inside a sector).
+	# Godot Y-down: positive shoelace ≈ clockwise. Traversing clockwise, interior is
+	# to the left of the forward tangent (same as math CCW / left-hand rule on screen).
+	var shoelace := 0.0
 	for i in n:
-		centroid += pts[i]
-	centroid /= float(n)
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[(i + 1) % n]
+		shoelace += a.x * b.y - b.x * a.y
+	var inside_from_left := 1.0 if shoelace > 0.0 else -1.0
 
 	var samples: Array = []
 	var cum := 0.0
@@ -306,12 +370,14 @@ static func _build_samples(spline: TrackSpline, p: Params) -> Array:
 		else:
 			tangent = tangent.normalized()
 		var left := Vector2(-tangent.y, tangent.x)
-		var toward_inside := centroid - curr
-		var inside := left if left.dot(toward_inside) >= 0.0 else -left
+		var inside := (left * inside_from_left).normalized()
+		# Keep continuity if a cusp reverses left momentarily.
+		if i > 0 and inside.dot(samples[i - 1].inside as Vector2) < 0.0:
+			inside = -inside
 		samples.append({
 			"pos": curr,
 			"tangent": tangent,
-			"inside": inside.normalized(),
+			"inside": inside,
 			"cum": cum,
 		})
 	# Close length: add last→first distance onto a virtual end sample for interpolation.
@@ -482,6 +548,8 @@ static func _sample_at(samples: Array, offset: float) -> Dictionary:
 	var t1: Vector2 = samples[hi].tangent
 	var i0: Vector2 = samples[lo].inside
 	var i1: Vector2 = samples[hi].inside
+	if i0.dot(i1) < 0.0:
+		i1 = -i1
 	var tangent := (t0.lerp(t1, u))
 	if tangent.length_squared() < 0.0001:
 		tangent = t0

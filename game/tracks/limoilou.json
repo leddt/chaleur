@@ -46,6 +46,7 @@
 	"segmentation": {
 		"algorithm": 2,
 		"car_length": 36.0,
+		"forced_space_count": 69,
 		"target_space_len": 36.0
 	},
 	"spline": {

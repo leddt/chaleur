@@ -54,7 +54,7 @@ func setup(player_names: Array[String], p_track: HeatTrack, seed: int = 1) -> vo
 		players.append(p)
 	_assign_unique_start_spots()
 	phase = Phase.SHIFT_GEARS
-	_log("Race setup on %s (%d laps), seed=%d" % [track.id, track.laps, seed])
+	_log("Race setup on %s (%d laps), seed=%d" % [track.display_name(), track.laps, seed])
 
 
 func active_player() -> PlayerState:

@@ -112,6 +112,7 @@ theme_override_constants/separation = 4
 
 [node name="TrackView" type="Control" parent="Margin/Root/MainRow/TableCol"]
 unique_name_in_owner = true
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3

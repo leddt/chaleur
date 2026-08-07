@@ -9,6 +9,7 @@ enum EditMode {
 }
 
 const CAR_SCENE := preload("res://view/car.tscn")
+const RESET_VIEW_ICON := preload("res://ui/kit/icons/recadrer.png")
 const HANDLE_HIT_RADIUS := 12.0
 const POINT_HIT_RADIUS := 14.0
 const CURVE_HIT_RADIUS := 14.0
@@ -30,6 +31,7 @@ const CORNER_LINE_COLOR := SplineTrackPainter.CORNER_LINE_COLOR
 const MIN_VIEW_ZOOM := 0.25
 const MAX_VIEW_ZOOM := 4.0
 const VIEW_ZOOM_STEP := 1.12
+const FIT_MARGIN := 24.0
 
 @onready var _canvas: Control = %Canvas
 @onready var _summary: Label = %SummaryLabel
@@ -92,13 +94,18 @@ var _preview_cars: Array = [] ## Array[CarToken] — one per spot (inner/outer).
 ## View transform: screen = world * zoom + pan
 var _view_pan := Vector2.ZERO
 var _view_zoom := 1.0
+var _fit_pan := Vector2.ZERO
+var _fit_zoom := 1.0
 var _panning := false
+var _reset_view_btn: Button
 
 
 func _ready() -> void:
 	theme = ThemeBuilder.build()
 	_apply_kit_chrome()
 	_setup_name_ui()
+	_canvas.clip_contents = true
+	_setup_reset_view_btn()
 	_canvas.draw.connect(_on_canvas_draw)
 	_canvas.gui_input.connect(_on_canvas_gui_input)
 	_canvas.resized.connect(_on_canvas_resized)
@@ -112,6 +119,8 @@ func _ready() -> void:
 	_setup_sector_ui()
 	_apply_edit_mode()
 	_ensure_preview_cars()
+	if _reset_view_btn != null:
+		_canvas.move_child(_reset_view_btn, -1)
 	# Layout may still report 0-height here — wait for a usable canvas size.
 	call_deferred("_try_init_spline")
 
@@ -401,6 +410,7 @@ func _on_corner_side_pressed() -> void:
 
 
 func _on_canvas_resized() -> void:
+	_refresh_fit(false)
 	_canvas.queue_redraw()
 	_try_init_spline()
 
@@ -528,6 +538,7 @@ func _reset_spline() -> void:
 	_space_len_slider.value = _seg_params.car_length
 	_updating_seg_ui = false
 	_refresh_space_len_label()
+	_fit_view()
 	_canvas.queue_redraw()
 
 
@@ -595,6 +606,7 @@ func _load_from_path(path: String) -> bool:
 	_space_len_slider.value = _seg_params.car_length
 	_updating_seg_ui = false
 	_refresh_space_len_label()
+	_fit_view()
 	_canvas.queue_redraw()
 	return true
 
@@ -985,6 +997,83 @@ func _apply_view_to_cars() -> void:
 	_cars_layer.scale = Vector2(_view_zoom, _view_zoom)
 
 
+func _setup_reset_view_btn() -> void:
+	_reset_view_btn = Button.new()
+	_reset_view_btn.name = "ResetView"
+	_reset_view_btn.text = ""
+	_reset_view_btn.icon = RESET_VIEW_ICON
+	_reset_view_btn.expand_icon = true
+	_reset_view_btn.theme_type_variation = &"Compact"
+	_reset_view_btn.focus_mode = Control.FOCUS_NONE
+	_reset_view_btn.visible = false
+	_reset_view_btn.tooltip_text = "Recadrer"
+	_reset_view_btn.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_reset_view_btn.offset_left = -48.0
+	_reset_view_btn.offset_top = 8.0
+	_reset_view_btn.offset_right = -8.0
+	_reset_view_btn.offset_bottom = 48.0
+	_reset_view_btn.custom_minimum_size = Vector2(40, 40)
+	_reset_view_btn.z_index = 10
+	_reset_view_btn.pressed.connect(reset_view)
+	_canvas.add_child(_reset_view_btn)
+	_reset_view_btn.add_theme_constant_override("icon_max_width", 28)
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		var sb := _reset_view_btn.get_theme_stylebox(state)
+		if sb is StyleBoxFlat:
+			var tight := (sb as StyleBoxFlat).duplicate() as StyleBoxFlat
+			tight.content_margin_left = 6
+			tight.content_margin_right = 6
+			tight.content_margin_top = 6
+			tight.content_margin_bottom = 6
+			_reset_view_btn.add_theme_stylebox_override(state, tight)
+
+
+func reset_view() -> void:
+	_fit_view()
+	_canvas.queue_redraw()
+
+
+func _fit_view() -> void:
+	_refresh_fit(true)
+
+
+## Update stored fit framing. If `force` or the view was already at fit, apply it.
+func _refresh_fit(force: bool) -> void:
+	if _spline == null or not _canvas_ready_for_spline():
+		_update_reset_view_btn()
+		return
+	var baked := _spline.baked_points()
+	if baked.size() < 2:
+		_update_reset_view_btn()
+		return
+	var world := SplineTrackPainter.bounds(baked, ROAD_HALF_WIDTH)
+	var fit := SplineTrackPainter.fit_transform(world, Rect2(Vector2.ZERO, _canvas.size), FIT_MARGIN)
+	var was_default := _is_default_view()
+	_fit_pan = fit.origin
+	_fit_zoom = absf(fit.get_scale().x)
+	if force or was_default or not _has_valid_view():
+		_view_pan = _fit_pan
+		_view_zoom = _fit_zoom
+		_apply_view_to_cars()
+	_update_reset_view_btn()
+
+
+func _has_valid_view() -> bool:
+	return _view_zoom > 0.0 and is_finite(_view_zoom)
+
+
+func _is_default_view() -> bool:
+	if not _has_valid_view():
+		return true
+	return is_equal_approx(_view_zoom, _fit_zoom) and _view_pan.is_equal_approx(_fit_pan)
+
+
+func _update_reset_view_btn() -> void:
+	if _reset_view_btn == null:
+		return
+	_reset_view_btn.visible = _spline != null and not _is_default_view()
+
+
 func _zoom_at(screen_pos: Vector2, factor: float) -> void:
 	var new_zoom := clampf(_view_zoom * factor, MIN_VIEW_ZOOM, MAX_VIEW_ZOOM)
 	if is_equal_approx(new_zoom, _view_zoom):
@@ -992,6 +1081,7 @@ func _zoom_at(screen_pos: Vector2, factor: float) -> void:
 	_view_pan = screen_pos - (screen_pos - _view_pan) * (new_zoom / _view_zoom)
 	_view_zoom = new_zoom
 	_apply_view_to_cars()
+	_update_reset_view_btn()
 	_canvas.queue_redraw()
 
 
@@ -1021,6 +1111,7 @@ func _handle_view_input(event: InputEvent) -> bool:
 		var mm := event as InputEventMouseMotion
 		_view_pan += mm.relative
 		_apply_view_to_cars()
+		_update_reset_view_btn()
 		_canvas.queue_redraw()
 		_canvas.accept_event()
 		return true
@@ -1033,6 +1124,8 @@ func _ensure_preview_cars() -> void:
 		_cars_layer.name = "PreviewCars"
 		_canvas.add_child(_cars_layer)
 		_apply_view_to_cars()
+		if _reset_view_btn != null:
+			_canvas.move_child(_reset_view_btn, -1)
 	while _preview_cars.size() < 2:
 		var car := CAR_SCENE.instantiate() as CarToken
 		_cars_layer.add_child(car)

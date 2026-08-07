@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://db0oxb3p38bnn"
-path="res://.godot/imported/track1.jpg-046b283f8bc6e0c4ed5e7c271d78b67b.ctex"
+uid="uid://5q4o2wjq3wx"
+path="res://.godot/imported/recadrer.png-492e5b619046728a9a72375d7e0f4c05.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/track1.jpg"
-dest_files=["res://.godot/imported/track1.jpg-046b283f8bc6e0c4ed5e7c271d78b67b.ctex"]
+source_file="res://ui/kit/icons/recadrer.png"
+dest_files=["res://.godot/imported/recadrer.png-492e5b619046728a9a72375d7e0f4c05.ctex"]
 
 [params]
 

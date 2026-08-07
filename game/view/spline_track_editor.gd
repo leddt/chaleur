@@ -55,6 +55,7 @@ const VIEW_ZOOM_STEP := 1.12
 @onready var _corner_speed_spin: SpinBox = %CornerSpeedSpin
 @onready var _set_corner_button: Button = %SetCornerButton
 @onready var _corner_side_button: Button = %CornerSideButton
+@onready var _corner_details: Control = %CornerDetails
 
 var _spline: TrackSpline
 var _track_name: String = ""
@@ -72,7 +73,8 @@ var _spline_ready: bool = false
 var _edit_mode: int = EditMode.TRACE
 var _seg_params: TrackSegmenter.Params = TrackSegmenter.Params.new()
 var _seg_result: TrackSegmenter.Result
-## Index of the start space (display number 1). The red line is its preceding frontier.
+## Index of the start space (display number 1). The red line is its preceding frontier
+## (exit of the previous space). Set-start places that line after the selection.
 var _start_space_index: int = 0
 var _selected_space: int = -1
 ## space_index -> {speed_limit: int, outside: bool, offset: Vector2}
@@ -795,9 +797,10 @@ func _refresh_sector_ui() -> void:
 
 
 func _on_set_start_pressed() -> void:
-	if _selected_space < 0 or _seg_result == null:
+	if _selected_space < 0 or _seg_result == null or _seg_result.space_count() == 0:
 		return
-	_start_space_index = _selected_space
+	# Start line sits on the exit of the selected space; display #1 is the next space.
+	_start_space_index = posmod(_selected_space + 1, _seg_result.space_count())
 	_dirty = true
 	_clamp_selected_sector()
 	_refresh_info()
@@ -808,17 +811,23 @@ func _on_set_start_pressed() -> void:
 func _refresh_set_start_button() -> void:
 	if _set_start_button == null:
 		return
+	var line_after_selected := (
+		_selected_space >= 0
+		and _seg_result != null
+		and _seg_result.space_count() > 0
+		and _start_space_index == posmod(_selected_space + 1, _seg_result.space_count())
+	)
 	var can_set := (
 		_edit_mode == EditMode.SPACES
 		and _selected_space >= 0
 		and _seg_result != null
-		and _selected_space != _start_space_index
+		and not line_after_selected
 	)
 	_set_start_button.disabled = not can_set
-	if _selected_space >= 0 and _selected_space == _start_space_index:
+	if line_after_selected:
 		_set_start_button.text = "Départ ✓"
 	else:
-		_set_start_button.text = "Case de départ"
+		_set_start_button.text = "Définir comme case départ"
 
 
 func _on_set_corner_pressed() -> void:
@@ -854,7 +863,8 @@ func _refresh_corner_ui() -> void:
 	)
 	var has_corner := has_sel and _corners.has(_selected_space)
 	_set_corner_button.disabled = not has_sel
-	_corner_speed_spin.editable = has_sel
+	_corner_details.visible = has_corner
+	_corner_speed_spin.editable = has_corner
 	_corner_side_button.disabled = not has_corner
 	if has_corner:
 		_set_corner_button.text = "Retirer virage"
@@ -865,7 +875,7 @@ func _refresh_corner_ui() -> void:
 			"Extérieur" if _corner_outside(_selected_space) else "Intérieur"
 		)
 	else:
-		_set_corner_button.text = "Virage"
+		_set_corner_button.text = "Ajouter virage"
 		_corner_side_button.text = "Extérieur"
 
 

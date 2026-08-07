@@ -245,24 +245,31 @@ theme_override_constants/separation = 8
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
-text = "Case de départ"
+text = "Définir comme case départ"
 
-[node name="CornerRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection"]
+[node name="SetCornerButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+disabled = true
+text = "Ajouter virage"
+
+[node name="CornerDetails" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection"]
+unique_name_in_owner = true
+visible = false
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="SetCornerButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerRow"]
-unique_name_in_owner = true
+[node name="SpeedRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails"]
 layout_mode = 2
-disabled = true
-text = "Virage"
+theme_override_constants/separation = 6
 
-[node name="CornerSpeedLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerRow"]
+[node name="CornerSpeedLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SpeedRow"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Vitesse:"
 
-[node name="CornerSpeedSpin" type="SpinBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerRow"]
+[node name="CornerSpeedSpin" type="SpinBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SpeedRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -271,7 +278,17 @@ max_value = 8.0
 value = 4.0
 rounded = true
 
-[node name="CornerSideButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerRow"]
+[node name="SideRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CornerSideLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SideRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Position de l'indicateur"
+autowrap_mode = 3
+
+[node name="CornerSideButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SideRow"]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true

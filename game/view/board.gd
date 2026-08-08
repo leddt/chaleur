@@ -46,20 +46,29 @@ func _ready() -> void:
 	%RematchButton.pressed.connect(_on_rematch)
 	%LobbyButton.pressed.connect(_on_lobby)
 	%FinishLobbyButton.pressed.connect(_on_lobby)
+	%MusicMuteCheck.button_pressed = Sfx.music_muted
+	%MusicMuteCheck.toggled.connect(_on_music_mute_toggled)
 	_reveal_banner.visible = false
 	Net.state_updated.connect(_on_net_state)
 	Net.net_error.connect(_on_net_error)
 	Net.return_to_lobby_requested.connect(_on_return_to_lobby)
 	if _engine != null:
+		if not _engine.is_race_over():
+			Sfx.start_race_music()
 		_refresh_all()
 	else:
 		_status.text = "En attente de l'état réseau…"
 		_sidebar.set_empty()
 
 
+func _on_music_mute_toggled(muted: bool) -> void:
+	Sfx.set_music_muted(muted)
+
+
 func _on_net_state() -> void:
 	_engine = Game.engine
 	if _engine == null:
+		Sfx.stop_race_music(false)
 		_status.text = "Partie réseau terminée"
 		_actions.clear()
 		_track.set_engine(null, true)
@@ -78,6 +87,8 @@ func _on_net_state() -> void:
 	if snap:
 		_log_cursor = 0
 		_log.clear()
+		if not _engine.is_race_over():
+			Sfx.start_race_music()
 	_refresh_all()
 
 
@@ -86,6 +97,7 @@ func _on_net_error(message: String) -> void:
 
 
 func _on_return_to_lobby() -> void:
+	Sfx.stop_race_music(false)
 	Game.engine = null
 	get_tree().change_scene_to_file("res://ui/lobby.tscn")
 
@@ -419,6 +431,7 @@ func _show_finish() -> void:
 	_pass_overlay.visible = false
 	_finish_overlay.visible = true
 	if first_show:
+		Sfx.stop_race_music()
 		Sfx.play("podium")
 	var lines: PackedStringArray = ["Classement"]
 	for p in _engine.ranking():
@@ -442,6 +455,7 @@ func _on_hand_selection_changed(_ids: Array[String]) -> void:
 
 
 func _on_menu() -> void:
+	Sfx.stop_race_music(false)
 	if Game.is_online():
 		Net.leave()
 	Game.clear_race()
@@ -449,6 +463,7 @@ func _on_menu() -> void:
 
 
 func _on_lobby() -> void:
+	Sfx.stop_race_music(false)
 	if Game.is_online():
 		Net.request_return_to_lobby()
 		return
@@ -477,4 +492,5 @@ func _on_rematch() -> void:
 	_sidebar.chosen_gear = 1
 	_log_cursor = 0
 	_log.clear()
+	Sfx.start_race_music()
 	_refresh_all()

@@ -36,6 +36,7 @@ const FIT_MARGIN := 24.0
 @onready var _canvas: Control = %Canvas
 @onready var _summary: Label = %SummaryLabel
 @onready var _track_name_edit: LineEdit = %TrackNameEdit
+@onready var _ground_theme_option: OptionButton = %GroundThemeOption
 @onready var _builtin_check: CheckBox = %BuiltinCheck
 @onready var _mode_trace: Button = %ModeTrace
 @onready var _mode_spaces: Button = %ModeSpaces
@@ -70,6 +71,7 @@ const FIT_MARGIN := 24.0
 
 var _spline: TrackSpline
 var _track_name: String = ""
+var _ground_theme: String = TrackGround.DEFAULT_THEME
 ## user:// path when editing an existing document; empty for a new track.
 var _file_path: String = ""
 var _selected: int = 0
@@ -78,9 +80,10 @@ var _dirty: bool = false
 var _updating_type_ui: bool = false
 var _updating_seg_ui: bool = false
 var _updating_mode_ui: bool = false
+var _updating_name_ui: bool = false
+var _ground: ColorRect
 var _updating_corner_ui: bool = false
 var _updating_kerb_ui: bool = false
-var _updating_name_ui: bool = false
 var _spline_ready: bool = false
 var _edit_mode: int = EditMode.TRACE
 var _seg_params: TrackSegmenter.Params = TrackSegmenter.Params.new()
@@ -116,6 +119,7 @@ func _ready() -> void:
 	_apply_kit_chrome()
 	_setup_name_ui()
 	_canvas.clip_contents = true
+	_ground = TrackGround.attach(_canvas, _ground_theme)
 	_setup_reset_view_btn()
 	_canvas.draw.connect(_on_canvas_draw)
 	_canvas.gui_input.connect(_on_canvas_gui_input)
@@ -149,6 +153,7 @@ func _apply_kit_chrome() -> void:
 	%SaveButton.theme_type_variation = &"Primary"
 	_builtin_check.visible = SplineTrackFile.can_write_builtin()
 	_builtin_check.disabled = not SplineTrackFile.can_write_builtin()
+	_ground_theme_option.theme_type_variation = &"Compact"
 	_seg_mode_auto.theme_type_variation = &"Compact"
 	_seg_mode_fixed.theme_type_variation = &"Compact"
 	_mode_trace.theme_type_variation = &"Compact"
@@ -163,6 +168,7 @@ func _apply_kit_chrome() -> void:
 		side.theme_type_variation = &"Instrument"
 	for path in [
 		"Root/MainRow/SidePanel/Margin/PanelVBox/NameSection/NameTitle",
+		"Root/MainRow/SidePanel/Margin/PanelVBox/NameSection/GroundTitle",
 		"Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/PrioTitle",
 		"Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/EditTitle",
 	]:
@@ -186,7 +192,13 @@ func _apply_kit_chrome() -> void:
 func _setup_name_ui() -> void:
 	_track_name_edit.text_changed.connect(_on_track_name_changed)
 	_builtin_check.toggled.connect(_on_builtin_toggled)
+	_ground_theme_option.clear()
+	for theme_id in TrackGround.theme_ids():
+		_ground_theme_option.add_item(TrackGround.display_name(theme_id))
+		_ground_theme_option.set_item_metadata(_ground_theme_option.item_count - 1, theme_id)
+	_ground_theme_option.item_selected.connect(_on_ground_theme_selected)
 	_sync_track_name_field()
+	_sync_ground_theme_field()
 	_sync_builtin_check()
 
 
@@ -196,6 +208,17 @@ func _on_track_name_changed(value: String) -> void:
 	_track_name = value.strip_edges()
 	_dirty = true
 	_refresh_window_title()
+
+
+func _on_ground_theme_selected(index: int) -> void:
+	if _updating_name_ui:
+		return
+	var theme_id := TrackGround.normalize(str(_ground_theme_option.get_item_metadata(index)))
+	if theme_id == _ground_theme:
+		return
+	_ground_theme = theme_id
+	_apply_ground_theme()
+	_dirty = true
 
 
 func _on_builtin_toggled(_pressed: bool) -> void:
@@ -218,6 +241,31 @@ func _sync_track_name_field() -> void:
 	_updating_name_ui = true
 	_track_name_edit.text = _track_name
 	_updating_name_ui = false
+
+
+func _sync_ground_theme_field() -> void:
+	_updating_name_ui = true
+	var want := TrackGround.normalize(_ground_theme)
+	var selected := 0
+	for i in _ground_theme_option.item_count:
+		if str(_ground_theme_option.get_item_metadata(i)) == want:
+			selected = i
+			break
+	_ground_theme_option.select(selected)
+	_updating_name_ui = false
+	_apply_ground_theme()
+
+
+func _apply_ground_theme() -> void:
+	_ground_theme = TrackGround.normalize(_ground_theme)
+	if _ground == null:
+		_ground = TrackGround.attach(_canvas, _ground_theme)
+		return
+	var mat := _ground.material as ShaderMaterial
+	if mat == null:
+		_ground.material = TrackGround.make_material(_ground_theme)
+	else:
+		TrackGround.apply(mat, _ground_theme)
 	_refresh_window_title()
 
 
@@ -700,6 +748,7 @@ func _build_save_document() -> Dictionary:
 	return {
 		"version": SplineTrackFile.VERSION,
 		"name": _track_name,
+		"ground_theme": TrackGround.normalize(_ground_theme),
 		"spline": _spline.to_dict(),
 		"segmentation": {
 			"algorithm": int(_seg_params.algorithm),
@@ -731,9 +780,11 @@ func _reset_spline() -> void:
 	_selected_sector = -1
 	_sector_flip_race_line.clear()
 	_track_name = ""
+	_ground_theme = TrackGround.DEFAULT_THEME
 	_file_path = ""
 	_seg_params.forced_space_count = 0
 	_sync_track_name_field()
+	_sync_ground_theme_field()
 	_sync_builtin_check()
 	_dirty = false
 	_spline_ready = true
@@ -765,7 +816,9 @@ func _load_from_path(path: String) -> bool:
 	_spline = spline
 	_file_path = path
 	_track_name = str(data.get("name", "")).strip_edges()
+	_ground_theme = TrackGround.from_document(data)
 	_sync_track_name_field()
+	_sync_ground_theme_field()
 	_sync_builtin_check()
 	var seg: Variant = data.get("segmentation", {})
 	if seg is Dictionary:
@@ -1202,17 +1255,6 @@ func _on_canvas_draw() -> void:
 		return
 	_recompute_segmentation()
 	var font := ThemeDB.fallback_font
-	# Soft grid stays in screen space.
-	var step := 40.0
-	var grid_col := Color(1, 1, 1, 0.04)
-	var x := 0.0
-	while x < _canvas.size.x:
-		_canvas.draw_line(Vector2(x, 0), Vector2(x, _canvas.size.y), grid_col, 1.0)
-		x += step
-	var y := 0.0
-	while y < _canvas.size.y:
-		_canvas.draw_line(Vector2(0, y), Vector2(_canvas.size.x, y), grid_col, 1.0)
-		y += step
 
 	_apply_view_to_cars()
 	# Transform points in the painter (screen space), don't scale the canvas:

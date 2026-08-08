@@ -31,6 +31,7 @@ func test_save_and_load_roundtrip() -> void:
 	var data := {
 		"version": SplineTrackFile.VERSION,
 		"name": "Test",
+		"ground_theme": "sand",
 		"spline": TrackSpline.make_default_triangle().to_dict(),
 		"segmentation": {"algorithm": 1, "car_length": 36.0, "target_space_len": 36.0},
 		"start_space": 2,
@@ -42,6 +43,7 @@ func test_save_and_load_roundtrip() -> void:
 	var loaded := SplineTrackFile.load_document(path)
 	assert_eq(str(loaded.get("name", "")), "Test")
 	assert_eq(int(loaded.get("start_space", -1)), 2)
+	assert_eq(str(loaded.get("ground_theme", "")), "sand")
 	var corners: Array = loaded.get("corners", [])
 	assert_eq(corners.size(), 1)
 	var kerbs: Array = loaded.get("kerbs", [])

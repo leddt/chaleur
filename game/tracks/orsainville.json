@@ -99,6 +99,7 @@
 		}
 	],
 	"name": "Orsainville",
+	"ground_theme": "grass",
 	"sector_flip_race_line": [
 		{
 			"key": 7

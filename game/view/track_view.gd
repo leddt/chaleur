@@ -27,6 +27,7 @@ var _anim_duration: Dictionary = {} # player_id -> float
 var _cars_layer: Node2D
 var _cars: Dictionary = {} # player_id -> CarToken
 var _view_xform := Transform2D.IDENTITY
+var _ground: ColorRect
 
 ## Fit framing (default). User pan/zoom overrides until reset.
 var _fit_pan := Vector2.ZERO
@@ -44,6 +45,7 @@ func _ready() -> void:
 	set_process(true)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	clip_contents = true
+	_ground = TrackGround.attach(self, TrackGround.DEFAULT_THEME)
 	_cars_layer = Node2D.new()
 	_cars_layer.name = "Cars"
 	add_child(_cars_layer)
@@ -83,12 +85,14 @@ func set_engine(p_engine: HeatGameEngine, snap: bool = false) -> void:
 		_clear_viz()
 		_clear_cars()
 		_view_dirty_fit = true
+		_sync_ground_theme()
 		_update_reset_btn()
 		queue_redraw()
 		return
 	if track_changed:
 		_view_dirty_fit = true
 		_reset_to_fit_values()
+	_sync_ground_theme()
 	if snap or _viz_progress.is_empty():
 		_snap_all()
 		_sync_cars()
@@ -162,7 +166,6 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Palette.INK)
 	if engine == null or engine.track == null:
 		return
 	var bind := engine.track.spline_bind
@@ -173,6 +176,19 @@ func _draw() -> void:
 	SplineTrackPainter.draw(self, bind.baked_points(), bind.paint_context(), opts, _view_xform)
 	if show_space_debug:
 		_draw_space_debug(bind)
+
+
+func _sync_ground_theme() -> void:
+	if _ground == null:
+		_ground = TrackGround.attach(self, TrackGround.DEFAULT_THEME)
+	var theme_id := TrackGround.DEFAULT_THEME
+	if engine != null and engine.track != null and engine.track.spline_bind != null:
+		theme_id = TrackGround.from_document(engine.track.spline_bind.document)
+	var mat := _ground.material as ShaderMaterial
+	if mat == null:
+		_ground.material = TrackGround.make_material(theme_id)
+	else:
+		TrackGround.apply(mat, theme_id)
 
 
 func _ensure_fit(bind: SplineTrackBind) -> void:

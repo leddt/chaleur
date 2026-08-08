@@ -85,6 +85,7 @@
 		}
 	],
 	"name": "Limoilou",
+	"ground_theme": "dirt",
 	"sector_flip_race_line": [
 		{
 			"key": 60

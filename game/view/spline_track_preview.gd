@@ -10,6 +10,8 @@ var _baked: PackedVector2Array = PackedVector2Array()
 var _ctx: SplineTrackPainter.Context = SplineTrackPainter.Context.new()
 var _opts: SplineTrackPainter.Options = SplineTrackPainter.preview_options()
 var _placeholder := "Sélectionne une piste"
+var _ground: ColorRect
+var _ground_theme := TrackGround.DEFAULT_THEME
 ## flip_key -> true (same storage as the editor document).
 var _sector_flip_race_line: Dictionary = {}
 var _corners: Dictionary = {}
@@ -19,6 +21,7 @@ var _kerbs: Dictionary = {}
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(queue_redraw)
+	_ground = TrackGround.attach(self, _ground_theme)
 	_ctx.font = ThemeDB.fallback_font
 	_ctx.race_line_flipped = _space_race_line_flipped
 
@@ -35,6 +38,7 @@ func clear_track() -> void:
 	_corners.clear()
 	_kerbs.clear()
 	_sector_flip_race_line.clear()
+	_set_ground_theme(TrackGround.DEFAULT_THEME)
 	queue_redraw()
 
 
@@ -46,6 +50,7 @@ func set_from_document(data: Dictionary) -> void:
 	if not spline_data is Dictionary:
 		clear_track()
 		return
+	_set_ground_theme(TrackGround.from_document(data))
 	_spline = TrackSpline.from_dict(spline_data)
 	_baked = SplineTrackPainter.bake_spline(_spline)
 	var params := TrackSegmenter.Params.new()
@@ -147,13 +152,24 @@ func _space_race_line_flipped(space: int) -> bool:
 
 func _draw() -> void:
 	var bg := Rect2(Vector2.ZERO, size)
-	draw_rect(bg, Palette.INK)
 	if not has_track():
 		_draw_placeholder()
 		return
 	var world := SplineTrackPainter.bounds(_baked, _ctx.half_width)
 	var xform := SplineTrackPainter.fit_transform(world, bg, 18.0)
 	SplineTrackPainter.draw(self, _baked, _ctx, _opts, xform)
+
+
+func _set_ground_theme(theme_id: String) -> void:
+	_ground_theme = TrackGround.normalize(theme_id)
+	if _ground == null:
+		_ground = TrackGround.attach(self, _ground_theme)
+		return
+	var mat := _ground.material as ShaderMaterial
+	if mat == null:
+		_ground.material = TrackGround.make_material(_ground_theme)
+	else:
+		TrackGround.apply(mat, _ground_theme)
 
 
 func _draw_placeholder() -> void:

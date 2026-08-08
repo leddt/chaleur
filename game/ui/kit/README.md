@@ -11,6 +11,11 @@ res://
 ├── data/
 │   ├── palette.gd
 │   └── card_data.gd
+├── fonts/
+│   ├── ArchivoBlack-Regular.ttf
+│   ├── BarlowCondensed-Medium.ttf
+│   ├── BarlowCondensed-Regular.ttf
+│   └── OFL.txt
 ├── ui/kit/
 │   ├── theme_builder.gd
 │   ├── kerb.gd
@@ -33,11 +38,9 @@ donc elle ne repeint pas le reste du jeu.
 **Palette** — cinq couleurs, pas une de plus. Asphalte, carton, rouge écurie,
 bleu essence, moutarde. Tout passe par `palette.gd`.
 
-**Typo** — `Archivo Black` pour les chiffres, `Barlow Condensed` pour le texte.
-Le kit passe par `SystemFont`, qui descend dans une liste de replis si la police
-n'est pas installée. Pour figer le rendu sur toutes les machines, télécharge les
-`.ttf` sur Google Fonts, mets-les dans `res://fonts/` et remplace
-`display_font()` / `body_font()` dans `theme_builder.gd` par des `FontFile`.
+**Typo** — `Archivo Black` pour les chiffres / titres, `Barlow Condensed Medium`
+pour le texte. Les `.ttf` sont embarqués dans `res://fonts/` (licence OFL) et
+chargés par `ThemeBuilder.display_font()` / `body_font()`.
 
 **Élément signature** — la bande de vibreurs (`kerb.gd`). Elle revient partout :
 bas des cartes, en-tête, séparateurs. Elle sait défiler (`animate()`), ce qui

@@ -7,13 +7,10 @@ extends RefCounted
 ##   var t := ThemeBuilder.build()
 ##   get_tree().root.theme = t          # applique a tout le jeu
 ##
-## Les polices passent par SystemFont : si "Archivo Black" n'est pas installee,
-## Godot descend automatiquement dans la liste. Pour figer le rendu sur toutes
-## les machines, telecharge les .ttf depuis Google Fonts, mets-les dans
-## res://fonts/ et remplace _display() / _body() par des FontFile charges.
+## Polices : FontFile embarques dans res://fonts/ (Archivo Black + Barlow Condensed).
 
-const DISPLAY_NAMES := ["Archivo Black", "Anton", "Oswald", "Impact", "Arial Black"]
-const BODY_NAMES := ["Barlow Condensed", "Roboto Condensed", "Oswald", "Arial Narrow", "Arial"]
+const DISPLAY_FONT_PATH := "res://fonts/ArchivoBlack-Regular.ttf"
+const BODY_FONT_PATH := "res://fonts/BarlowCondensed-Medium.ttf"
 
 # Echelle typographique. Un seul ratio, applique partout.
 const SIZE_HUGE := 76
@@ -25,18 +22,11 @@ const SIZE_XS := 11
 
 
 static func display_font() -> Font:
-	var f := SystemFont.new()
-	f.font_names = PackedStringArray(DISPLAY_NAMES)
-	f.font_weight = 900
-	return f
+	return load(DISPLAY_FONT_PATH) as Font
 
 
 static func body_font() -> Font:
-	var f := SystemFont.new()
-	f.font_names = PackedStringArray(BODY_NAMES)
-	f.font_weight = 500
-	return f
-
+	return load(BODY_FONT_PATH) as Font
 
 static func build() -> Theme:
 	var t := Theme.new()

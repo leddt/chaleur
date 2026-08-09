@@ -184,6 +184,23 @@ class PaintLayer:
 static var _asphalt_material: ShaderMaterial
 
 
+## Pan only — no redraw. Geometry is already zoom-baked; PaintRoot.scale stays 1.
+static func set_view_pan(host: CanvasItem, pan: Vector2) -> void:
+	var node := host as Node
+	if node == null:
+		return
+	var root := node.get_node_or_null("_PaintRoot") as Node2D
+	if root == null:
+		return
+	root.position = pan
+	root.scale = Vector2.ONE
+
+
+## @deprecated Prefer set_view_pan for pan; zoom requires a full draw().
+static func set_view_xform(host: CanvasItem, xform: Transform2D) -> void:
+	set_view_pan(host, xform.origin)
+
+
 static func draw(
 	canvas: CanvasItem,
 	baked: PackedVector2Array,
@@ -197,7 +214,11 @@ static func draw(
 		return
 	var options := opts if opts != null else default_options()
 	var layers := _ensure_paint_layers(canvas)
-	_sync_asphalt_material(layers.asphalt, xform)
+	## Bake zoom into geometry for crisp AA; pan via PaintRoot.position only.
+	var zoom := maxf(absf(xform.get_scale().x), 0.0001)
+	set_view_pan(canvas, xform.origin)
+	_sync_asphalt_material(layers.asphalt, zoom)
+	var zoom_xform := Transform2D(0.0, Vector2(zoom, zoom), 0.0, Vector2.ZERO)
 
 	var under: PaintLayer = layers.under
 	var asphalt: PaintLayer = layers.asphalt
@@ -205,13 +226,13 @@ static func draw(
 	var top: PaintLayer = layers.top
 
 	if options.race_line:
-		under.set_paint(func() -> void: _draw_race_line_kerbs(under, ctx, xform))
+		under.set_paint(func() -> void: _draw_race_line_kerbs(under, ctx, zoom_xform))
 	else:
 		under.clear_paint()
 
 	if options.asphalt:
 		asphalt.set_paint(
-			func() -> void: _draw_asphalt_band(asphalt, baked, ctx.half_width, xform)
+			func() -> void: _draw_asphalt_band(asphalt, baked, ctx.half_width, zoom_xform)
 		)
 	else:
 		asphalt.clear_paint()
@@ -219,11 +240,11 @@ static func draw(
 	over.set_paint(
 		func() -> void:
 			if options.asphalt:
-				_draw_striped_kerbs(over, ctx, xform)
+				_draw_striped_kerbs(over, ctx, zoom_xform)
 			if after_asphalt.is_valid():
 				after_asphalt.call(over)
 			if options.centerline:
-				_draw_centerline(over, baked, xform)
+				_draw_centerline(over, baked, zoom_xform)
 			if (
 				options.spaces
 				or options.start_line
@@ -232,7 +253,7 @@ static func draw(
 				or options.space_numbers
 				or options.start_grid
 			):
-				_draw_space_overlays(over, ctx, options, xform)
+				_draw_space_overlays(over, ctx, options, zoom_xform)
 	)
 
 	if after_road.is_valid():
@@ -249,57 +270,59 @@ static func _asphalt_mat() -> ShaderMaterial:
 		_asphalt_material.set_shader_parameter("dark_color", ASPHALT_GRAIN_DARK)
 		_asphalt_material.set_shader_parameter("light_color", ASPHALT_GRAIN_LIGHT)
 		_asphalt_material.set_shader_parameter("grain_world", ASPHALT_GRAIN_WORLD)
+		_asphalt_material.set_shader_parameter("view_zoom", 1.0)
 	return _asphalt_material
 
 
-static func _sync_asphalt_material(asphalt_layer: CanvasItem, xform: Transform2D) -> void:
+static func _sync_asphalt_material(asphalt_layer: CanvasItem, view_zoom: float = 1.0) -> void:
 	var mat := _asphalt_mat()
-	## screen = scale * world + origin  →  world = (screen - origin) / scale
-	mat.set_shader_parameter("xform_origin", xform.origin)
-	mat.set_shader_parameter("xform_scale", maxf(absf(xform.get_scale().x), 0.0001))
 	mat.set_shader_parameter("grain_world", ASPHALT_GRAIN_WORLD)
 	mat.set_shader_parameter("base_color", ASPHALT_COLOR)
 	mat.set_shader_parameter("dark_color", ASPHALT_GRAIN_DARK)
 	mat.set_shader_parameter("light_color", ASPHALT_GRAIN_LIGHT)
+	mat.set_shader_parameter("view_zoom", maxf(view_zoom, 0.0001))
 	asphalt_layer.material = mat
 
 
 static func _ensure_paint_layers(host: CanvasItem) -> Dictionary:
 	var node := host as Node
 	assert(node != null, "SplineTrackPainter.draw host must be a Node")
-	var under := node.get_node_or_null("_PaintUnder") as PaintLayer
-	var asphalt := node.get_node_or_null("_PaintAsphalt") as PaintLayer
-	var over := node.get_node_or_null("_PaintOver") as PaintLayer
-	var top := node.get_node_or_null("_PaintTop") as PaintLayer
-	if under == null:
-		under = PaintLayer.new()
-		under.name = "_PaintUnder"
-		under.z_index = 1
-		node.add_child(under)
-	if asphalt == null:
-		asphalt = PaintLayer.new()
-		asphalt.name = "_PaintAsphalt"
-		asphalt.z_index = 2
-		node.add_child(asphalt)
-	if over == null:
-		over = PaintLayer.new()
-		over.name = "_PaintOver"
-		over.z_index = 3
-		node.add_child(over)
-	if top == null:
-		top = PaintLayer.new()
-		top.name = "_PaintTop"
-		top.z_index = 4
-		node.add_child(top)
-	return {"under": under, "asphalt": asphalt, "over": over, "top": top}
+	var root := node.get_node_or_null("_PaintRoot") as Node2D
+	if root == null:
+		root = Node2D.new()
+		root.name = "_PaintRoot"
+		root.z_index = 1
+		node.add_child(root)
+	var under := _take_paint_layer(node, root, "_PaintUnder", 0)
+	var asphalt := _take_paint_layer(node, root, "_PaintAsphalt", 1)
+	var over := _take_paint_layer(node, root, "_PaintOver", 2)
+	var top := _take_paint_layer(node, root, "_PaintTop", 3)
+	return {"root": root, "under": under, "asphalt": asphalt, "over": over, "top": top}
+
+
+static func _take_paint_layer(host: Node, root: Node2D, layer_name: String, z: int) -> PaintLayer:
+	var layer := root.get_node_or_null(layer_name) as PaintLayer
+	if layer == null:
+		layer = host.get_node_or_null(layer_name) as PaintLayer
+		if layer != null:
+			layer.reparent(root)
+		else:
+			layer = PaintLayer.new()
+			layer.name = layer_name
+			root.add_child(layer)
+	layer.z_index = z
+	return layer
 
 
 static func clear_paint_layers(host: CanvasItem) -> void:
 	var node := host as Node
 	if node == null:
 		return
+	var root := node.get_node_or_null("_PaintRoot") as Node2D
+	if root == null:
+		return
 	for name in ["_PaintUnder", "_PaintAsphalt", "_PaintOver", "_PaintTop"]:
-		var layer := node.get_node_or_null(name) as PaintLayer
+		var layer := root.get_node_or_null(name) as PaintLayer
 		if layer != null:
 			layer.clear_paint()
 

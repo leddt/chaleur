@@ -1554,6 +1554,7 @@ func _setup_reset_view_btn() -> void:
 
 func reset_view() -> void:
 	_fit_view()
+	_apply_view_to_cars()
 	_canvas.queue_redraw()
 
 
@@ -1636,7 +1637,7 @@ func _handle_view_input(event: InputEvent) -> bool:
 		_view_pan += mm.relative
 		_apply_view_to_cars()
 		_update_reset_view_btn()
-		_canvas.queue_redraw()
+		SplineTrackPainter.set_view_pan(_canvas, _view_pan)
 		_canvas.accept_event()
 		return true
 	return false
@@ -1716,17 +1717,18 @@ func _paint_context(font: Font) -> SplineTrackPainter.Context:
 func _draw_track(baked: PackedVector2Array, font: Font, xform: Transform2D) -> void:
 	var ctx := _paint_context(font)
 	var opts := SplineTrackPainter.editor_roadmap_options(_hide_space_numbers.button_pressed)
+	var zoom_xform := Transform2D(0.0, Vector2(_view_zoom, _view_zoom), 0.0, Vector2.ZERO)
 	var after_asphalt := func(c: CanvasItem) -> void:
 		_draw_target = c
-		_draw_selection_fills(xform)
+		_draw_selection_fills(zoom_xform)
 		_draw_target = null
 	var after_road := func(c: CanvasItem) -> void:
 		_draw_target = c
-		TrackDecor.draw(c, _decorations, xform)
-		_draw_decor_ghost(xform)
-		_draw_decor_selection(xform)
+		TrackDecor.draw(c, _decorations, zoom_xform)
+		_draw_decor_ghost(zoom_xform)
+		_draw_decor_selection(zoom_xform)
 		if _edit_mode == EditMode.TRACE:
-			_draw_control_points(font, xform)
+			_draw_control_points(font, zoom_xform)
 		_draw_target = null
 	SplineTrackPainter.draw(_canvas, baked, ctx, opts, xform, after_asphalt, after_road)
 	_sync_preview_cars()
@@ -1873,7 +1875,7 @@ func _draw_selection_fills(xform: Transform2D) -> void:
 
 
 func _draw_control_points(font: Font, xform: Transform2D) -> void:
-	var z := _view_zoom
+	var z := maxf(absf(xform.get_scale().x), 0.0001)
 	for i in _spline.point_count():
 		var cp := _spline.get_point(i)
 		var selected := i == _selected

@@ -176,6 +176,7 @@ func _draw() -> void:
 	_ensure_fit(bind)
 	var opts := SplineTrackPainter.game_options()
 	var xform := _view_xform
+	var zoom_xform := Transform2D(0.0, Vector2(_view_zoom, _view_zoom), 0.0, Vector2.ZERO)
 	SplineTrackPainter.draw(
 		self,
 		bind.baked_points(),
@@ -184,9 +185,9 @@ func _draw() -> void:
 		xform,
 		Callable(),
 		func(c: CanvasItem) -> void:
-			TrackDecor.draw(c, _decorations, xform)
+			TrackDecor.draw(c, _decorations, zoom_xform)
 			if show_space_debug:
-				_draw_space_debug_on(c, bind, xform)
+				_draw_space_debug_on(c, bind, zoom_xform)
 	)
 
 
@@ -308,7 +309,7 @@ func _handle_view_input(event: InputEvent) -> bool:
 		_compose_view_xform()
 		_apply_view_to_cars()
 		_update_reset_btn()
-		queue_redraw()
+		SplineTrackPainter.set_view_pan(self, _view_pan)
 		return true
 	return false
 

@@ -162,6 +162,7 @@ func _draw() -> void:
 		return
 	var world := SplineTrackPainter.bounds(_baked, _ctx.half_width)
 	var xform := SplineTrackPainter.fit_transform(world, bg, 18.0)
+	var zoom_xform := Transform2D(0.0, Vector2(absf(xform.get_scale().x), absf(xform.get_scale().x)), 0.0, Vector2.ZERO)
 	SplineTrackPainter.draw(
 		self,
 		_baked,
@@ -169,7 +170,7 @@ func _draw() -> void:
 		_opts,
 		xform,
 		Callable(),
-		func(c: CanvasItem) -> void: TrackDecor.draw(c, _decorations, xform)
+		func(c: CanvasItem) -> void: TrackDecor.draw(c, _decorations, zoom_xform)
 	)
 
 

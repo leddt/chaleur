@@ -66,7 +66,7 @@ func _ready() -> void:
 	_reset_btn.offset_right = -8.0
 	_reset_btn.offset_bottom = 48.0
 	_reset_btn.custom_minimum_size = Vector2(40, 40)
-	_reset_btn.z_index = TrackGround.CLOUD_OVERLAY_Z + 1
+	_reset_btn.z_index = TrackGround.VIEW_UI_Z
 	_reset_btn.pressed.connect(reset_view)
 	add_child(_reset_btn)
 	_reset_btn.add_theme_constant_override("icon_max_width", 28)

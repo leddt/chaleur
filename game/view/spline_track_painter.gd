@@ -224,6 +224,7 @@ static func draw(
 	var asphalt: PaintLayer = layers.asphalt
 	var over: PaintLayer = layers.over
 	var top: PaintLayer = layers.top
+	var badges: PaintLayer = layers.badges
 
 	if options.race_line:
 		under.set_paint(func() -> void: _draw_race_line_kerbs(under, ctx, zoom_xform))
@@ -249,7 +250,6 @@ static func draw(
 				options.spaces
 				or options.start_line
 				or options.corner_lines
-				or options.speed_limits
 				or options.space_numbers
 				or options.start_grid
 			):
@@ -260,6 +260,13 @@ static func draw(
 		top.set_paint(func() -> void: after_road.call(top))
 	else:
 		top.clear_paint()
+
+	if options.speed_limits:
+		badges.set_paint(
+			func() -> void: _draw_speed_limit_badges(badges, ctx, zoom_xform)
+		)
+	else:
+		badges.clear_paint()
 
 
 static func _asphalt_mat() -> ShaderMaterial:
@@ -297,10 +304,24 @@ static func _ensure_paint_layers(host: CanvasItem) -> Dictionary:
 	var asphalt := _take_paint_layer(node, root, "_PaintAsphalt", 1)
 	var over := _take_paint_layer(node, root, "_PaintOver", 2)
 	var top := _take_paint_layer(node, root, "_PaintTop", 3)
-	return {"root": root, "under": under, "asphalt": asphalt, "over": over, "top": top}
+	var badges := _take_paint_layer(node, root, "_PaintBadges", TrackGround.SPEED_BADGE_Z, false)
+	return {
+		"root": root,
+		"under": under,
+		"asphalt": asphalt,
+		"over": over,
+		"top": top,
+		"badges": badges,
+	}
 
 
-static func _take_paint_layer(host: Node, root: Node2D, layer_name: String, z: int) -> PaintLayer:
+static func _take_paint_layer(
+	host: Node,
+	root: Node2D,
+	layer_name: String,
+	z: int,
+	z_relative: bool = true,
+) -> PaintLayer:
 	var layer := root.get_node_or_null(layer_name) as PaintLayer
 	if layer == null:
 		layer = host.get_node_or_null(layer_name) as PaintLayer
@@ -310,6 +331,7 @@ static func _take_paint_layer(host: Node, root: Node2D, layer_name: String, z: i
 			layer = PaintLayer.new()
 			layer.name = layer_name
 			root.add_child(layer)
+	layer.z_as_relative = z_relative
 	layer.z_index = z
 	return layer
 
@@ -321,7 +343,7 @@ static func clear_paint_layers(host: CanvasItem) -> void:
 	var root := node.get_node_or_null("_PaintRoot") as Node2D
 	if root == null:
 		return
-	for name in ["_PaintUnder", "_PaintAsphalt", "_PaintOver", "_PaintTop"]:
+	for name in ["_PaintUnder", "_PaintAsphalt", "_PaintOver", "_PaintTop", "_PaintBadges"]:
 		var layer := root.get_node_or_null(name) as PaintLayer
 		if layer != null:
 			layer.clear_paint()
@@ -636,9 +658,6 @@ static func _draw_space_overlays(canvas: CanvasItem, ctx: Context, opts: Options
 			draw_line = true
 		if draw_line:
 			canvas.draw_line(inner_edge, outer_edge, col, _sw(xform, width), true)
-		if is_corner_exit and opts.speed_limits:
-			var badge_c := _tx(xform, corner_badge_center(ctx, space_before, a))
-			_draw_corner_limit_badge(canvas, font, badge_c, _corner_speed(ctx, space_before), xform)
 		if opts.space_numbers:
 			var b: TrackSegmenter.Frontier = ctx.seg.frontiers[(i + 1) % n]
 			var label_pos := _tx(
@@ -656,6 +675,20 @@ static func _draw_space_overlays(canvas: CanvasItem, ctx: Context, opts: Options
 			)
 	if opts.start_grid:
 		_draw_start_grid(canvas, ctx, xform)
+
+
+static func _draw_speed_limit_badges(canvas: CanvasItem, ctx: Context, xform: Transform2D) -> void:
+	if ctx.seg == null or ctx.seg.space_count() < 2:
+		return
+	var n := ctx.seg.space_count()
+	var font := ctx.font if ctx.font != null else ThemeDB.fallback_font
+	for i in n:
+		var space_before := posmod(i - 1, n)
+		if not ctx.corners.has(space_before):
+			continue
+		var a: TrackSegmenter.Frontier = ctx.seg.frontiers[i]
+		var badge_c := _tx(xform, corner_badge_center(ctx, space_before, a))
+		_draw_corner_limit_badge(canvas, font, badge_c, _corner_speed(ctx, space_before), xform)
 
 
 static func _corner_speed(ctx: Context, space: int) -> int:

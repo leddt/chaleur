@@ -16,6 +16,10 @@ const CLOUD_SHADER := preload("res://shaders/cloud_shadows.gdshader")
 
 ## Au-dessus du tracé / voitures pour que les ombres couvrent tout le plateau.
 const CLOUD_OVERLAY_Z := 100
+## Badges de limite au-dessus des ombres de nuages.
+const SPEED_BADGE_Z := CLOUD_OVERLAY_Z + 1
+## Boutons de vue au-dessus des badges.
+const VIEW_UI_Z := CLOUD_OVERLAY_Z + 2
 
 const _THEME_ORDER: Array[String] = [
 	THEME_GRASS, THEME_DIRT, THEME_SAND, THEME_SNOW, THEME_ROCK,

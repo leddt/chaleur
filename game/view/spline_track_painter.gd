@@ -52,6 +52,39 @@ class Options:
 	var speed_limits: bool = false
 	var space_numbers: bool = false
 	var start_grid: bool = false
+	var asphalt_base: Color = ASPHALT_COLOR
+	var asphalt_dark: Color = ASPHALT_GRAIN_DARK
+	var asphalt_light: Color = ASPHALT_GRAIN_LIGHT
+	var race_line_color: Color = RACE_LINE_EDGE_COLOR
+	var kerb_color_a: Color = KERB_COLOR_A
+	var kerb_color_b: Color = KERB_COLOR_B
+	var centerline_color: Color = CENTERLINE_COLOR
+	var start_line_color: Color = START_LINE_COLOR
+	var corner_line_color: Color = CORNER_LINE_COLOR
+	var space_edge_color: Color = SPACE_EDGE_COLOR
+
+
+static func apply_asphalt_colors(opts: Options, settings: Dictionary) -> void:
+	if opts == null:
+		return
+	opts.asphalt_base = settings.get("base", ASPHALT_COLOR) as Color
+	opts.asphalt_dark = settings.get("dark", ASPHALT_GRAIN_DARK) as Color
+	opts.asphalt_light = settings.get("light", ASPHALT_GRAIN_LIGHT) as Color
+
+
+static func apply_track_colors(opts: Options, settings: Dictionary) -> void:
+	if opts == null:
+		return
+	var asphalt: Dictionary = settings.get("asphalt", {})
+	if not asphalt.is_empty():
+		apply_asphalt_colors(opts, asphalt)
+	opts.race_line_color = settings.get("race_line", RACE_LINE_EDGE_COLOR) as Color
+	opts.kerb_color_a = settings.get("kerb_a", KERB_COLOR_A) as Color
+	opts.kerb_color_b = settings.get("kerb_b", KERB_COLOR_B) as Color
+	opts.centerline_color = settings.get("centerline", CENTERLINE_COLOR) as Color
+	opts.start_line_color = settings.get("start_line", START_LINE_COLOR) as Color
+	opts.corner_line_color = settings.get("corner_line", CORNER_LINE_COLOR) as Color
+	opts.space_edge_color = settings.get("space_edge", SPACE_EDGE_COLOR) as Color
 
 
 ## Track data needed beyond the centerline polyline.
@@ -217,8 +250,15 @@ static func draw(
 	## Bake zoom into geometry for crisp AA; pan via PaintRoot.position only.
 	var zoom := maxf(absf(xform.get_scale().x), 0.0001)
 	set_view_pan(canvas, xform.origin)
-	_sync_asphalt_material(layers.asphalt, zoom)
+	_sync_asphalt_material(
+		layers.asphalt,
+		zoom,
+		options.asphalt_base,
+		options.asphalt_dark,
+		options.asphalt_light
+	)
 	var zoom_xform := Transform2D(0.0, Vector2(zoom, zoom), 0.0, Vector2.ZERO)
+	var edge_color := TrackAsphalt.derive_edge(options.asphalt_base)
 
 	var under: PaintLayer = layers.under
 	var asphalt: PaintLayer = layers.asphalt
@@ -227,13 +267,17 @@ static func draw(
 	var badges: PaintLayer = layers.badges
 
 	if options.race_line:
-		under.set_paint(func() -> void: _draw_race_line_kerbs(under, ctx, zoom_xform))
+		var race_col := options.race_line_color
+		under.set_paint(
+			func() -> void: _draw_race_line_kerbs(under, ctx, zoom_xform, edge_color, race_col)
+		)
 	else:
 		under.clear_paint()
 
 	if options.asphalt:
+		var asphalt_col := options.asphalt_base
 		asphalt.set_paint(
-			func() -> void: _draw_asphalt_band(asphalt, baked, ctx.half_width, zoom_xform)
+			func() -> void: _draw_asphalt_band(asphalt, baked, ctx.half_width, zoom_xform, asphalt_col)
 		)
 	else:
 		asphalt.clear_paint()
@@ -241,11 +285,13 @@ static func draw(
 	over.set_paint(
 		func() -> void:
 			if options.asphalt:
-				_draw_striped_kerbs(over, ctx, zoom_xform)
+				_draw_striped_kerbs(
+					over, ctx, zoom_xform, options.kerb_color_a, options.kerb_color_b
+				)
 			if after_asphalt.is_valid():
 				after_asphalt.call(over)
 			if options.centerline:
-				_draw_centerline(over, baked, zoom_xform)
+				_draw_centerline(over, baked, zoom_xform, options.centerline_color)
 			if (
 				options.spaces
 				or options.start_line
@@ -262,8 +308,9 @@ static func draw(
 		top.clear_paint()
 
 	if options.speed_limits:
+		var corner_col := options.corner_line_color
 		badges.set_paint(
-			func() -> void: _draw_speed_limit_badges(badges, ctx, zoom_xform)
+			func() -> void: _draw_speed_limit_badges(badges, ctx, zoom_xform, corner_col)
 		)
 	else:
 		badges.clear_paint()
@@ -281,14 +328,31 @@ static func _asphalt_mat() -> ShaderMaterial:
 	return _asphalt_material
 
 
-static func _sync_asphalt_material(asphalt_layer: CanvasItem, view_zoom: float = 1.0) -> void:
-	var mat := _asphalt_mat()
+static func _sync_asphalt_material(
+	asphalt_layer: CanvasItem,
+	view_zoom: float = 1.0,
+	base: Color = ASPHALT_COLOR,
+	dark: Color = ASPHALT_GRAIN_DARK,
+	light: Color = ASPHALT_GRAIN_LIGHT,
+) -> void:
+	var mat := asphalt_layer.material as ShaderMaterial if asphalt_layer != null else null
+	if mat == null or mat.shader != ASPHALT_SHADER:
+		mat = ShaderMaterial.new()
+		mat.shader = ASPHALT_SHADER
+		if asphalt_layer != null:
+			asphalt_layer.material = mat
 	mat.set_shader_parameter("grain_world", ASPHALT_GRAIN_WORLD)
-	mat.set_shader_parameter("base_color", ASPHALT_COLOR)
-	mat.set_shader_parameter("dark_color", ASPHALT_GRAIN_DARK)
-	mat.set_shader_parameter("light_color", ASPHALT_GRAIN_LIGHT)
+	mat.set_shader_parameter("base_color", base)
+	mat.set_shader_parameter("dark_color", dark)
+	mat.set_shader_parameter("light_color", light)
 	mat.set_shader_parameter("view_zoom", maxf(view_zoom, 0.0001))
-	asphalt_layer.material = mat
+	# Keep legacy shared mat in sync for tests / old callers.
+	var shared := _asphalt_mat()
+	shared.set_shader_parameter("grain_world", ASPHALT_GRAIN_WORLD)
+	shared.set_shader_parameter("base_color", base)
+	shared.set_shader_parameter("dark_color", dark)
+	shared.set_shader_parameter("light_color", light)
+	shared.set_shader_parameter("view_zoom", maxf(view_zoom, 0.0001))
 
 
 static func _ensure_paint_layers(host: CanvasItem) -> Dictionary:
@@ -410,6 +474,7 @@ static func _draw_asphalt_band(
 	baked: PackedVector2Array,
 	half_width: float,
 	xform: Transform2D,
+	color: Color = ASPHALT_COLOR,
 ) -> void:
 	var pts := unique_loop_points(baked)
 	if pts.size() < 3:
@@ -421,11 +486,16 @@ static func _draw_asphalt_band(
 	var radius := _sw(xform, half_width)
 	## Solid stroke; pixel grain comes from the asphalt layer shader.
 	for i in local.size():
-		canvas.draw_circle(local[i], radius, ASPHALT_COLOR)
-	canvas.draw_polyline(_closed_loop(local), ASPHALT_COLOR, radius * 2.0, true)
+		canvas.draw_circle(local[i], radius, color)
+	canvas.draw_polyline(_closed_loop(local), color, radius * 2.0, true)
 
 
-static func _draw_centerline(canvas: CanvasItem, baked: PackedVector2Array, xform: Transform2D) -> void:
+static func _draw_centerline(
+	canvas: CanvasItem,
+	baked: PackedVector2Array,
+	xform: Transform2D,
+	color: Color = CENTERLINE_COLOR,
+) -> void:
 	var pts := unique_loop_points(baked)
 	if pts.size() < 3:
 		return
@@ -433,10 +503,16 @@ static func _draw_centerline(canvas: CanvasItem, baked: PackedVector2Array, xfor
 	local.resize(pts.size())
 	for i in pts.size():
 		local[i] = _tx(xform, pts[i])
-	canvas.draw_polyline(_closed_loop(local), CENTERLINE_COLOR, maxf(1.0, _sw(xform, CENTERLINE_WIDTH)), true)
+	canvas.draw_polyline(_closed_loop(local), color, maxf(1.0, _sw(xform, CENTERLINE_WIDTH)), true)
 
 
-static func _draw_race_line_kerbs(canvas: CanvasItem, ctx: Context, xform: Transform2D) -> void:
+static func _draw_race_line_kerbs(
+	canvas: CanvasItem,
+	ctx: Context,
+	xform: Transform2D,
+	outer_edge_color: Color = ASPHALT_EDGE_COLOR,
+	race_line_color: Color = RACE_LINE_EDGE_COLOR,
+) -> void:
 	if ctx.seg == null or ctx.seg.samples.is_empty():
 		return
 	var half := ctx.half_width
@@ -455,8 +531,8 @@ static func _draw_race_line_kerbs(canvas: CanvasItem, ctx: Context, xform: Trans
 		var space := ctx.seg.space_index_at_offset(float(s.cum))
 		var flipped := bool(ctx.race_line_flipped.call(space))
 		if have_prev and flipped != prev_flipped:
-			_stroke_edge_run(canvas, race_run, RACE_LINE_EDGE_COLOR, _sw(xform, RACE_LINE_EDGE_WIDTH))
-			_stroke_edge_run(canvas, outer_run, ASPHALT_EDGE_COLOR, _sw(xform, ASPHALT_OUTER_EDGE_WIDTH))
+			_stroke_edge_run(canvas, race_run, race_line_color, _sw(xform, RACE_LINE_EDGE_WIDTH))
+			_stroke_edge_run(canvas, outer_run, outer_edge_color, _sw(xform, ASPHALT_OUTER_EDGE_WIDTH))
 			race_run = PackedVector2Array()
 			outer_run = PackedVector2Array()
 		have_prev = true
@@ -465,8 +541,8 @@ static func _draw_race_line_kerbs(canvas: CanvasItem, ctx: Context, xform: Trans
 		var center: Vector2 = s.pos
 		race_run.append(_tx(xform, center + race_n * (half + race_half)))
 		outer_run.append(_tx(xform, center - race_n * (half + outer_half)))
-	_stroke_edge_run(canvas, race_run, RACE_LINE_EDGE_COLOR, _sw(xform, RACE_LINE_EDGE_WIDTH))
-	_stroke_edge_run(canvas, outer_run, ASPHALT_EDGE_COLOR, _sw(xform, ASPHALT_OUTER_EDGE_WIDTH))
+	_stroke_edge_run(canvas, race_run, race_line_color, _sw(xform, RACE_LINE_EDGE_WIDTH))
+	_stroke_edge_run(canvas, outer_run, outer_edge_color, _sw(xform, ASPHALT_OUTER_EDGE_WIDTH))
 
 
 static func _stroke_edge_run(canvas: CanvasItem, pts: PackedVector2Array, color: Color, width: float) -> void:
@@ -490,7 +566,13 @@ static func _kerb_sides(ctx: Context, space: int) -> Vector2i:
 
 
 ## Red/cream strips along geometric inside and/or outside asphalt edges.
-static func _draw_striped_kerbs(canvas: CanvasItem, ctx: Context, xform: Transform2D) -> void:
+static func _draw_striped_kerbs(
+	canvas: CanvasItem,
+	ctx: Context,
+	xform: Transform2D,
+	color_a: Color = KERB_COLOR_A,
+	color_b: Color = KERB_COLOR_B,
+) -> void:
 	if ctx.seg == null or ctx.seg.samples.is_empty() or ctx.kerbs.is_empty():
 		return
 	var half := ctx.half_width
@@ -510,9 +592,9 @@ static func _draw_striped_kerbs(canvas: CanvasItem, ctx: Context, xform: Transfo
 		var sides := _kerb_sides(ctx, space)
 		if have_prev and sides != prev_sides:
 			if prev_sides.x != 0:
-				_stroke_striped_kerb_run(canvas, inner_edge, inner_out, xform)
+				_stroke_striped_kerb_run(canvas, inner_edge, inner_out, xform, color_a, color_b)
 			if prev_sides.y != 0:
-				_stroke_striped_kerb_run(canvas, outer_edge, outer_out, xform)
+				_stroke_striped_kerb_run(canvas, outer_edge, outer_out, xform, color_a, color_b)
 			inner_edge = PackedVector2Array()
 			inner_out = PackedVector2Array()
 			outer_edge = PackedVector2Array()
@@ -527,9 +609,9 @@ static func _draw_striped_kerbs(canvas: CanvasItem, ctx: Context, xform: Transfo
 			outer_edge.append(center - inside * half)
 			outer_out.append(-inside)
 	if prev_sides.x != 0:
-		_stroke_striped_kerb_run(canvas, inner_edge, inner_out, xform)
+		_stroke_striped_kerb_run(canvas, inner_edge, inner_out, xform, color_a, color_b)
 	if prev_sides.y != 0:
-		_stroke_striped_kerb_run(canvas, outer_edge, outer_out, xform)
+		_stroke_striped_kerb_run(canvas, outer_edge, outer_out, xform, color_a, color_b)
 
 
 ## `edge` = asphalt lip; `outward` = unit normals pointing away from the road.
@@ -538,6 +620,8 @@ static func _stroke_striped_kerb_run(
 	edge: PackedVector2Array,
 	outward: PackedVector2Array,
 	xform: Transform2D,
+	color_a: Color = KERB_COLOR_A,
+	color_b: Color = KERB_COLOR_B,
 ) -> void:
 	var n := edge.size()
 	if n < 2 or outward.size() != n:
@@ -568,7 +652,7 @@ static func _stroke_striped_kerb_run(
 			_tx(xform, b1),
 			_tx(xform, b0),
 		])
-		var col := KERB_COLOR_A if stripe_i % 2 == 0 else KERB_COLOR_B
+		var col := color_a if stripe_i % 2 == 0 else color_b
 		canvas.draw_colored_polygon(poly, col)
 		t = t1
 		stripe_i += 1
@@ -644,14 +728,14 @@ static func _draw_space_overlays(canvas: CanvasItem, ctx: Context, opts: Options
 		var space_before := posmod(i - 1, n)
 		var is_corner_exit := ctx.corners.has(space_before)
 		var draw_line := false
-		var col := SPACE_EDGE_COLOR
+		var col := opts.space_edge_color
 		var width := 2.0
 		if is_start_line and opts.start_line:
-			col = START_LINE_COLOR
+			col = opts.start_line_color
 			width = 3.5
 			draw_line = true
 		elif is_corner_exit and opts.corner_lines:
-			col = CORNER_LINE_COLOR
+			col = opts.corner_line_color
 			width = 3.5
 			draw_line = true
 		elif opts.spaces:
@@ -677,7 +761,12 @@ static func _draw_space_overlays(canvas: CanvasItem, ctx: Context, opts: Options
 		_draw_start_grid(canvas, ctx, xform)
 
 
-static func _draw_speed_limit_badges(canvas: CanvasItem, ctx: Context, xform: Transform2D) -> void:
+static func _draw_speed_limit_badges(
+	canvas: CanvasItem,
+	ctx: Context,
+	xform: Transform2D,
+	ring_color: Color = CORNER_LINE_COLOR,
+) -> void:
 	if ctx.seg == null or ctx.seg.space_count() < 2:
 		return
 	var n := ctx.seg.space_count()
@@ -688,7 +777,9 @@ static func _draw_speed_limit_badges(canvas: CanvasItem, ctx: Context, xform: Tr
 			continue
 		var a: TrackSegmenter.Frontier = ctx.seg.frontiers[i]
 		var badge_c := _tx(xform, corner_badge_center(ctx, space_before, a))
-		_draw_corner_limit_badge(canvas, font, badge_c, _corner_speed(ctx, space_before), xform)
+		_draw_corner_limit_badge(
+			canvas, font, badge_c, _corner_speed(ctx, space_before), xform, ring_color
+		)
 
 
 static func _corner_speed(ctx: Context, space: int) -> int:
@@ -704,11 +795,12 @@ static func _draw_corner_limit_badge(
 	center: Vector2,
 	limit: int,
 	xform: Transform2D,
+	ring_color: Color = CORNER_LINE_COLOR,
 ) -> void:
 	var r := _sw(xform, CORNER_BADGE_RADIUS)
 	var font_size := maxi(8, int(round(_sw(xform, 12.0))))
 	canvas.draw_circle(center, r, Color.WHITE, true, -1.0, true)
-	canvas.draw_arc(center, maxf(1.0, r - _sw(xform, 1.5)), 0.0, TAU, 28, CORNER_LINE_COLOR, _sw(xform, 2.5), true)
+	canvas.draw_arc(center, maxf(1.0, r - _sw(xform, 1.5)), 0.0, TAU, 28, ring_color, _sw(xform, 2.5), true)
 	var text := str(limit)
 	var extent := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 	# draw_string uses the baseline. Center the line box (ascent above, descent below).

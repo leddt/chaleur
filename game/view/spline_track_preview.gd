@@ -12,6 +12,7 @@ var _opts: SplineTrackPainter.Options = SplineTrackPainter.preview_options()
 var _placeholder := "Sélectionne une piste"
 var _ground: ColorRect
 var _ground_theme := TrackGround.DEFAULT_THEME
+var _track_colors: Dictionary = TrackColors.defaults()
 ## flip_key -> true (same storage as the editor document).
 var _sector_flip_race_line: Dictionary = {}
 var _corners: Dictionary = {}
@@ -41,6 +42,7 @@ func clear_track() -> void:
 	_decorations.clear()
 	_sector_flip_race_line.clear()
 	_set_ground_theme(TrackGround.DEFAULT_THEME)
+	_track_colors = TrackColors.defaults()
 	SplineTrackPainter.clear_paint_layers(self)
 	queue_redraw()
 
@@ -54,6 +56,7 @@ func set_from_document(data: Dictionary) -> void:
 		clear_track()
 		return
 	_set_ground_theme(TrackGround.from_document(data))
+	_track_colors = TrackColors.from_document(data)
 	_spline = TrackSpline.from_dict(spline_data)
 	_baked = SplineTrackPainter.bake_spline(_spline)
 	var params := TrackSegmenter.Params.new()
@@ -166,6 +169,7 @@ func _draw() -> void:
 	var zoom := absf(xform.get_scale().x)
 	TrackGround.set_view(self, xform.origin, zoom)
 	var zoom_xform := Transform2D(0.0, Vector2(zoom, zoom), 0.0, Vector2.ZERO)
+	SplineTrackPainter.apply_track_colors(_opts, _track_colors)
 	SplineTrackPainter.draw(
 		self,
 		_baked,
@@ -173,7 +177,9 @@ func _draw() -> void:
 		_opts,
 		xform,
 		Callable(),
-		func(c: CanvasItem) -> void: TrackDecor.draw(c, _decorations, zoom_xform)
+		func(c: CanvasItem) -> void: TrackDecor.draw(
+			c, _decorations, zoom_xform, _track_colors.vegetation_a, _track_colors.vegetation_b
+		)
 	)
 
 

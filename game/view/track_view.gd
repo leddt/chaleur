@@ -176,6 +176,8 @@ func _draw() -> void:
 		return
 	_ensure_fit(bind)
 	var opts := SplineTrackPainter.game_options()
+	var colors := TrackColors.from_document(bind.document)
+	SplineTrackPainter.apply_track_colors(opts, colors)
 	var xform := _view_xform
 	var zoom_xform := Transform2D(0.0, Vector2(_view_zoom, _view_zoom), 0.0, Vector2.ZERO)
 	SplineTrackPainter.draw(
@@ -186,7 +188,7 @@ func _draw() -> void:
 		xform,
 		Callable(),
 		func(c: CanvasItem) -> void:
-			TrackDecor.draw(c, _decorations, zoom_xform)
+			TrackDecor.draw(c, _decorations, zoom_xform, colors.vegetation_a, colors.vegetation_b)
 			if show_space_debug:
 				_draw_space_debug_on(c, bind, zoom_xform)
 	)

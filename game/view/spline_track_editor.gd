@@ -7,6 +7,7 @@ enum EditMode {
 	SPACES, ## Inspect / tune space segmentation.
 	SECTORS, ## Select stretches between corners (may wrap past start).
 	DECOR, ## Track backdrop and scenery.
+	COLORS, ## Track colors (placeholder).
 }
 
 const CAR_SCENE := preload("res://view/car.tscn")
@@ -48,10 +49,25 @@ const FIT_MARGIN := 24.0
 @onready var _mode_spaces: Button = %ModeSpaces
 @onready var _mode_sectors: Button = %ModeSectors
 @onready var _mode_decor: Button = %ModeDecor
+@onready var _mode_colors: Button = %ModeColors
 @onready var _trace_section: Control = %TraceSection
 @onready var _spaces_section: Control = %SpacesSection
 @onready var _sectors_section: Control = %SectorsSection
 @onready var _decor_section: Control = %DecorSection
+@onready var _colors_section: Control = %ColorsSection
+@onready var _asphalt_color_picker: ColorPickerButton = %AsphaltColorPicker
+@onready var _asphalt_light_picker: ColorPickerButton = %AsphaltLightPicker
+@onready var _asphalt_dark_picker: ColorPickerButton = %AsphaltDarkPicker
+@onready var _grain_lock_check: CheckBox = %GrainLockCheck
+@onready var _race_line_color_picker: ColorPickerButton = %RaceLineColorPicker
+@onready var _kerb_a_color_picker: ColorPickerButton = %KerbAColorPicker
+@onready var _kerb_b_color_picker: ColorPickerButton = %KerbBColorPicker
+@onready var _centerline_color_picker: ColorPickerButton = %CenterlineColorPicker
+@onready var _start_line_color_picker: ColorPickerButton = %StartLineColorPicker
+@onready var _corner_line_color_picker: ColorPickerButton = %CornerLineColorPicker
+@onready var _space_edge_color_picker: ColorPickerButton = %SpaceEdgeColorPicker
+@onready var _vegetation_a_color_picker: ColorPickerButton = %VegetationAColorPicker
+@onready var _vegetation_b_color_picker: ColorPickerButton = %VegetationBColorPicker
 @onready var _sector_info_label: Label = %SectorInfoLabel
 @onready var _sector_race_line_button: Button = %SectorRaceLineButton
 @onready var _type_auto: BaseButton = %TypeAuto
@@ -82,6 +98,20 @@ var _track_name: String = ""
 ## Temporary draw target for paint layers (decor / handles).
 var _draw_target: CanvasItem
 var _ground_theme: String = TrackGround.DEFAULT_THEME
+var _asphalt_base: Color = TrackAsphalt.DEFAULT_BASE
+var _asphalt_dark: Color = TrackAsphalt.DEFAULT_DARK
+var _asphalt_light: Color = TrackAsphalt.DEFAULT_LIGHT
+var _asphalt_grain_locked: bool = TrackAsphalt.DEFAULT_LOCKED
+var _race_line_color: Color = TrackColors.DEFAULT_RACE_LINE
+var _kerb_color_a: Color = TrackColors.DEFAULT_KERB_A
+var _kerb_color_b: Color = TrackColors.DEFAULT_KERB_B
+var _centerline_color: Color = TrackColors.DEFAULT_CENTERLINE
+var _start_line_color: Color = TrackColors.DEFAULT_START_LINE
+var _corner_line_color: Color = TrackColors.DEFAULT_CORNER_LINE
+var _space_edge_color: Color = TrackColors.DEFAULT_SPACE_EDGE
+var _vegetation_a: Color = TrackColors.DEFAULT_VEGETATION_A
+var _vegetation_b: Color = TrackColors.DEFAULT_VEGETATION_B
+var _updating_asphalt_ui: bool = false
 ## Placeable scenery items: Array[{type, position:Vector2, seed}].
 var _decorations: Array = []
 var _decor_brush: String = TrackDecor.TOOL_SELECT
@@ -168,6 +198,7 @@ func _ready() -> void:
 	%BackButton.pressed.connect(_on_back)
 	%SaveButton.pressed.connect(_on_save)
 	_setup_mode_ui()
+	_setup_asphalt_color_ui()
 	_setup_type_ui()
 	_setup_segmentation_ui()
 	_set_start_button.pressed.connect(_on_set_start_pressed)
@@ -201,6 +232,7 @@ func _apply_kit_chrome() -> void:
 	_mode_spaces.theme_type_variation = &"Compact"
 	_mode_sectors.theme_type_variation = &"Compact"
 	_mode_decor.theme_type_variation = &"Compact"
+	_mode_colors.theme_type_variation = &"Compact"
 	_style_decor_palette_button(_decor_select)
 	_style_decor_palette_button(_decor_tree)
 	_style_decor_palette_button(_decor_rock)
@@ -233,6 +265,18 @@ func _apply_kit_chrome() -> void:
 			caption.theme_type_variation = &"Caption"
 			caption.remove_theme_color_override("font_color")
 			caption.remove_theme_font_size_override("font_size")
+	for swatch_label_path in [
+		"Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/BaseCol/AsphaltBaseLabel",
+		"Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/LightCol/AsphaltLightLabel",
+		"Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/DarkCol/AsphaltDarkLabel",
+	]:
+		var swatch_label := get_node_or_null(swatch_label_path) as Label
+		if swatch_label != null:
+			swatch_label.theme_type_variation = &"Caption"
+			swatch_label.remove_theme_color_override("font_color")
+			swatch_label.remove_theme_font_size_override("font_size")
+			swatch_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			swatch_label.text = swatch_label.text.to_upper()
 	_sector_info_label.theme_type_variation = &"Caption"
 
 
@@ -479,6 +523,7 @@ func _setup_mode_ui() -> void:
 	_mode_spaces.toggled.connect(_on_mode_spaces_toggled)
 	_mode_sectors.toggled.connect(_on_mode_sectors_toggled)
 	_mode_decor.toggled.connect(_on_mode_decor_toggled)
+	_mode_colors.toggled.connect(_on_mode_colors_toggled)
 	_sync_mode_buttons()
 
 
@@ -506,13 +551,237 @@ func _on_mode_decor_toggled(pressed: bool) -> void:
 	_set_edit_mode(EditMode.DECOR)
 
 
+func _on_mode_colors_toggled(pressed: bool) -> void:
+	if _updating_mode_ui or not pressed:
+		return
+	_set_edit_mode(EditMode.COLORS)
+
+
 func _sync_mode_buttons() -> void:
 	_updating_mode_ui = true
 	_mode_trace.button_pressed = _edit_mode == EditMode.TRACE
 	_mode_spaces.button_pressed = _edit_mode == EditMode.SPACES
 	_mode_sectors.button_pressed = _edit_mode == EditMode.SECTORS
 	_mode_decor.button_pressed = _edit_mode == EditMode.DECOR
+	_mode_colors.button_pressed = _edit_mode == EditMode.COLORS
 	_updating_mode_ui = false
+
+
+func _setup_asphalt_color_ui() -> void:
+	_asphalt_color_picker.color_changed.connect(_on_asphalt_base_changed)
+	_asphalt_light_picker.color_changed.connect(_on_asphalt_light_changed)
+	_asphalt_dark_picker.color_changed.connect(_on_asphalt_dark_changed)
+	_grain_lock_check.toggled.connect(_on_grain_lock_toggled)
+	_race_line_color_picker.color_changed.connect(_on_race_line_color_changed)
+	_kerb_a_color_picker.color_changed.connect(_on_kerb_a_color_changed)
+	_kerb_b_color_picker.color_changed.connect(_on_kerb_b_color_changed)
+	_centerline_color_picker.color_changed.connect(_on_centerline_color_changed)
+	_start_line_color_picker.color_changed.connect(_on_start_line_color_changed)
+	_corner_line_color_picker.color_changed.connect(_on_corner_line_color_changed)
+	_space_edge_color_picker.color_changed.connect(_on_space_edge_color_changed)
+	_vegetation_a_color_picker.color_changed.connect(_on_vegetation_a_color_changed)
+	_vegetation_b_color_picker.color_changed.connect(_on_vegetation_b_color_changed)
+	_sync_asphalt_color_fields()
+
+
+func _asphalt_settings() -> Dictionary:
+	return {
+		"base": _asphalt_base,
+		"dark": _asphalt_dark,
+		"light": _asphalt_light,
+		"locked": _asphalt_grain_locked,
+	}
+
+
+func _track_colors_settings() -> Dictionary:
+	return {
+		"asphalt": _asphalt_settings(),
+		"race_line": _race_line_color,
+		"kerb_a": _kerb_color_a,
+		"kerb_b": _kerb_color_b,
+		"centerline": _centerline_color,
+		"start_line": _start_line_color,
+		"corner_line": _corner_line_color,
+		"space_edge": _space_edge_color,
+		"vegetation_a": _vegetation_a,
+		"vegetation_b": _vegetation_b,
+	}
+
+
+func _apply_locked_grain_from_base() -> void:
+	if not _asphalt_grain_locked:
+		return
+	_asphalt_dark = TrackAsphalt.derive_dark(_asphalt_base)
+	_asphalt_light = TrackAsphalt.derive_light(_asphalt_base)
+
+
+func _sync_asphalt_color_fields() -> void:
+	_updating_asphalt_ui = true
+	_apply_locked_grain_from_base()
+	_asphalt_color_picker.color = _asphalt_base
+	_asphalt_light_picker.color = _asphalt_light
+	_asphalt_dark_picker.color = _asphalt_dark
+	_grain_lock_check.button_pressed = _asphalt_grain_locked
+	_asphalt_light_picker.disabled = _asphalt_grain_locked
+	_asphalt_dark_picker.disabled = _asphalt_grain_locked
+	_race_line_color_picker.color = _race_line_color
+	_kerb_a_color_picker.color = _kerb_color_a
+	_kerb_b_color_picker.color = _kerb_color_b
+	_centerline_color_picker.color = _centerline_color
+	_start_line_color_picker.color = _start_line_color
+	_corner_line_color_picker.color = _corner_line_color
+	_space_edge_color_picker.color = _space_edge_color
+	_vegetation_a_color_picker.color = _vegetation_a
+	_vegetation_b_color_picker.color = _vegetation_b
+	_updating_asphalt_ui = false
+
+
+func _on_asphalt_base_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_asphalt_base):
+		return
+	_asphalt_base = color
+	_apply_locked_grain_from_base()
+	if _asphalt_grain_locked:
+		_updating_asphalt_ui = true
+		_asphalt_light_picker.color = _asphalt_light
+		_asphalt_dark_picker.color = _asphalt_dark
+		_updating_asphalt_ui = false
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_asphalt_light_changed(color: Color) -> void:
+	if _updating_asphalt_ui or _asphalt_grain_locked:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_asphalt_light):
+		return
+	_asphalt_light = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_asphalt_dark_changed(color: Color) -> void:
+	if _updating_asphalt_ui or _asphalt_grain_locked:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_asphalt_dark):
+		return
+	_asphalt_dark = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_grain_lock_toggled(pressed: bool) -> void:
+	if _updating_asphalt_ui:
+		return
+	_asphalt_grain_locked = pressed
+	_apply_locked_grain_from_base()
+	_sync_asphalt_color_fields()
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_race_line_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_race_line_color):
+		return
+	_race_line_color = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_kerb_a_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_kerb_color_a):
+		return
+	_kerb_color_a = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_kerb_b_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_kerb_color_b):
+		return
+	_kerb_color_b = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_centerline_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_centerline_color):
+		return
+	_centerline_color = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_start_line_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_start_line_color):
+		return
+	_start_line_color = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_corner_line_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_corner_line_color):
+		return
+	_corner_line_color = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_space_edge_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = _space_edge_color.a
+	if color.is_equal_approx(_space_edge_color):
+		return
+	_space_edge_color = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_vegetation_a_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_vegetation_a):
+		return
+	_vegetation_a = color
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _on_vegetation_b_color_changed(color: Color) -> void:
+	if _updating_asphalt_ui:
+		return
+	color.a = 1.0
+	if color.is_equal_approx(_vegetation_b):
+		return
+	_vegetation_b = color
+	_dirty = true
+	_canvas.queue_redraw()
 
 
 func _setup_type_ui() -> void:
@@ -553,6 +822,7 @@ func _apply_edit_mode() -> void:
 	_spaces_section.visible = _edit_mode == EditMode.SPACES
 	_sectors_section.visible = _edit_mode == EditMode.SECTORS
 	_decor_section.visible = _edit_mode == EditMode.DECOR
+	_colors_section.visible = _edit_mode == EditMode.COLORS
 	_refresh_set_start_button()
 	_refresh_corner_ui()
 	_refresh_kerb_ui()
@@ -966,6 +1236,7 @@ func _build_save_document() -> Dictionary:
 		"version": SplineTrackFile.VERSION,
 		"name": _track_name,
 		"ground_theme": TrackGround.normalize(_ground_theme),
+		"colors": TrackColors.to_colors_document(_track_colors_settings()),
 		"spline": _spline.to_dict(),
 		"segmentation": {
 			"algorithm": int(_seg_params.algorithm),
@@ -1002,11 +1273,25 @@ func _reset_spline() -> void:
 	_sector_flip_race_line.clear()
 	_track_name = ""
 	_ground_theme = TrackGround.DEFAULT_THEME
+	_asphalt_base = TrackAsphalt.DEFAULT_BASE
+	_asphalt_dark = TrackAsphalt.DEFAULT_DARK
+	_asphalt_light = TrackAsphalt.DEFAULT_LIGHT
+	_asphalt_grain_locked = TrackAsphalt.DEFAULT_LOCKED
+	_race_line_color = TrackColors.DEFAULT_RACE_LINE
+	_kerb_color_a = TrackColors.DEFAULT_KERB_A
+	_kerb_color_b = TrackColors.DEFAULT_KERB_B
+	_centerline_color = TrackColors.DEFAULT_CENTERLINE
+	_start_line_color = TrackColors.DEFAULT_START_LINE
+	_corner_line_color = TrackColors.DEFAULT_CORNER_LINE
+	_space_edge_color = TrackColors.DEFAULT_SPACE_EDGE
+	_vegetation_a = TrackColors.DEFAULT_VEGETATION_A
+	_vegetation_b = TrackColors.DEFAULT_VEGETATION_B
 	_decor_brush = TrackDecor.TOOL_SELECT
 	_file_path = ""
 	_seg_params.forced_space_count = 0
 	_sync_track_name_field()
 	_sync_ground_theme_field()
+	_sync_asphalt_color_fields()
 	_sync_builtin_check()
 	_sync_decor_palette()
 	_dirty = false
@@ -1042,6 +1327,22 @@ func _load_from_path(path: String) -> bool:
 	_ground_theme = TrackGround.from_document(data)
 	_sync_track_name_field()
 	_sync_ground_theme_field()
+	var colors := TrackColors.from_document(data)
+	var asphalt: Dictionary = colors.asphalt
+	_asphalt_base = asphalt.base
+	_asphalt_dark = asphalt.dark
+	_asphalt_light = asphalt.light
+	_asphalt_grain_locked = asphalt.locked
+	_race_line_color = colors.race_line
+	_kerb_color_a = colors.kerb_a
+	_kerb_color_b = colors.kerb_b
+	_centerline_color = colors.centerline
+	_start_line_color = colors.start_line
+	_corner_line_color = colors.corner_line
+	_space_edge_color = colors.space_edge
+	_vegetation_a = colors.vegetation_a
+	_vegetation_b = colors.vegetation_b
+	_sync_asphalt_color_fields()
 	_sync_builtin_check()
 	var seg: Variant = data.get("segmentation", {})
 	if seg is Dictionary:
@@ -1472,6 +1773,9 @@ func _refresh_info() -> void:
 	if _edit_mode == EditMode.DECOR:
 		_refresh_summary()
 		return
+	if _edit_mode == EditMode.COLORS:
+		_refresh_summary()
+		return
 	if _spline == null or _spline.point_count() == 0:
 		_refresh_summary()
 		return
@@ -1720,6 +2024,7 @@ func _paint_context(font: Font) -> SplineTrackPainter.Context:
 func _draw_track(baked: PackedVector2Array, font: Font, xform: Transform2D) -> void:
 	var ctx := _paint_context(font)
 	var opts := SplineTrackPainter.editor_roadmap_options(_hide_space_numbers.button_pressed)
+	SplineTrackPainter.apply_track_colors(opts, _track_colors_settings())
 	var zoom_xform := Transform2D(0.0, Vector2(_view_zoom, _view_zoom), 0.0, Vector2.ZERO)
 	var after_asphalt := func(c: CanvasItem) -> void:
 		_draw_target = c
@@ -1727,7 +2032,7 @@ func _draw_track(baked: PackedVector2Array, font: Font, xform: Transform2D) -> v
 		_draw_target = null
 	var after_road := func(c: CanvasItem) -> void:
 		_draw_target = c
-		TrackDecor.draw(c, _decorations, zoom_xform)
+		TrackDecor.draw(c, _decorations, zoom_xform, _vegetation_a, _vegetation_b)
 		_draw_decor_ghost(zoom_xform)
 		_draw_decor_selection(zoom_xform)
 		if _edit_mode == EditMode.TRACE:
@@ -1743,7 +2048,7 @@ func _draw_decor_ghost(xform: Transform2D) -> void:
 	if not TrackDecor.is_place_brush(_decor_brush) or not _decor_ghost_active:
 		return
 	var ghost := TrackDecor.make_item(_decor_brush, _decor_ghost_pos, _decor_ghost_seed)
-	TrackDecor.draw_item(_ink(), ghost, xform, 0.45)
+	TrackDecor.draw_item(_ink(), ghost, xform, 0.45, _vegetation_a, _vegetation_b)
 
 
 func _draw_decor_selection(xform: Transform2D) -> void:
@@ -1987,6 +2292,8 @@ func _on_canvas_gui_input(event: InputEvent) -> void:
 		return
 	if _edit_mode == EditMode.DECOR:
 		_on_decor_gui_input(event)
+		return
+	if _edit_mode == EditMode.COLORS:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton

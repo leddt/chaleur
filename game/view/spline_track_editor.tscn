@@ -226,11 +226,15 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Édition"
 
-[node name="ModeRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection" unique_id=1310735849]
+[node name="ModeRows" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection" unique_id=1310735850]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="ModeTrace" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow" unique_id=1740522518]
+[node name="ModeRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRows" unique_id=1310735849]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ModeTrace" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRows/ModeRow" unique_id=1740522518]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -239,7 +243,7 @@ button_pressed = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Tracé"
 
-[node name="ModeSpaces" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow" unique_id=1932417627]
+[node name="ModeSpaces" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRows/ModeRow" unique_id=1932417627]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -247,7 +251,7 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Cases"
 
-[node name="ModeSectors" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow" unique_id=1776243916]
+[node name="ModeSectors" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRows/ModeRow" unique_id=1776243916]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -255,13 +259,25 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Secteurs"
 
-[node name="ModeDecor" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow" unique_id=914100025]
+[node name="ModeRow2" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRows" unique_id=1310735851]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ModeDecor" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRows/ModeRow2" unique_id=914100025]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Décor"
+
+[node name="ModeColors" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRows/ModeRow2" unique_id=914100026]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_group = SubResource("ButtonGroup_mode")
+text = "Couleurs"
 
 [node name="TraceSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=584460077]
 unique_name_in_owner = true
@@ -460,6 +476,215 @@ tooltip_text = "Gradins"
 toggle_mode = true
 button_group = SubResource("ButtonGroup_decor")
 expand_icon = true
+
+[node name="ColorsSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=1600373690]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AsphaltHeader" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373691]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AsphaltTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltHeader" unique_id=1600373700]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Asphalte"
+
+[node name="GrainLockCheck" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltHeader" unique_id=1600373693]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Lier le grain"
+
+[node name="AsphaltSwatches" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373694]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BaseCol" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches" unique_id=1600373695]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="AsphaltBaseLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/BaseCol" unique_id=1600373701]
+layout_mode = 2
+text = "BASE"
+horizontal_alignment = 1
+
+[node name="AsphaltColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/BaseCol" unique_id=1600373692]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+edit_alpha = false
+color = Color(0.28, 0.29, 0.31, 1)
+
+[node name="LightCol" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches" unique_id=1600373697]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="AsphaltLightLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/LightCol" unique_id=1600373698]
+layout_mode = 2
+text = "CLAIR"
+horizontal_alignment = 1
+
+[node name="AsphaltLightPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/LightCol" unique_id=1600373696]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+edit_alpha = false
+color = Color(0.31, 0.32, 0.34, 1)
+
+[node name="DarkCol" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches" unique_id=1600373699]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="AsphaltDarkLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/DarkCol" unique_id=1600373702]
+layout_mode = 2
+text = "SOMBRE"
+horizontal_alignment = 1
+
+[node name="AsphaltDarkPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/DarkCol" unique_id=1600373703]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+edit_alpha = false
+color = Color(0.24, 0.25, 0.26, 1)
+
+[node name="RaceLineRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373710]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RaceLineTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/RaceLineRow" unique_id=1600373711]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Ligne de course"
+
+[node name="RaceLineColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/RaceLineRow" unique_id=1600373715]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 28)
+layout_mode = 2
+edit_alpha = false
+color = Color(0.58, 0.59, 0.62, 1)
+
+[node name="KerbsRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373716]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="KerbsTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/KerbsRow" unique_id=1600373717]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Kerbs"
+
+[node name="KerbAColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/KerbsRow" unique_id=1600373721]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 28)
+layout_mode = 2
+tooltip_text = "Stripe rouge"
+edit_alpha = false
+color = Color(0.753, 0.224, 0.169, 1)
+
+[node name="KerbBColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/KerbsRow" unique_id=1600373724]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 28)
+layout_mode = 2
+tooltip_text = "Stripe crème"
+edit_alpha = false
+color = Color(0.863, 0.827, 0.745, 1)
+
+[node name="CenterlineRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373730]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CenterlineTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/CenterlineRow" unique_id=1600373731]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Ligne centrale"
+
+[node name="CenterlineColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/CenterlineRow" unique_id=1600373732]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 28)
+layout_mode = 2
+edit_alpha = false
+color = Color(0.95, 0.95, 0.97, 1)
+
+[node name="StartLineRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373733]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StartLineTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/StartLineRow" unique_id=1600373734]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Départ"
+
+[node name="StartLineColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/StartLineRow" unique_id=1600373735]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 28)
+layout_mode = 2
+edit_alpha = false
+color = Color(0.9, 0.15, 0.12, 1)
+
+[node name="CornerLineRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373736]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CornerLineTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/CornerLineRow" unique_id=1600373737]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Virages"
+
+[node name="CornerLineColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/CornerLineRow" unique_id=1600373738]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 28)
+layout_mode = 2
+edit_alpha = false
+color = Color(0.2, 0.85, 0.35, 1)
+
+[node name="SpaceEdgeRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373739]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SpaceEdgeTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/SpaceEdgeRow" unique_id=1600373740]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Cases"
+
+[node name="SpaceEdgeColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/SpaceEdgeRow" unique_id=1600373741]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 28)
+layout_mode = 2
+edit_alpha = false
+color = Color(0.05, 0.05, 0.06, 1)
+
+[node name="VegetationRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection" unique_id=1600373742]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="VegetationTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/VegetationRow" unique_id=1600373743]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Végétation"
+
+[node name="VegetationAColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/VegetationRow" unique_id=1600373744]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 28)
+layout_mode = 2
+tooltip_text = "Feuillage clair"
+edit_alpha = false
+color = Color(0.336, 0.492, 0.374, 1)
+
+[node name="VegetationBColorPicker" type="ColorPickerButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/VegetationRow" unique_id=1600373745]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 28)
+layout_mode = 2
+tooltip_text = "Feuillage sombre"
+edit_alpha = false
+color = Color(0.216, 0.357, 0.241, 1)
 
 [node name="PanelSpacer" type="Control" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=490134924]
 layout_mode = 2

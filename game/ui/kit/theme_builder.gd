@@ -87,6 +87,22 @@ static func _setup_buttons(t: Theme, body: Font) -> void:
 	_setup_card_button(t, body)
 	_setup_primary_button(t, body)
 	_setup_compact_button(t, body)
+	_setup_color_picker_button(t)
+
+
+## Pastilles de couleur : peu de marge pour maximiser la surface de swatch.
+static func _setup_color_picker_button(t: Theme) -> void:
+	t.set_stylebox("normal", "ColorPickerButton", _color_picker_button_box(Color(0, 0, 0, 0), Palette.SMOKE))
+	t.set_stylebox("hover", "ColorPickerButton", _color_picker_button_box(Color(0, 0, 0, 0), Palette.MUSTARD))
+	t.set_stylebox("pressed", "ColorPickerButton", _color_picker_button_box(Palette.MUSTARD, Palette.MUSTARD))
+	t.set_stylebox("disabled", "ColorPickerButton", _color_picker_button_box(Color(0, 0, 0, 0), Palette.INK))
+	t.set_stylebox("focus", "ColorPickerButton", _color_picker_button_box(Color(0, 0, 0, 0), Palette.CARDBOARD))
+
+
+static func _color_picker_button_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var sb := _button_box(fill, border)
+	sb.set_content_margin_all(2)
+	return sb
 
 
 ## Bandeau étroit pour les sélecteurs de mode / panneau éditeur.

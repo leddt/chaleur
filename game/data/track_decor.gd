@@ -244,14 +244,20 @@ static func hit_index(items: Array, world: Vector2) -> int:
 	return -1
 
 
-static func draw(canvas: CanvasItem, items: Array, xform: Transform2D = Transform2D.IDENTITY) -> void:
+static func draw(
+	canvas: CanvasItem,
+	items: Array,
+	xform: Transform2D = Transform2D.IDENTITY,
+	foliage_a: Color = TrackColors.DEFAULT_VEGETATION_A,
+	foliage_b: Color = TrackColors.DEFAULT_VEGETATION_B,
+) -> void:
 	if canvas == null:
 		return
 	for raw in items:
 		var item := parse_item(raw)
 		if item.is_empty():
 			continue
-		draw_item(canvas, item, xform)
+		draw_item(canvas, item, xform, 1.0, foliage_a, foliage_b)
 
 
 static func draw_item(
@@ -259,6 +265,8 @@ static func draw_item(
 	item: Dictionary,
 	xform: Transform2D = Transform2D.IDENTITY,
 	alpha: float = 1.0,
+	foliage_a: Color = TrackColors.DEFAULT_VEGETATION_A,
+	foliage_b: Color = TrackColors.DEFAULT_VEGETATION_B,
 ) -> void:
 	var parsed := parse_item(item)
 	if parsed.is_empty() or canvas == null:
@@ -271,7 +279,7 @@ static func draw_item(
 		TYPE_BLEACHERS:
 			_draw_bleachers(canvas, params_for(parsed), full, a)
 		_:
-			_draw_tree(canvas, params_for(parsed), full, a)
+			_draw_tree(canvas, params_for(parsed), full, a, foliage_a, foliage_b)
 
 
 static func preview_texture(type_id: String, px: int = 48, seed: int = 1) -> Texture2D:
@@ -418,10 +426,22 @@ static func _rock_verts_from_params(center: Vector2, params: Dictionary) -> Pack
 	return pts
 
 
-static func _draw_tree(canvas: CanvasItem, params: Dictionary, xform: Transform2D, alpha: float = 1.0) -> void:
+static func _foliage_mix(foliage_a: Color, foliage_b: Color, light: float, dark: float) -> Color:
+	## Interpole entre les deux bornes selon le bias clair/sombre du blob.
+	var mix := clampf(0.5 + float(light) * 0.9 - float(dark) * 0.9, 0.0, 1.0)
+	return foliage_a.lerp(foliage_b, mix)
+
+
+static func _draw_tree(
+	canvas: CanvasItem,
+	params: Dictionary,
+	xform: Transform2D,
+	alpha: float = 1.0,
+	foliage_a: Color = TrackColors.DEFAULT_VEGETATION_A,
+	foliage_b: Color = TrackColors.DEFAULT_VEGETATION_B,
+) -> void:
 	var canopy_r: float = float(params.canopy_r)
-	var base_green := Palette.team(3)
-	var shadow := base_green.darkened(0.45)
+	var shadow := foliage_a.lerp(foliage_b, 0.75).darkened(0.35)
 	shadow.a = 0.55 * alpha
 	var s := _sx(xform)
 	canvas.draw_circle(xform * Vector2(1.2, 1.6), canopy_r * 0.92 * s, shadow, true, -1.0, true)
@@ -429,9 +449,9 @@ static func _draw_tree(canvas: CanvasItem, params: Dictionary, xform: Transform2
 	for i in blobs.size():
 		var b: Dictionary = blobs[i]
 		var br: float = float(b.radius)
-		var tint := base_green.lightened(float(b.light)).darkened(float(b.dark))
+		var tint := _foliage_mix(foliage_a, foliage_b, float(b.light), float(b.dark))
 		if i == 0:
-			tint = base_green.darkened(0.12)
+			tint = foliage_a.lerp(foliage_b, 0.55)
 		tint.a *= alpha
 		var p := Vector2(cos(float(b.ang)), sin(float(b.ang))) * float(b.dist)
 		canvas.draw_circle(xform * p, br * s, tint, true, -1.0, true)
@@ -439,7 +459,7 @@ static func _draw_tree(canvas: CanvasItem, params: Dictionary, xform: Transform2
 	trunk.a *= alpha
 	canvas.draw_circle(xform * Vector2.ZERO, canopy_r * 0.16 * s, trunk, true, -1.0, true)
 	var hi := Vector2(cos(float(params.hi_ang)), sin(float(params.hi_ang))) * canopy_r * 0.28
-	var hi_col := base_green.lightened(0.28)
+	var hi_col := foliage_a.lerp(foliage_b, 0.15).lightened(0.12)
 	hi_col.a = 0.55 * alpha
 	canvas.draw_circle(xform * hi, canopy_r * 0.22 * s, hi_col, true, -1.0, true)
 
@@ -583,15 +603,21 @@ static func _sx(xform: Transform2D) -> float:
 
 static func _stamp_tree(img: Image, center: Vector2, params: Dictionary, fit: float) -> void:
 	var canopy_r: float = float(params.canopy_r) * fit
-	var base_green := Palette.team(3)
-	_fill_circle(img, center + Vector2(1.0, 1.2) * fit, canopy_r * 0.92, Color(base_green.darkened(0.45), 0.5))
+	var foliage_a := TrackColors.DEFAULT_VEGETATION_A
+	var foliage_b := TrackColors.DEFAULT_VEGETATION_B
+	_fill_circle(
+		img,
+		center + Vector2(1.0, 1.2) * fit,
+		canopy_r * 0.92,
+		Color(foliage_a.lerp(foliage_b, 0.75).darkened(0.35), 0.5)
+	)
 	var blobs: Array = params.blobs
 	for i in blobs.size():
 		var b: Dictionary = blobs[i]
 		var br: float = float(b.radius) * fit
-		var tint := base_green.lightened(float(b.light)).darkened(float(b.dark))
+		var tint := _foliage_mix(foliage_a, foliage_b, float(b.light), float(b.dark))
 		if i == 0:
-			tint = base_green.darkened(0.12)
+			tint = foliage_a.lerp(foliage_b, 0.55)
 		var p := center + Vector2(cos(float(b.ang)), sin(float(b.ang))) * float(b.dist) * fit
 		_fill_circle(img, p, br, tint)
 	_fill_circle(img, center, canopy_r * 0.16, Color(0.28, 0.20, 0.14, 1.0))

@@ -42,6 +42,7 @@ const FIT_MARGIN := 24.0
 @onready var _decor_select: Button = %DecorSelect
 @onready var _decor_tree: Button = %DecorTree
 @onready var _decor_rock: Button = %DecorRock
+@onready var _decor_bleachers: Button = %DecorBleachers
 @onready var _builtin_check: CheckBox = %BuiltinCheck
 @onready var _mode_trace: Button = %ModeTrace
 @onready var _mode_spaces: Button = %ModeSpaces
@@ -92,6 +93,7 @@ var _decor_ghost_active: bool = false
 var _decor_place_seeds: Dictionary = {
 	TrackDecor.TYPE_TREE: 1,
 	TrackDecor.TYPE_ROCK: 1,
+	TrackDecor.TYPE_BLEACHERS: 1,
 }
 ## user:// path when editing an existing document; empty for a new track.
 var _file_path: String = ""
@@ -122,12 +124,14 @@ var _kerbs: Dictionary = {}
 var _drag_corner_space: int = -1
 ## World-space grab delta: mouse - badge center at press.
 var _drag_corner_grab := Vector2.ZERO
-## "", "move", "scale", "rotate", "marquee"
+## "", "move", "scale", "resize", "rotate", "marquee"
 var _drag_decor_mode: String = ""
 var _drag_decor_start_mouse := Vector2.ZERO
 var _drag_decor_pivot := Vector2.ZERO
 var _drag_decor_start_dist: float = 1.0
 var _drag_decor_start_angle: float = 0.0
+## Poignée de resize libre: "nw"|"n"|"ne"|"e"|"se"|"s"|"sw"|"w"
+var _drag_decor_handle: String = ""
 ## Snapshots at drag start: Array[{index:int, item:Dictionary}].
 var _drag_decor_snapshots: Array = []
 var _decor_marquee_start := Vector2.ZERO
@@ -198,6 +202,7 @@ func _apply_kit_chrome() -> void:
 	_style_decor_palette_button(_decor_select)
 	_style_decor_palette_button(_decor_tree)
 	_style_decor_palette_button(_decor_rock)
+	_style_decor_palette_button(_decor_bleachers)
 	_set_start_button.theme_type_variation = &"Compact"
 	_set_corner_button.theme_type_variation = &"Compact"
 	_corner_side_button.theme_type_variation = &"Compact"
@@ -341,14 +346,18 @@ func _setup_decor_palette() -> void:
 	_decor_select.text = ""
 	_decor_tree.text = ""
 	_decor_rock.text = ""
+	_decor_bleachers.text = ""
 	_decor_select.add_theme_constant_override("icon_max_width", 36)
 	_decor_tree.add_theme_constant_override("icon_max_width", 36)
 	_decor_rock.add_theme_constant_override("icon_max_width", 36)
+	_decor_bleachers.add_theme_constant_override("icon_max_width", 36)
 	_roll_decor_place_seed(TrackDecor.TYPE_TREE)
 	_roll_decor_place_seed(TrackDecor.TYPE_ROCK)
+	_roll_decor_place_seed(TrackDecor.TYPE_BLEACHERS)
 	_decor_select.pressed.connect(_on_decor_select_pressed)
 	_decor_tree.pressed.connect(_on_decor_tree_pressed)
 	_decor_rock.pressed.connect(_on_decor_rock_pressed)
+	_decor_bleachers.pressed.connect(_on_decor_bleachers_pressed)
 	_sync_decor_palette()
 
 
@@ -368,6 +377,12 @@ func _on_decor_rock_pressed() -> void:
 	if _updating_decor_ui:
 		return
 	_activate_decor_place_tool(TrackDecor.TYPE_ROCK)
+
+
+func _on_decor_bleachers_pressed() -> void:
+	if _updating_decor_ui:
+		return
+	_activate_decor_place_tool(TrackDecor.TYPE_BLEACHERS)
 
 
 func _activate_decor_place_tool(type_id: String) -> void:
@@ -422,6 +437,8 @@ func _refresh_decor_place_icon(type_id: String) -> void:
 	match id:
 		TrackDecor.TYPE_ROCK:
 			_decor_rock.icon = tex
+		TrackDecor.TYPE_BLEACHERS:
+			_decor_bleachers.icon = tex
 		_:
 			_decor_tree.icon = tex
 
@@ -439,6 +456,7 @@ func _sync_decor_palette() -> void:
 	_decor_select.set_pressed_no_signal(_decor_brush == TrackDecor.TOOL_SELECT)
 	_decor_tree.set_pressed_no_signal(_decor_brush == TrackDecor.TYPE_TREE)
 	_decor_rock.set_pressed_no_signal(_decor_brush == TrackDecor.TYPE_ROCK)
+	_decor_bleachers.set_pressed_no_signal(_decor_brush == TrackDecor.TYPE_BLEACHERS)
 	_updating_decor_ui = false
 	if TrackDecor.is_place_brush(_decor_brush):
 		_decor_ghost_seed = int(_decor_place_seeds.get(_decor_brush, 1))
@@ -847,6 +865,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_S and (event.ctrl_pressed or event.meta_pressed):
 			_on_save()
+			get_viewport().set_input_as_handled()
+			return
+		if (
+			_edit_mode == EditMode.DECOR
+			and (event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE)
+			and _remove_selected_decorations()
+		):
 			get_viewport().set_input_as_handled()
 			return
 	if _spline == null or _edit_mode != EditMode.TRACE:
@@ -1772,6 +1797,15 @@ func _draw_decor_oriented_handles(
 			frame,
 			true
 		)
+	if TrackDecor.uses_free_size(str(item.type)):
+		var edge_r := handle_r * 0.85
+		for mid in TrackDecor.selection_edge_mids(item):
+			var ep: Vector2 = xform * mid
+			_canvas.draw_rect(
+				Rect2(ep - Vector2(edge_r, edge_r), Vector2(edge_r, edge_r) * 2.0),
+				frame,
+				true
+			)
 	var rot_world := TrackDecor.rotate_handle_world(item)
 	var rot_screen: Vector2 = xform * rot_world
 	var top_mid: Vector2 = xform * corners[0].lerp(corners[1], 0.5)
@@ -2007,6 +2041,7 @@ func _on_decor_gui_input(event: InputEvent) -> void:
 
 func _clear_decor_drag() -> void:
 	_drag_decor_mode = ""
+	_drag_decor_handle = ""
 	_drag_decor_snapshots.clear()
 
 
@@ -2082,9 +2117,19 @@ func _decor_handle_at_screen(screen: Vector2) -> String:
 		var rot_s: Vector2 = view * TrackDecor.rotate_handle_world(item)
 		if screen.distance_to(rot_s) <= thresh:
 			return "rotate"
-		for corner in TrackDecor.selection_corners(item):
-			if screen.distance_to(view * corner) <= thresh:
+		var corners := TrackDecor.selection_corners(item)
+		var corner_ids := ["nw", "ne", "se", "sw"]
+		for i in mini(corners.size(), corner_ids.size()):
+			if screen.distance_to(view * corners[i]) <= thresh:
+				if TrackDecor.uses_free_size(str(item.type)):
+					return "resize:%s" % corner_ids[i]
 				return "scale"
+		if TrackDecor.uses_free_size(str(item.type)):
+			var edge_ids := ["n", "e", "s", "w"]
+			var mids := TrackDecor.selection_edge_mids(item)
+			for j in mini(mids.size(), edge_ids.size()):
+				if screen.distance_to(view * mids[j]) <= thresh:
+					return "resize:%s" % edge_ids[j]
 		return ""
 	var aabb := _decor_selection_aabb()
 	if aabb.size.x <= 0.0 or aabb.size.y <= 0.0:
@@ -2132,7 +2177,12 @@ func _begin_decor_group_drag(mode: String, world: Vector2) -> void:
 	if _selected_decors.is_empty():
 		_clear_decor_drag()
 		return
-	_drag_decor_mode = mode
+	_drag_decor_handle = ""
+	if mode.begins_with("resize:"):
+		_drag_decor_mode = "resize"
+		_drag_decor_handle = mode.substr("resize:".length())
+	else:
+		_drag_decor_mode = mode
 	_drag_decor_start_mouse = world
 	_drag_decor_snapshots.clear()
 	for idx_v in _selected_decors:
@@ -2169,6 +2219,8 @@ func _continue_decor_drag(world: Vector2) -> void:
 				var start_pos: Vector2 = start_item.position
 				item.position = start_pos + move_delta
 				_decorations[idx] = item
+		"resize":
+			_continue_decor_free_resize(world)
 		"scale":
 			var dist: float = (world - _drag_decor_pivot).length()
 			var ratio: float = dist / _drag_decor_start_dist
@@ -2179,7 +2231,11 @@ func _continue_decor_drag(world: Vector2) -> void:
 				var item2 := start2.duplicate(true)
 				var start_pos2: Vector2 = start2.position
 				item2.position = _drag_decor_pivot + (start_pos2 - _drag_decor_pivot) * ratio
-				item2.scale = TrackDecor.clamp_scale(float(start2.scale) * ratio)
+				if TrackDecor.uses_free_size(str(start2.type)):
+					var start_sz: Vector2 = start2.size
+					item2.size = TrackDecor.clamp_bleacher_size(start_sz * ratio)
+				else:
+					item2.scale = TrackDecor.clamp_scale(float(start2.scale) * ratio)
 				_decorations[idx2] = item2
 		"rotate":
 			var ang: float = (world - _drag_decor_pivot).angle()
@@ -2197,6 +2253,69 @@ func _continue_decor_drag(world: Vector2) -> void:
 			return
 	_dirty = true
 	_canvas.queue_redraw()
+
+
+func _continue_decor_free_resize(world: Vector2) -> void:
+	## Resize largeur×hauteur d'un seul gradin: le côté/coin opposé reste ancré.
+	if _drag_decor_snapshots.size() != 1 or _drag_decor_handle.is_empty():
+		return
+	var snap: Dictionary = _drag_decor_snapshots[0]
+	var start: Dictionary = snap.item
+	if not TrackDecor.uses_free_size(str(start.type)):
+		return
+	var rot := float(start.rotation)
+	var start_pos: Vector2 = start.position
+	var start_sz: Vector2 = start.size
+	var hx := start_sz.x * 0.5
+	var hy := start_sz.y * 0.5
+	## Coins locaux du cadre de hit (sans HIT_PAD) — taille visuelle réelle.
+	var local_mouse: Vector2 = (world - start_pos).rotated(-rot)
+	var min_v := Vector2(-hx, -hy)
+	var max_v := Vector2(hx, hy)
+	var h := _drag_decor_handle
+	if h.contains("w"):
+		min_v.x = local_mouse.x
+	if h.contains("e"):
+		max_v.x = local_mouse.x
+	if h.contains("n"):
+		min_v.y = local_mouse.y
+	if h.contains("s"):
+		max_v.y = local_mouse.y
+	## Empêche l'inversion: impose une taille minimale avant clamp/snap.
+	if max_v.x < min_v.x + TrackDecor.BLEACHER_MIN_WIDTH:
+		if h.contains("w"):
+			min_v.x = max_v.x - TrackDecor.BLEACHER_MIN_WIDTH
+		else:
+			max_v.x = min_v.x + TrackDecor.BLEACHER_MIN_WIDTH
+	if max_v.y < min_v.y + TrackDecor.BLEACHER_TIER_DEPTH:
+		if h.contains("n"):
+			min_v.y = max_v.y - TrackDecor.BLEACHER_TIER_DEPTH
+		else:
+			max_v.y = min_v.y + TrackDecor.BLEACHER_TIER_DEPTH
+	var raw_size := max_v - min_v
+	var new_size := TrackDecor.clamp_bleacher_size(raw_size)
+	## Recaler le bord déplacé pour respecter le snap d'étages / clamp largeur.
+	if h.contains("w"):
+		min_v.x = max_v.x - new_size.x
+	elif h.contains("e"):
+		max_v.x = min_v.x + new_size.x
+	else:
+		var cx := (min_v.x + max_v.x) * 0.5
+		min_v.x = cx - new_size.x * 0.5
+		max_v.x = cx + new_size.x * 0.5
+	if h.contains("n"):
+		min_v.y = max_v.y - new_size.y
+	elif h.contains("s"):
+		max_v.y = min_v.y + new_size.y
+	else:
+		var cy := (min_v.y + max_v.y) * 0.5
+		min_v.y = cy - new_size.y * 0.5
+		max_v.y = cy + new_size.y * 0.5
+	var new_center_local := (min_v + max_v) * 0.5
+	var item := start.duplicate(true)
+	item.size = new_size
+	item.position = start_pos + new_center_local.rotated(rot)
+	_decorations[int(snap.index)] = item
 
 
 func _finish_decor_marquee() -> void:
@@ -2227,10 +2346,18 @@ func _on_decor_place_press(world: Vector2) -> void:
 	_clear_decor_drag()
 	_selected_decors.clear()
 	var place_pos := _decor_ghost_pos if _decor_ghost_active else world
-	_decorations.append(TrackDecor.make_item(_decor_brush, place_pos, _decor_ghost_seed))
-	_roll_decor_ghost_seed()
-	_decor_ghost_pos = place_pos
-	_decor_ghost_active = true
+	var brush := _decor_brush
+	_decorations.append(TrackDecor.make_item(brush, place_pos, _decor_ghost_seed))
+	var placed_i := _decorations.size() - 1
+	if TrackDecor.uses_free_size(brush):
+		## Gradins: passer en sélection pour pouvoir redimensionner tout de suite.
+		_roll_decor_place_seed(brush)
+		_set_decor_brush(TrackDecor.TOOL_SELECT)
+		_set_decor_selection([placed_i])
+	else:
+		_roll_decor_ghost_seed()
+		_decor_ghost_pos = place_pos
+		_decor_ghost_active = true
 	_dirty = true
 	_canvas.queue_redraw()
 
@@ -2253,6 +2380,25 @@ func _remove_decoration_at(index: int) -> void:
 		_clear_decor_drag()
 	_dirty = true
 	_canvas.queue_redraw()
+
+
+func _remove_selected_decorations() -> bool:
+	_prune_decor_selection()
+	if _selected_decors.is_empty():
+		return false
+	var indices: Array = _selected_decors.duplicate()
+	indices.sort()
+	## Supprimer du plus grand index au plus petit pour ne pas décaler.
+	indices.reverse()
+	_clear_decor_drag()
+	for idx_v in indices:
+		var idx := int(idx_v)
+		if idx >= 0 and idx < _decorations.size():
+			_decorations.remove_at(idx)
+	_selected_decors.clear()
+	_dirty = true
+	_canvas.queue_redraw()
+	return true
 
 
 func _on_spaces_gui_input(event: InputEvent) -> void:

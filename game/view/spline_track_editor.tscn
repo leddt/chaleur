@@ -1,6 +1,6 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene format=3 uid="uid://crvb1t8bi1xdt"]
 
-[ext_resource type="Script" path="res://view/spline_track_editor.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://cyb455xbjgswy" path="res://view/spline_track_editor.gd" id="1_script"]
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_algo"]
 
@@ -12,7 +12,7 @@
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_decor"]
 
-[node name="SplineTrackEditor" type="Control"]
+[node name="SplineTrackEditor" type="Control" unique_id=1402217437]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -21,7 +21,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=1326102883]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -30,7 +30,7 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.106, 0.114, 0.129, 1)
 
-[node name="Root" type="VBoxContainer" parent="."]
+[node name="Root" type="VBoxContainer" parent="." unique_id=320174697]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -39,115 +39,114 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 6
 
-[node name="TopBar" type="HBoxContainer" parent="Root"]
+[node name="TopBar" type="HBoxContainer" parent="Root" unique_id=323888166]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Title" type="Label" parent="Root/TopBar"]
+[node name="Title" type="Label" parent="Root/TopBar" unique_id=1184482065]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
 text = "Créateur de piste"
 
-[node name="BuiltinCheck" type="CheckBox" parent="Root/TopBar"]
+[node name="BuiltinCheck" type="CheckBox" parent="Root/TopBar" unique_id=331413953]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-text = "Built-in (ressources)"
 tooltip_text = "Enregistrer dans res://tracks (debug uniquement)"
+text = "Built-in (ressources)"
 
-[node name="SaveButton" type="Button" parent="Root/TopBar"]
+[node name="SaveButton" type="Button" parent="Root/TopBar" unique_id=638010588]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Enregistrer"
 
-[node name="BackButton" type="Button" parent="Root/TopBar"]
+[node name="BackButton" type="Button" parent="Root/TopBar" unique_id=496166146]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Menu"
 
-[node name="MainRow" type="HBoxContainer" parent="Root"]
+[node name="MainRow" type="HBoxContainer" parent="Root" unique_id=595062980]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 8
 
-[node name="Canvas" type="Control" parent="Root/MainRow"]
+[node name="Canvas" type="Control" parent="Root/MainRow" unique_id=2044439881]
 unique_name_in_owner = true
 clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-mouse_filter = 0
 
-[node name="SidePanel" type="PanelContainer" parent="Root/MainRow"]
+[node name="SidePanel" type="PanelContainer" parent="Root/MainRow" unique_id=834961173]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Margin" type="MarginContainer" parent="Root/MainRow/SidePanel"]
+[node name="Margin" type="MarginContainer" parent="Root/MainRow/SidePanel" unique_id=585844418]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="PanelVBox" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin"]
+[node name="PanelVBox" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin" unique_id=925400590]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="NameSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="NameSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=1592202775]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="NameTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection"]
+[node name="NameTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection" unique_id=1661997536]
 layout_mode = 2
 text = "Nom de la piste"
 
-[node name="TrackNameEdit" type="LineEdit" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection"]
+[node name="TrackNameEdit" type="LineEdit" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection" unique_id=1612063296]
 unique_name_in_owner = true
 layout_mode = 2
 placeholder_text = "Nouvelle piste"
 caret_blink = true
 
-[node name="PrioSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="PrioSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=1594486706]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="PrioTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+[node name="PrioTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection" unique_id=1141386807]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Segmentation"
 
-[node name="AlgoRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+[node name="AlgoRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection" unique_id=812716862]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="AlgoCenter" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/AlgoRow"]
+[node name="AlgoCenter" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/AlgoRow" unique_id=1156105594]
 unique_name_in_owner = true
 layout_mode = 2
 button_group = SubResource("ButtonGroup_algo")
 text = "Centre"
 
-[node name="AlgoInner" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/AlgoRow"]
+[node name="AlgoInner" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/AlgoRow" unique_id=1766880504]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 button_group = SubResource("ButtonGroup_algo")
 text = "Intérieur"
 
-[node name="AlgoAdaptive" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/AlgoRow"]
+[node name="AlgoAdaptive" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/AlgoRow" unique_id=438307526]
 unique_name_in_owner = true
 layout_mode = 2
 button_group = SubResource("ButtonGroup_algo")
 text = "Adaptatif"
 
-[node name="SegModeRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+[node name="SegModeRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection" unique_id=364159601]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="SegModeAuto" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/SegModeRow"]
+[node name="SegModeAuto" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/SegModeRow" unique_id=1191062133]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -156,7 +155,7 @@ button_pressed = true
 button_group = SubResource("ButtonGroup_seg_mode")
 text = "Automatique"
 
-[node name="SegModeFixed" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/SegModeRow"]
+[node name="SegModeFixed" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/SegModeRow" unique_id=1697750443]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -164,17 +163,17 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_seg_mode")
 text = "Fixe"
 
-[node name="LenRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+[node name="LenRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection" unique_id=1602076761]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="LenLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/LenRow"]
+[node name="LenLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/LenRow" unique_id=837965330]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Longueur"
 
-[node name="SpaceLenSlider" type="HSlider" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/LenRow"]
+[node name="SpaceLenSlider" type="HSlider" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/LenRow" unique_id=564263654]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -182,26 +181,25 @@ size_flags_vertical = 1
 min_value = 20.0
 max_value = 80.0
 value = 36.0
-step = 1.0
 
-[node name="SpaceLenValue" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/LenRow"]
+[node name="SpaceLenValue" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/LenRow" unique_id=975169270]
 unique_name_in_owner = true
-layout_mode = 2
 custom_minimum_size = Vector2(44, 0)
+layout_mode = 2
 text = "36 px"
 horizontal_alignment = 2
 
-[node name="CountRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+[node name="CountRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection" unique_id=1226962908]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="CountLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/CountRow"]
+[node name="CountLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/CountRow" unique_id=2089680821]
 layout_mode = 2
 text = "Cases"
 
-[node name="SpaceCountSpin" type="SpinBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/CountRow"]
+[node name="SpaceCountSpin" type="SpinBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/CountRow" unique_id=750848791]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -211,28 +209,28 @@ value = 24.0
 rounded = true
 suffix = "cases"
 
-[node name="HideSpaceNumbers" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection"]
+[node name="HideSpaceNumbers" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection" unique_id=1036301829]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Masquer numéros de cases"
 
-[node name="EditSep" type="HSeparator" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="EditSep" type="HSeparator" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=1225383419]
 layout_mode = 2
 
-[node name="EditSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="EditSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=414729703]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="EditTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection"]
+[node name="EditTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection" unique_id=661413862]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "Édition"
 
-[node name="ModeRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection"]
+[node name="ModeRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection" unique_id=1310735849]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="ModeTrace" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow"]
+[node name="ModeTrace" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow" unique_id=1740522518]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -241,7 +239,7 @@ button_pressed = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Tracé"
 
-[node name="ModeSpaces" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow"]
+[node name="ModeSpaces" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow" unique_id=1932417627]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -249,7 +247,7 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Cases"
 
-[node name="ModeSectors" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow"]
+[node name="ModeSectors" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow" unique_id=1776243916]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -257,7 +255,7 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Secteurs"
 
-[node name="ModeDecor" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow"]
+[node name="ModeDecor" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow" unique_id=914100025]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -265,74 +263,74 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Décor"
 
-[node name="TraceSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="TraceSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=584460077]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="TypeLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection"]
+[node name="TypeLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection" unique_id=531559840]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Type du point"
 
-[node name="TypeRow" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection"]
+[node name="TypeRow" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection" unique_id=1521107474]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="TypeAuto" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection/TypeRow"]
+[node name="TypeAuto" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection/TypeRow" unique_id=1175080112]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 button_group = SubResource("ButtonGroup_type")
 text = "Auto"
 
-[node name="TypeTension" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection/TypeRow"]
+[node name="TypeTension" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection/TypeRow" unique_id=2104631078]
 unique_name_in_owner = true
 layout_mode = 2
 button_group = SubResource("ButtonGroup_type")
 text = "Tension"
 
-[node name="TypeFree" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection/TypeRow"]
+[node name="TypeFree" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/TraceSection/TypeRow" unique_id=1520469561]
 unique_name_in_owner = true
 layout_mode = 2
 button_group = SubResource("ButtonGroup_type")
 text = "Libre"
 
-[node name="SpacesSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="SpacesSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=930593195]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="SetStartButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection"]
+[node name="SetStartButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection" unique_id=610521056]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
 text = "Définir comme case départ"
 
-[node name="SetCornerButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection"]
+[node name="SetCornerButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection" unique_id=1293505976]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 disabled = true
 text = "Ajouter virage"
 
-[node name="CornerDetails" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection"]
+[node name="CornerDetails" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection" unique_id=368508535]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="SpeedRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails"]
+[node name="SpeedRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails" unique_id=89939275]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="CornerSpeedLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SpeedRow"]
+[node name="CornerSpeedLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SpeedRow" unique_id=593786555]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Vitesse:"
 
-[node name="CornerSpeedSpin" type="SpinBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SpeedRow"]
+[node name="CornerSpeedSpin" type="SpinBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SpeedRow" unique_id=2132240207]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -341,48 +339,48 @@ max_value = 8.0
 value = 4.0
 rounded = true
 
-[node name="SideRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails"]
+[node name="SideRow" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails" unique_id=12001263]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="CornerSideLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SideRow"]
+[node name="CornerSideLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SideRow" unique_id=1968345007]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Position de l'indicateur"
 autowrap_mode = 3
 
-[node name="CornerSideButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SideRow"]
+[node name="CornerSideButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/CornerDetails/SideRow" unique_id=516770235]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Côté d'affichage de la limite (réinitialise le décalage)"
 disabled = true
 text = "Extérieur"
-tooltip_text = "Côté d'affichage de la limite (réinitialise le décalage)"
 
-[node name="KerbDetails" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection"]
+[node name="KerbDetails" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection" unique_id=736281074]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="KerbInsideCheck" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/KerbDetails"]
+[node name="KerbInsideCheck" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/KerbDetails" unique_id=384584631]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Kerb intérieur"
 tooltip_text = "Bande vibreurs rouge/crème sur le bord géométrique intérieur"
+text = "Kerb intérieur"
 
-[node name="KerbOutsideCheck" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/KerbDetails"]
+[node name="KerbOutsideCheck" type="CheckBox" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SpacesSection/KerbDetails" unique_id=1934480656]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Kerb extérieur"
 tooltip_text = "Bande vibreurs rouge/crème sur le bord géométrique extérieur"
+text = "Kerb extérieur"
 
-[node name="SectorsSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="SectorsSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=2120193149]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="SectorHint" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection"]
+[node name="SectorHint" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection" unique_id=1557629900]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.74, 0.78, 1)
@@ -390,92 +388,84 @@ theme_override_font_sizes/font_size = 12
 text = "Clique une case pour sélectionner son secteur."
 autowrap_mode = 3
 
-[node name="SectorInfoLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection"]
+[node name="SectorInfoLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection" unique_id=2097525275]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Aucun secteur sélectionné"
 autowrap_mode = 3
 
-[node name="SectorRaceLineButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection"]
+[node name="SectorRaceLineButton" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection" unique_id=1009297506]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Inverse quel côté du ruban est le spot 0 (ligne de course)"
 disabled = true
 text = "Ligne de course : intérieure"
-tooltip_text = "Inverse quel côté du ruban est le spot 0 (ligne de course)"
 
-[node name="DecorSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="DecorSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=1600373689]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="GroundTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection"]
+[node name="GroundTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection" unique_id=837241709]
 layout_mode = 2
 text = "Sol"
 
-[node name="GroundThemeOption" type="OptionButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection"]
+[node name="GroundThemeOption" type="OptionButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection" unique_id=2080809321]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="DecorItemsTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection"]
+[node name="DecorItemsTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection" unique_id=1298497657]
 layout_mode = 2
 text = "Éléments"
 
-[node name="DecorPalette" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection"]
+[node name="DecorPalette" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection" unique_id=950074986]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="DecorSelect" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette"]
+[node name="DecorSelect" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette" unique_id=997983478]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(52, 52)
+custom_minimum_size = Vector2(48, 48)
 layout_mode = 2
+tooltip_text = "Sélection"
 toggle_mode = true
 button_pressed = true
 button_group = SubResource("ButtonGroup_decor")
-text = ""
-flat = false
 expand_icon = true
-tooltip_text = "Sélection"
 
-[node name="DecorTree" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette"]
+[node name="DecorTree" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette" unique_id=125999200]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(52, 52)
+custom_minimum_size = Vector2(48, 48)
 layout_mode = 2
-toggle_mode = true
-button_group = SubResource("ButtonGroup_decor")
-text = ""
-flat = false
-expand_icon = true
 tooltip_text = "Arbre"
-
-[node name="DecorRock" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(52, 52)
-layout_mode = 2
 toggle_mode = true
 button_group = SubResource("ButtonGroup_decor")
-text = ""
-flat = false
 expand_icon = true
+
+[node name="DecorRock" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette" unique_id=797619678]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
 tooltip_text = "Roche"
-
-[node name="DecorBleachers" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(52, 52)
-layout_mode = 2
 toggle_mode = true
 button_group = SubResource("ButtonGroup_decor")
-text = ""
-flat = false
 expand_icon = true
-tooltip_text = "Gradins"
 
-[node name="PanelSpacer" type="Control" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="DecorBleachers" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette" unique_id=133179533]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+tooltip_text = "Gradins"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_decor")
+expand_icon = true
+
+[node name="PanelSpacer" type="Control" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=490134924]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="SummaryLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+[node name="SummaryLabel" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox" unique_id=1152424887]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.74, 0.78, 1)

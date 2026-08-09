@@ -79,6 +79,8 @@ const FIT_MARGIN := 24.0
 
 var _spline: TrackSpline
 var _track_name: String = ""
+## Temporary draw target for paint layers (decor / handles).
+var _draw_target: CanvasItem
 var _ground_theme: String = TrackGround.DEFAULT_THEME
 ## Placeable scenery items: Array[{type, position:Vector2, seed}].
 var _decorations: Array = []
@@ -1478,6 +1480,10 @@ func _refresh_info() -> void:
 	_refresh_summary()
 
 
+func _ink() -> CanvasItem:
+	return _draw_target if _draw_target != null else _canvas
+
+
 func _on_canvas_draw() -> void:
 	if _spline == null:
 		return
@@ -1492,10 +1498,8 @@ func _on_canvas_draw() -> void:
 	var baked := _spline.baked_points()
 	if baked.size() >= 2:
 		_draw_track(baked, font, xform)
-
-	if _edit_mode == EditMode.TRACE:
+	elif _edit_mode == EditMode.TRACE:
 		_draw_control_points(font, xform)
-	_sync_preview_cars()
 
 
 func _compose_view_xform() -> Transform2D:
@@ -1642,6 +1646,7 @@ func _ensure_preview_cars() -> void:
 	if _cars_layer == null:
 		_cars_layer = Node2D.new()
 		_cars_layer.name = "PreviewCars"
+		_cars_layer.z_index = 10
 		_canvas.add_child(_cars_layer)
 		_apply_view_to_cars()
 		if _reset_view_btn != null:
@@ -1710,20 +1715,21 @@ func _paint_context(font: Font) -> SplineTrackPainter.Context:
 
 func _draw_track(baked: PackedVector2Array, font: Font, xform: Transform2D) -> void:
 	var ctx := _paint_context(font)
-	var body := SplineTrackPainter.Options.new()
-	body.asphalt = true
-	body.race_line = true
-	body.centerline = true
-	SplineTrackPainter.draw(_canvas, baked, ctx, body, xform)
-	_draw_selection_fills(xform)
-	var overlays := SplineTrackPainter.editor_roadmap_options(_hide_space_numbers.button_pressed)
-	overlays.asphalt = false
-	overlays.race_line = false
-	overlays.centerline = false
-	SplineTrackPainter.draw(_canvas, baked, ctx, overlays, xform)
-	TrackDecor.draw(_canvas, _decorations, xform)
-	_draw_decor_ghost(xform)
-	_draw_decor_selection(xform)
+	var opts := SplineTrackPainter.editor_roadmap_options(_hide_space_numbers.button_pressed)
+	var after_asphalt := func(c: CanvasItem) -> void:
+		_draw_target = c
+		_draw_selection_fills(xform)
+		_draw_target = null
+	var after_road := func(c: CanvasItem) -> void:
+		_draw_target = c
+		TrackDecor.draw(c, _decorations, xform)
+		_draw_decor_ghost(xform)
+		_draw_decor_selection(xform)
+		if _edit_mode == EditMode.TRACE:
+			_draw_control_points(font, xform)
+		_draw_target = null
+	SplineTrackPainter.draw(_canvas, baked, ctx, opts, xform, after_asphalt, after_road)
+	_sync_preview_cars()
 
 
 func _draw_decor_ghost(xform: Transform2D) -> void:
@@ -1732,7 +1738,7 @@ func _draw_decor_ghost(xform: Transform2D) -> void:
 	if not TrackDecor.is_place_brush(_decor_brush) or not _decor_ghost_active:
 		return
 	var ghost := TrackDecor.make_item(_decor_brush, _decor_ghost_pos, _decor_ghost_seed)
-	TrackDecor.draw_item(_canvas, ghost, xform, 0.45)
+	TrackDecor.draw_item(_ink(), ghost, xform, 0.45)
 
 
 func _draw_decor_selection(xform: Transform2D) -> void:
@@ -1767,8 +1773,8 @@ func _draw_decor_marquee(xform: Transform2D) -> void:
 	var fill := Color(0.5, 0.78, 1.0, 0.12)
 	var edge := Color(0.5, 0.78, 1.0, 0.85)
 	var z := absf(xform.get_scale().x)
-	_canvas.draw_rect(rect, fill, true)
-	_canvas.draw_rect(rect, edge, false, maxf(1.0, 1.5 * z), true)
+	_ink().draw_rect(rect, fill, true)
+	_ink().draw_rect(rect, edge, false, maxf(1.0, 1.5 * z), true)
 
 
 func _draw_decor_item_frame(item: Dictionary, xform: Transform2D, frame: Color, line_w: float) -> void:
@@ -1779,7 +1785,7 @@ func _draw_decor_item_frame(item: Dictionary, xform: Transform2D, frame: Color, 
 	for c in corners:
 		loop.append(xform * c)
 	loop.append(loop[0])
-	_canvas.draw_polyline(loop, frame, line_w, true)
+	_ink().draw_polyline(loop, frame, line_w, true)
 
 
 func _draw_decor_oriented_handles(
@@ -1792,7 +1798,7 @@ func _draw_decor_oriented_handles(
 		return
 	for c2 in corners:
 		var p: Vector2 = xform * c2
-		_canvas.draw_rect(
+		_ink().draw_rect(
 			Rect2(p - Vector2(handle_r, handle_r), Vector2(handle_r, handle_r) * 2.0),
 			frame,
 			true
@@ -1801,7 +1807,7 @@ func _draw_decor_oriented_handles(
 		var edge_r := handle_r * 0.85
 		for mid in TrackDecor.selection_edge_mids(item):
 			var ep: Vector2 = xform * mid
-			_canvas.draw_rect(
+			_ink().draw_rect(
 				Rect2(ep - Vector2(edge_r, edge_r), Vector2(edge_r, edge_r) * 2.0),
 				frame,
 				true
@@ -1809,9 +1815,9 @@ func _draw_decor_oriented_handles(
 	var rot_world := TrackDecor.rotate_handle_world(item)
 	var rot_screen: Vector2 = xform * rot_world
 	var top_mid: Vector2 = xform * corners[0].lerp(corners[1], 0.5)
-	_canvas.draw_line(top_mid, rot_screen, frame, line_w, true)
-	_canvas.draw_circle(rot_screen, handle_r * 1.15, frame, true, -1.0, true)
-	_canvas.draw_arc(
+	_ink().draw_line(top_mid, rot_screen, frame, line_w, true)
+	_ink().draw_circle(rot_screen, handle_r * 1.15, frame, true, -1.0, true)
+	_ink().draw_arc(
 		rot_screen,
 		handle_r * 0.7,
 		-PI * 0.75,
@@ -1832,10 +1838,10 @@ func _draw_decor_group_handles(xform: Transform2D, frame: Color, line_w: float, 
 	for c in corners:
 		loop.append(xform * c)
 	loop.append(loop[0])
-	_canvas.draw_polyline(loop, frame, line_w, true)
+	_ink().draw_polyline(loop, frame, line_w, true)
 	for c2 in corners:
 		var p: Vector2 = xform * c2
-		_canvas.draw_rect(
+		_ink().draw_rect(
 			Rect2(p - Vector2(handle_r, handle_r), Vector2(handle_r, handle_r) * 2.0),
 			frame,
 			true
@@ -1843,9 +1849,9 @@ func _draw_decor_group_handles(xform: Transform2D, frame: Color, line_w: float, 
 	var rot_world := _decor_group_rotate_handle(aabb)
 	var rot_screen: Vector2 = xform * rot_world
 	var top_mid: Vector2 = xform * corners[0].lerp(corners[1], 0.5)
-	_canvas.draw_line(top_mid, rot_screen, frame, line_w, true)
-	_canvas.draw_circle(rot_screen, handle_r * 1.15, frame, true, -1.0, true)
-	_canvas.draw_arc(
+	_ink().draw_line(top_mid, rot_screen, frame, line_w, true)
+	_ink().draw_circle(rot_screen, handle_r * 1.15, frame, true, -1.0, true)
+	_ink().draw_arc(
 		rot_screen,
 		handle_r * 0.7,
 		-PI * 0.75,
@@ -1877,17 +1883,17 @@ func _draw_control_points(font: Font, xform: Transform2D) -> void:
 			var out_h := xform * _spline.out_handle_world(i)
 			var out_col := Color(0.35, 0.75, 1.0, 0.9)
 			var in_col := Color(0.75, 0.45, 1.0, 0.9) if cp.type == TrackSpline.PointType.FREE else out_col
-			_canvas.draw_line(pos, out_h, out_col, 1.5 * z, true)
-			_canvas.draw_line(pos, in_h, in_col, 1.5 * z, true)
+			_ink().draw_line(pos, out_h, out_col, 1.5 * z, true)
+			_ink().draw_line(pos, in_h, in_col, 1.5 * z, true)
 			var in_r := (6.0 if cp.type == TrackSpline.PointType.FREE else 3.5) * z
-			_canvas.draw_circle(out_h, 6.0 * z, out_col, true, -1.0, true)
-			_canvas.draw_circle(in_h, in_r, in_col, true, -1.0, true)
+			_ink().draw_circle(out_h, 6.0 * z, out_col, true, -1.0, true)
+			_ink().draw_circle(in_h, in_r, in_col, true, -1.0, true)
 
 		var fill := _point_fill_color(cp.type, selected)
 		var radius := (10.0 if selected else 8.0) * z
-		_canvas.draw_circle(pos, radius, fill, true, -1.0, true)
-		_canvas.draw_arc(pos, radius, 0.0, TAU, 24, Color.WHITE if selected else Color(0, 0, 0, 0.7), 2.0 * z, true)
-		_canvas.draw_string(
+		_ink().draw_circle(pos, radius, fill, true, -1.0, true)
+		_ink().draw_arc(pos, radius, 0.0, TAU, 24, Color.WHITE if selected else Color(0, 0, 0, 0.7), 2.0 * z, true)
+		_ink().draw_string(
 			font,
 			pos + Vector2(12, -8) * z,
 			"%d %s" % [i + 1, _type_letter(cp.type)],
@@ -1928,7 +1934,7 @@ func _draw_fill_tri(a: Vector2, b: Vector2, c: Vector2, color: Color, xform: Tra
 	var area2 := absf((b - a).cross(c - a))
 	if area2 < 0.05:
 		return
-	_canvas.draw_colored_polygon(PackedVector2Array([xform * a, xform * b, xform * c]), color)
+	_ink().draw_colored_polygon(PackedVector2Array([xform * a, xform * b, xform * c]), color)
 
 
 func _corner_badge_natural(frontier: TrackSegmenter.Frontier, outside: bool) -> Vector2:

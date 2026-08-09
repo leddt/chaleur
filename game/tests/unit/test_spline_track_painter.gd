@@ -57,6 +57,14 @@ func test_preview_options_omit_race_overlays() -> void:
 	assert_false(o.start_grid)
 
 
+func test_asphalt_shader_material_configured() -> void:
+	var mat := SplineTrackPainter._asphalt_mat()
+	assert_true(mat != null)
+	assert_true(mat.shader != null)
+	assert_gt(SplineTrackPainter.ASPHALT_GRAIN_WORLD, 0.0)
+	assert_eq(mat.get_shader_parameter("grain_world"), SplineTrackPainter.ASPHALT_GRAIN_WORLD)
+
+
 func test_context_stores_striped_kerb_sides() -> void:
 	var ctx := SplineTrackPainter.Context.new()
 	ctx.kerbs = {

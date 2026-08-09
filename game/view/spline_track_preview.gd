@@ -41,6 +41,7 @@ func clear_track() -> void:
 	_decorations.clear()
 	_sector_flip_race_line.clear()
 	_set_ground_theme(TrackGround.DEFAULT_THEME)
+	SplineTrackPainter.clear_paint_layers(self)
 	queue_redraw()
 
 
@@ -156,12 +157,20 @@ func _space_race_line_flipped(space: int) -> bool:
 func _draw() -> void:
 	var bg := Rect2(Vector2.ZERO, size)
 	if not has_track():
+		SplineTrackPainter.clear_paint_layers(self)
 		_draw_placeholder()
 		return
 	var world := SplineTrackPainter.bounds(_baked, _ctx.half_width)
 	var xform := SplineTrackPainter.fit_transform(world, bg, 18.0)
-	SplineTrackPainter.draw(self, _baked, _ctx, _opts, xform)
-	TrackDecor.draw(self, _decorations, xform)
+	SplineTrackPainter.draw(
+		self,
+		_baked,
+		_ctx,
+		_opts,
+		xform,
+		Callable(),
+		func(c: CanvasItem) -> void: TrackDecor.draw(c, _decorations, xform)
+	)
 
 
 func _set_ground_theme(theme_id: String) -> void:

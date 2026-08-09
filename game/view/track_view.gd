@@ -49,6 +49,7 @@ func _ready() -> void:
 	_ground = TrackGround.attach(self, TrackGround.DEFAULT_THEME)
 	_cars_layer = Node2D.new()
 	_cars_layer.name = "Cars"
+	_cars_layer.z_index = 10
 	add_child(_cars_layer)
 	_reset_btn = Button.new()
 	_reset_btn.name = "ResetView"
@@ -174,10 +175,34 @@ func _draw() -> void:
 		return
 	_ensure_fit(bind)
 	var opts := SplineTrackPainter.game_options()
-	SplineTrackPainter.draw(self, bind.baked_points(), bind.paint_context(), opts, _view_xform)
-	TrackDecor.draw(self, _decorations, _view_xform)
-	if show_space_debug:
-		_draw_space_debug(bind)
+	var xform := _view_xform
+	SplineTrackPainter.draw(
+		self,
+		bind.baked_points(),
+		bind.paint_context(),
+		opts,
+		xform,
+		Callable(),
+		func(c: CanvasItem) -> void:
+			TrackDecor.draw(c, _decorations, xform)
+			if show_space_debug:
+				_draw_space_debug_on(c, bind, xform)
+	)
+
+
+func _draw_space_debug_on(canvas: CanvasItem, bind: SplineTrackBind, xform: Transform2D) -> void:
+	for space in engine.track.space_count:
+		var poses := bind.space_slot_poses(space)
+		if poses.is_empty():
+			continue
+		var world: Vector2 = poses[0].pos
+		var pos: Vector2 = xform * world
+		var col := Color(1, 1, 0, 0.55)
+		if engine.track.corner_after(space) != null:
+			col = Color(0.2, 1, 0.3, 0.8)
+		if space == 0:
+			col = Color(1, 0.3, 0.3, 0.8)
+		canvas.draw_circle(pos, 4.0, col)
 
 
 func _sync_ground_theme() -> void:
@@ -289,18 +314,7 @@ func _handle_view_input(event: InputEvent) -> bool:
 
 
 func _draw_space_debug(bind: SplineTrackBind) -> void:
-	for space in engine.track.space_count:
-		var poses := bind.space_slot_poses(space)
-		if poses.is_empty():
-			continue
-		var world: Vector2 = poses[0].pos
-		var pos: Vector2 = _view_xform * world
-		var col := Color(1, 1, 0, 0.55)
-		if engine.track.corner_after(space) != null:
-			col = Color(0.2, 1, 0.3, 0.8)
-		if space == 0:
-			col = Color(1, 0.3, 0.3, 0.8)
-		draw_circle(pos, 4.0, col)
+	_draw_space_debug_on(self, bind, _view_xform)
 
 
 func _sync_cars() -> void:

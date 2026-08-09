@@ -13,6 +13,11 @@ const OUTER_SPOT_ALONG_OFFSET := 4.0
 
 const ASPHALT_COLOR := Color(0.28, 0.29, 0.31, 1.0)
 const ASPHALT_EDGE_COLOR := Color(0.18, 0.19, 0.21, 1.0)
+## World units per grain pixel (shader).
+const ASPHALT_GRAIN_WORLD := 1.15
+const ASPHALT_GRAIN_DARK := Color(0.24, 0.25, 0.26, 1.0)
+const ASPHALT_GRAIN_LIGHT := Color(0.31, 0.32, 0.34, 1.0)
+const ASPHALT_SHADER := preload("res://shaders/asphalt_grain.gdshader")
 const RACE_LINE_EDGE_COLOR := Color(0.58, 0.59, 0.62, 1.0)
 ## Red/cream vibeurs along geometric inside/outside edges (per-space).
 const KERB_THICKNESS := 5.5
@@ -157,35 +162,146 @@ static func fit_transform(world_rect: Rect2, viewport: Rect2, padding: float = 1
 	return xform
 
 
+## Lightweight Node2D used as an ordered paint layer under a host canvas.
+class PaintLayer:
+	extends Node2D
+
+	var _paint: Callable = Callable()
+
+	func set_paint(cb: Callable) -> void:
+		_paint = cb
+		queue_redraw()
+
+	func clear_paint() -> void:
+		_paint = Callable()
+		queue_redraw()
+
+	func _draw() -> void:
+		if _paint.is_valid():
+			_paint.call()
+
+
+static var _asphalt_material: ShaderMaterial
+
+
 static func draw(
 	canvas: CanvasItem,
 	baked: PackedVector2Array,
 	ctx: Context,
 	opts: Options = null,
 	xform: Transform2D = Transform2D.IDENTITY,
+	after_asphalt: Callable = Callable(),
+	after_road: Callable = Callable(),
 ) -> void:
 	if canvas == null or ctx == null:
 		return
 	var options := opts if opts != null else default_options()
-	# Solid race-line edges under asphalt: mitre spikes get covered by the band.
-	# Race width extends past KERB_THICKNESS so the outer lip survives striped kerbs drawn later.
+	var layers := _ensure_paint_layers(canvas)
+	_sync_asphalt_material(layers.asphalt, xform)
+
+	var under: PaintLayer = layers.under
+	var asphalt: PaintLayer = layers.asphalt
+	var over: PaintLayer = layers.over
+	var top: PaintLayer = layers.top
+
 	if options.race_line:
-		_draw_race_line_kerbs(canvas, ctx, xform)
+		under.set_paint(func() -> void: _draw_race_line_kerbs(under, ctx, xform))
+	else:
+		under.clear_paint()
+
 	if options.asphalt:
-		_draw_asphalt_band(canvas, baked, ctx.half_width, xform)
-		# Striped vibeurs sit just outside the asphalt edge.
-		_draw_striped_kerbs(canvas, ctx, xform)
-	if options.centerline:
-		_draw_centerline(canvas, baked, xform)
-	if (
-		options.spaces
-		or options.start_line
-		or options.corner_lines
-		or options.speed_limits
-		or options.space_numbers
-		or options.start_grid
-	):
-		_draw_space_overlays(canvas, ctx, options, xform)
+		asphalt.set_paint(
+			func() -> void: _draw_asphalt_band(asphalt, baked, ctx.half_width, xform)
+		)
+	else:
+		asphalt.clear_paint()
+
+	over.set_paint(
+		func() -> void:
+			if options.asphalt:
+				_draw_striped_kerbs(over, ctx, xform)
+			if after_asphalt.is_valid():
+				after_asphalt.call(over)
+			if options.centerline:
+				_draw_centerline(over, baked, xform)
+			if (
+				options.spaces
+				or options.start_line
+				or options.corner_lines
+				or options.speed_limits
+				or options.space_numbers
+				or options.start_grid
+			):
+				_draw_space_overlays(over, ctx, options, xform)
+	)
+
+	if after_road.is_valid():
+		top.set_paint(func() -> void: after_road.call(top))
+	else:
+		top.clear_paint()
+
+
+static func _asphalt_mat() -> ShaderMaterial:
+	if _asphalt_material == null:
+		_asphalt_material = ShaderMaterial.new()
+		_asphalt_material.shader = ASPHALT_SHADER
+		_asphalt_material.set_shader_parameter("base_color", ASPHALT_COLOR)
+		_asphalt_material.set_shader_parameter("dark_color", ASPHALT_GRAIN_DARK)
+		_asphalt_material.set_shader_parameter("light_color", ASPHALT_GRAIN_LIGHT)
+		_asphalt_material.set_shader_parameter("grain_world", ASPHALT_GRAIN_WORLD)
+	return _asphalt_material
+
+
+static func _sync_asphalt_material(asphalt_layer: CanvasItem, xform: Transform2D) -> void:
+	var mat := _asphalt_mat()
+	## screen = scale * world + origin  →  world = (screen - origin) / scale
+	mat.set_shader_parameter("xform_origin", xform.origin)
+	mat.set_shader_parameter("xform_scale", maxf(absf(xform.get_scale().x), 0.0001))
+	mat.set_shader_parameter("grain_world", ASPHALT_GRAIN_WORLD)
+	mat.set_shader_parameter("base_color", ASPHALT_COLOR)
+	mat.set_shader_parameter("dark_color", ASPHALT_GRAIN_DARK)
+	mat.set_shader_parameter("light_color", ASPHALT_GRAIN_LIGHT)
+	asphalt_layer.material = mat
+
+
+static func _ensure_paint_layers(host: CanvasItem) -> Dictionary:
+	var node := host as Node
+	assert(node != null, "SplineTrackPainter.draw host must be a Node")
+	var under := node.get_node_or_null("_PaintUnder") as PaintLayer
+	var asphalt := node.get_node_or_null("_PaintAsphalt") as PaintLayer
+	var over := node.get_node_or_null("_PaintOver") as PaintLayer
+	var top := node.get_node_or_null("_PaintTop") as PaintLayer
+	if under == null:
+		under = PaintLayer.new()
+		under.name = "_PaintUnder"
+		under.z_index = 1
+		node.add_child(under)
+	if asphalt == null:
+		asphalt = PaintLayer.new()
+		asphalt.name = "_PaintAsphalt"
+		asphalt.z_index = 2
+		node.add_child(asphalt)
+	if over == null:
+		over = PaintLayer.new()
+		over.name = "_PaintOver"
+		over.z_index = 3
+		node.add_child(over)
+	if top == null:
+		top = PaintLayer.new()
+		top.name = "_PaintTop"
+		top.z_index = 4
+		node.add_child(top)
+	return {"under": under, "asphalt": asphalt, "over": over, "top": top}
+
+
+static func clear_paint_layers(host: CanvasItem) -> void:
+	var node := host as Node
+	if node == null:
+		return
+	for name in ["_PaintUnder", "_PaintAsphalt", "_PaintOver", "_PaintTop"]:
+		var layer := node.get_node_or_null(name) as PaintLayer
+		if layer != null:
+			layer.clear_paint()
 
 
 static func corner_badge_natural(
@@ -257,7 +373,11 @@ static func _draw_asphalt_band(
 	local.resize(pts.size())
 	for i in pts.size():
 		local[i] = _tx(xform, pts[i])
-	_stroke_closed_band(canvas, local, _closed_loop(local), _sw(xform, half_width), ASPHALT_COLOR)
+	var radius := _sw(xform, half_width)
+	## Solid stroke; pixel grain comes from the asphalt layer shader.
+	for i in local.size():
+		canvas.draw_circle(local[i], radius, ASPHALT_COLOR)
+	canvas.draw_polyline(_closed_loop(local), ASPHALT_COLOR, radius * 2.0, true)
 
 
 static func _draw_centerline(canvas: CanvasItem, baked: PackedVector2Array, xform: Transform2D) -> void:
@@ -269,18 +389,6 @@ static func _draw_centerline(canvas: CanvasItem, baked: PackedVector2Array, xfor
 	for i in pts.size():
 		local[i] = _tx(xform, pts[i])
 	canvas.draw_polyline(_closed_loop(local), CENTERLINE_COLOR, maxf(1.0, _sw(xform, CENTERLINE_WIDTH)), true)
-
-
-static func _stroke_closed_band(
-	canvas: CanvasItem,
-	pts: PackedVector2Array,
-	loop: PackedVector2Array,
-	radius: float,
-	color: Color,
-) -> void:
-	for i in pts.size():
-		canvas.draw_circle(pts[i], radius, color)
-	canvas.draw_polyline(loop, color, radius * 2.0, true)
 
 
 static func _draw_race_line_kerbs(canvas: CanvasItem, ctx: Context, xform: Transform2D) -> void:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://view/spline_track_editor.gd" id="1_script"]
 
@@ -9,6 +9,8 @@
 [sub_resource type="ButtonGroup" id="ButtonGroup_mode"]
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_type"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_decor"]
 
 [node name="SplineTrackEditor" type="Control"]
 layout_mode = 3
@@ -107,14 +109,6 @@ unique_name_in_owner = true
 layout_mode = 2
 placeholder_text = "Nouvelle piste"
 caret_blink = true
-
-[node name="GroundTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection"]
-layout_mode = 2
-text = "Sol"
-
-[node name="GroundThemeOption" type="OptionButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/NameSection"]
-unique_name_in_owner = true
-layout_mode = 2
 
 [node name="PrioSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
 layout_mode = 2
@@ -263,6 +257,14 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Secteurs"
 
+[node name="ModeDecor" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/ModeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_group = SubResource("ButtonGroup_mode")
+text = "Décor"
+
 [node name="TraceSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -400,6 +402,63 @@ layout_mode = 2
 disabled = true
 text = "Ligne de course : intérieure"
 tooltip_text = "Inverse quel côté du ruban est le spot 0 (ligne de course)"
+
+[node name="DecorSection" type="VBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="GroundTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection"]
+layout_mode = 2
+text = "Sol"
+
+[node name="GroundThemeOption" type="OptionButton" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="DecorItemsTitle" type="Label" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection"]
+layout_mode = 2
+text = "Éléments"
+
+[node name="DecorPalette" type="HBoxContainer" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DecorSelect" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("ButtonGroup_decor")
+text = ""
+flat = false
+expand_icon = true
+tooltip_text = "Sélection"
+
+[node name="DecorTree" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_decor")
+text = ""
+flat = false
+expand_icon = true
+tooltip_text = "Arbre"
+
+[node name="DecorRock" type="Button" parent="Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorPalette"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(52, 52)
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_decor")
+text = ""
+flat = false
+expand_icon = true
+tooltip_text = "Roche"
 
 [node name="PanelSpacer" type="Control" parent="Root/MainRow/SidePanel/Margin/PanelVBox"]
 layout_mode = 2

@@ -28,6 +28,7 @@ var _cars_layer: Node2D
 var _cars: Dictionary = {} # player_id -> CarToken
 var _view_xform := Transform2D.IDENTITY
 var _ground: ColorRect
+var _decorations: Array = []
 
 ## Fit framing (default). User pan/zoom overrides until reset.
 var _fit_pan := Vector2.ZERO
@@ -174,6 +175,7 @@ func _draw() -> void:
 	_ensure_fit(bind)
 	var opts := SplineTrackPainter.game_options()
 	SplineTrackPainter.draw(self, bind.baked_points(), bind.paint_context(), opts, _view_xform)
+	TrackDecor.draw(self, _decorations, _view_xform)
 	if show_space_debug:
 		_draw_space_debug(bind)
 
@@ -182,8 +184,10 @@ func _sync_ground_theme() -> void:
 	if _ground == null:
 		_ground = TrackGround.attach(self, TrackGround.DEFAULT_THEME)
 	var theme_id := TrackGround.DEFAULT_THEME
+	_decorations.clear()
 	if engine != null and engine.track != null and engine.track.spline_bind != null:
 		theme_id = TrackGround.from_document(engine.track.spline_bind.document)
+		_decorations = TrackDecor.from_document(engine.track.spline_bind.document)
 	var mat := _ground.material as ShaderMaterial
 	if mat == null:
 		_ground.material = TrackGround.make_material(theme_id)

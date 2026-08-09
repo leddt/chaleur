@@ -16,6 +16,7 @@ var _ground_theme := TrackGround.DEFAULT_THEME
 var _sector_flip_race_line: Dictionary = {}
 var _corners: Dictionary = {}
 var _kerbs: Dictionary = {}
+var _decorations: Array = []
 
 
 func _ready() -> void:
@@ -37,6 +38,7 @@ func clear_track() -> void:
 	_ctx.seg = null
 	_corners.clear()
 	_kerbs.clear()
+	_decorations.clear()
 	_sector_flip_race_line.clear()
 	_set_ground_theme(TrackGround.DEFAULT_THEME)
 	queue_redraw()
@@ -110,6 +112,7 @@ func set_from_document(data: Dictionary) -> void:
 				_sector_flip_race_line[int(item2.get("key", -1))] = true
 			elif item2 != null:
 				_sector_flip_race_line[int(item2)] = true
+	_decorations = TrackDecor.from_document(data)
 	queue_redraw()
 
 
@@ -158,6 +161,7 @@ func _draw() -> void:
 	var world := SplineTrackPainter.bounds(_baked, _ctx.half_width)
 	var xform := SplineTrackPainter.fit_transform(world, bg, 18.0)
 	SplineTrackPainter.draw(self, _baked, _ctx, _opts, xform)
+	TrackDecor.draw(self, _decorations, xform)
 
 
 func _set_ground_theme(theme_id: String) -> void:

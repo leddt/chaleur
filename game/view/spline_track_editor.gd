@@ -6,10 +6,12 @@ enum EditMode {
 	TRACE, ## Edit control points / spline shape.
 	SPACES, ## Inspect / tune space segmentation.
 	SECTORS, ## Select stretches between corners (may wrap past start).
+	DECOR, ## Track backdrop and scenery.
 }
 
 const CAR_SCENE := preload("res://view/car.tscn")
 const RESET_VIEW_ICON := preload("res://ui/kit/icons/recadrer.png")
+const DECOR_SELECT_ICON := preload("res://ui/kit/icons/selection.png")
 const HANDLE_HIT_RADIUS := 12.0
 const POINT_HIT_RADIUS := 14.0
 const CURVE_HIT_RADIUS := 14.0
@@ -37,13 +39,18 @@ const FIT_MARGIN := 24.0
 @onready var _summary: Label = %SummaryLabel
 @onready var _track_name_edit: LineEdit = %TrackNameEdit
 @onready var _ground_theme_option: OptionButton = %GroundThemeOption
+@onready var _decor_select: Button = %DecorSelect
+@onready var _decor_tree: Button = %DecorTree
+@onready var _decor_rock: Button = %DecorRock
 @onready var _builtin_check: CheckBox = %BuiltinCheck
 @onready var _mode_trace: Button = %ModeTrace
 @onready var _mode_spaces: Button = %ModeSpaces
 @onready var _mode_sectors: Button = %ModeSectors
+@onready var _mode_decor: Button = %ModeDecor
 @onready var _trace_section: Control = %TraceSection
 @onready var _spaces_section: Control = %SpacesSection
 @onready var _sectors_section: Control = %SectorsSection
+@onready var _decor_section: Control = %DecorSection
 @onready var _sector_info_label: Label = %SectorInfoLabel
 @onready var _sector_race_line_button: Button = %SectorRaceLineButton
 @onready var _type_auto: BaseButton = %TypeAuto
@@ -72,6 +79,20 @@ const FIT_MARGIN := 24.0
 var _spline: TrackSpline
 var _track_name: String = ""
 var _ground_theme: String = TrackGround.DEFAULT_THEME
+## Placeable scenery items: Array[{type, position:Vector2, seed}].
+var _decorations: Array = []
+var _decor_brush: String = TrackDecor.TOOL_SELECT
+## Selected decoration indices in Decor+Select tool.
+var _selected_decors: Array = []
+## Next place preview: stable seed until the item is committed.
+var _decor_ghost_seed: int = 1
+var _decor_ghost_pos := Vector2.ZERO
+var _decor_ghost_active: bool = false
+## Pending place seed per tool (tree/rock) — matches palette icon.
+var _decor_place_seeds: Dictionary = {
+	TrackDecor.TYPE_TREE: 1,
+	TrackDecor.TYPE_ROCK: 1,
+}
 ## user:// path when editing an existing document; empty for a new track.
 var _file_path: String = ""
 var _selected: int = 0
@@ -81,6 +102,7 @@ var _updating_type_ui: bool = false
 var _updating_seg_ui: bool = false
 var _updating_mode_ui: bool = false
 var _updating_name_ui: bool = false
+var _updating_decor_ui: bool = false
 var _ground: ColorRect
 var _updating_corner_ui: bool = false
 var _updating_kerb_ui: bool = false
@@ -100,6 +122,17 @@ var _kerbs: Dictionary = {}
 var _drag_corner_space: int = -1
 ## World-space grab delta: mouse - badge center at press.
 var _drag_corner_grab := Vector2.ZERO
+## "", "move", "scale", "rotate", "marquee"
+var _drag_decor_mode: String = ""
+var _drag_decor_start_mouse := Vector2.ZERO
+var _drag_decor_pivot := Vector2.ZERO
+var _drag_decor_start_dist: float = 1.0
+var _drag_decor_start_angle: float = 0.0
+## Snapshots at drag start: Array[{index:int, item:Dictionary}].
+var _drag_decor_snapshots: Array = []
+var _decor_marquee_start := Vector2.ZERO
+var _decor_marquee_end := Vector2.ZERO
+var _decor_marquee_additive: bool = false
 ## Index into `_compute_sectors()` (-1 = none).
 var _selected_sector: int = -1
 ## flip_key (corner before sector, or -1 if no corners) -> race line on geometric outside.
@@ -118,12 +151,14 @@ func _ready() -> void:
 	theme = ThemeBuilder.build()
 	_apply_kit_chrome()
 	_setup_name_ui()
+	_setup_decor_palette()
 	_canvas.clip_contents = true
 	_ground = TrackGround.attach(_canvas, _ground_theme)
 	_setup_reset_view_btn()
 	_canvas.draw.connect(_on_canvas_draw)
 	_canvas.gui_input.connect(_on_canvas_gui_input)
 	_canvas.resized.connect(_on_canvas_resized)
+	_canvas.mouse_exited.connect(_on_canvas_mouse_exited)
 	%BackButton.pressed.connect(_on_back)
 	%SaveButton.pressed.connect(_on_save)
 	_setup_mode_ui()
@@ -159,6 +194,10 @@ func _apply_kit_chrome() -> void:
 	_mode_trace.theme_type_variation = &"Compact"
 	_mode_spaces.theme_type_variation = &"Compact"
 	_mode_sectors.theme_type_variation = &"Compact"
+	_mode_decor.theme_type_variation = &"Compact"
+	_style_decor_palette_button(_decor_select)
+	_style_decor_palette_button(_decor_tree)
+	_style_decor_palette_button(_decor_rock)
 	_set_start_button.theme_type_variation = &"Compact"
 	_set_corner_button.theme_type_variation = &"Compact"
 	_corner_side_button.theme_type_variation = &"Compact"
@@ -168,7 +207,8 @@ func _apply_kit_chrome() -> void:
 		side.theme_type_variation = &"Instrument"
 	for path in [
 		"Root/MainRow/SidePanel/Margin/PanelVBox/NameSection/NameTitle",
-		"Root/MainRow/SidePanel/Margin/PanelVBox/NameSection/GroundTitle",
+		"Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/GroundTitle",
+		"Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorItemsTitle",
 		"Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/PrioTitle",
 		"Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/EditTitle",
 	]:
@@ -269,6 +309,141 @@ func _apply_ground_theme() -> void:
 	_refresh_window_title()
 
 
+func _style_decor_palette_button(btn: Button) -> void:
+	## Sélection = bordure moutarde seulement (pas de fond rempli).
+	btn.theme_type_variation = &"Compact"
+	var empty := Color(0, 0, 0, 0)
+	btn.add_theme_stylebox_override("normal", _decor_swatch_box(empty, Palette.SMOKE))
+	btn.add_theme_stylebox_override("hover", _decor_swatch_box(empty, Palette.MUSTARD))
+	btn.add_theme_stylebox_override("pressed", _decor_swatch_box(empty, Palette.MUSTARD))
+	btn.add_theme_stylebox_override("hover_pressed", _decor_swatch_box(empty, Palette.MUSTARD))
+	btn.add_theme_stylebox_override("focus", _decor_swatch_box(empty, Palette.MUSTARD))
+	btn.add_theme_color_override("icon_normal_color", Palette.CARDBOARD)
+	btn.add_theme_color_override("icon_hover_color", Palette.CARDBOARD)
+	btn.add_theme_color_override("icon_pressed_color", Palette.CARDBOARD)
+
+
+func _decor_swatch_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = fill
+	sb.border_color = border
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	return sb
+
+
+func _setup_decor_palette() -> void:
+	_decor_select.icon = DECOR_SELECT_ICON
+	_decor_select.text = ""
+	_decor_tree.text = ""
+	_decor_rock.text = ""
+	_decor_select.add_theme_constant_override("icon_max_width", 36)
+	_decor_tree.add_theme_constant_override("icon_max_width", 36)
+	_decor_rock.add_theme_constant_override("icon_max_width", 36)
+	_roll_decor_place_seed(TrackDecor.TYPE_TREE)
+	_roll_decor_place_seed(TrackDecor.TYPE_ROCK)
+	_decor_select.pressed.connect(_on_decor_select_pressed)
+	_decor_tree.pressed.connect(_on_decor_tree_pressed)
+	_decor_rock.pressed.connect(_on_decor_rock_pressed)
+	_sync_decor_palette()
+
+
+func _on_decor_select_pressed() -> void:
+	if _updating_decor_ui:
+		return
+	_set_decor_brush(TrackDecor.TOOL_SELECT)
+
+
+func _on_decor_tree_pressed() -> void:
+	if _updating_decor_ui:
+		return
+	_activate_decor_place_tool(TrackDecor.TYPE_TREE)
+
+
+func _on_decor_rock_pressed() -> void:
+	if _updating_decor_ui:
+		return
+	_activate_decor_place_tool(TrackDecor.TYPE_ROCK)
+
+
+func _activate_decor_place_tool(type_id: String) -> void:
+	## Premier clic : place le seed déjà affiché sur l'icône.
+	## Reclic sur l'outil actif : tire un nouveau seed (icône + fantôme).
+	var id := TrackDecor.normalize(type_id)
+	var already_active := TrackDecor.normalize_brush(_decor_brush) == id
+	_decor_brush = id
+	_clear_decor_drag()
+	_selected_decors.clear()
+	if already_active:
+		_roll_decor_place_seed(id)
+	else:
+		_decor_ghost_seed = int(_decor_place_seeds.get(id, 1))
+	_sync_decor_palette()
+	_canvas.queue_redraw()
+
+
+func _set_decor_brush(brush_id: String) -> void:
+	_decor_brush = TrackDecor.normalize_brush(brush_id)
+	_clear_decor_drag()
+	if TrackDecor.is_place_brush(_decor_brush):
+		_selected_decors.clear()
+		_decor_ghost_seed = int(_decor_place_seeds.get(_decor_brush, 1))
+	else:
+		_decor_ghost_active = false
+	_sync_decor_palette()
+	_canvas.queue_redraw()
+
+
+func _roll_decor_place_seed(type_id: String) -> void:
+	var id := TrackDecor.normalize(type_id)
+	var seed_v := maxi(1, int(randi()))
+	_decor_place_seeds[id] = seed_v
+	if TrackDecor.normalize_brush(_decor_brush) == id:
+		_decor_ghost_seed = seed_v
+	_refresh_decor_place_icon(id)
+
+
+func _roll_decor_ghost_seed() -> void:
+	## Roll the currently active place tool (after pose / mode enter).
+	if TrackDecor.is_place_brush(_decor_brush):
+		_roll_decor_place_seed(_decor_brush)
+	else:
+		_decor_ghost_seed = maxi(1, int(randi()))
+
+
+func _refresh_decor_place_icon(type_id: String) -> void:
+	var id := TrackDecor.normalize(type_id)
+	var seed_v := int(_decor_place_seeds.get(id, 1))
+	var tex := TrackDecor.preview_texture(id, 40, seed_v)
+	match id:
+		TrackDecor.TYPE_ROCK:
+			_decor_rock.icon = tex
+		_:
+			_decor_tree.icon = tex
+
+
+func _on_canvas_mouse_exited() -> void:
+	if not _decor_ghost_active:
+		return
+	_decor_ghost_active = false
+	_canvas.queue_redraw()
+
+
+func _sync_decor_palette() -> void:
+	_updating_decor_ui = true
+	_decor_brush = TrackDecor.normalize_brush(_decor_brush)
+	_decor_select.set_pressed_no_signal(_decor_brush == TrackDecor.TOOL_SELECT)
+	_decor_tree.set_pressed_no_signal(_decor_brush == TrackDecor.TYPE_TREE)
+	_decor_rock.set_pressed_no_signal(_decor_brush == TrackDecor.TYPE_ROCK)
+	_updating_decor_ui = false
+	if TrackDecor.is_place_brush(_decor_brush):
+		_decor_ghost_seed = int(_decor_place_seeds.get(_decor_brush, 1))
+
+
 func _display_track_name() -> String:
 	return _track_name if not _track_name.is_empty() else "Nouvelle piste"
 
@@ -283,6 +458,7 @@ func _setup_mode_ui() -> void:
 	_mode_trace.toggled.connect(_on_mode_trace_toggled)
 	_mode_spaces.toggled.connect(_on_mode_spaces_toggled)
 	_mode_sectors.toggled.connect(_on_mode_sectors_toggled)
+	_mode_decor.toggled.connect(_on_mode_decor_toggled)
 	_sync_mode_buttons()
 
 
@@ -304,11 +480,18 @@ func _on_mode_sectors_toggled(pressed: bool) -> void:
 	_set_edit_mode(EditMode.SECTORS)
 
 
+func _on_mode_decor_toggled(pressed: bool) -> void:
+	if _updating_mode_ui or not pressed:
+		return
+	_set_edit_mode(EditMode.DECOR)
+
+
 func _sync_mode_buttons() -> void:
 	_updating_mode_ui = true
 	_mode_trace.button_pressed = _edit_mode == EditMode.TRACE
 	_mode_spaces.button_pressed = _edit_mode == EditMode.SPACES
 	_mode_sectors.button_pressed = _edit_mode == EditMode.SECTORS
+	_mode_decor.button_pressed = _edit_mode == EditMode.DECOR
 	_updating_mode_ui = false
 
 
@@ -333,6 +516,12 @@ func _set_edit_mode(mode: int) -> void:
 	_edit_mode = mode
 	_drag_mode = ""
 	_drag_corner_space = -1
+	_clear_decor_drag()
+	if mode != EditMode.DECOR:
+		_selected_decors.clear()
+		_decor_ghost_active = false
+	elif TrackDecor.is_place_brush(_decor_brush):
+		_decor_ghost_seed = int(_decor_place_seeds.get(_decor_brush, 1))
 	_sync_mode_buttons()
 	_apply_edit_mode()
 	_refresh_info()
@@ -343,6 +532,7 @@ func _apply_edit_mode() -> void:
 	_trace_section.visible = _edit_mode == EditMode.TRACE
 	_spaces_section.visible = _edit_mode == EditMode.SPACES
 	_sectors_section.visible = _edit_mode == EditMode.SECTORS
+	_decor_section.visible = _edit_mode == EditMode.DECOR
 	_refresh_set_start_button()
 	_refresh_corner_ui()
 	_refresh_kerb_ui()
@@ -760,6 +950,7 @@ func _build_save_document() -> Dictionary:
 		"corners": corners_data,
 		"kerbs": kerbs_data,
 		"sector_flip_race_line": flips_data,
+		"decorations": TrackDecor.to_document(_decorations),
 	}
 
 
@@ -776,16 +967,21 @@ func _reset_spline() -> void:
 	_start_space_index = 0
 	_corners.clear()
 	_kerbs.clear()
+	_decorations.clear()
+	_selected_decors.clear()
+	_clear_decor_drag()
 	_drag_corner_space = -1
 	_selected_sector = -1
 	_sector_flip_race_line.clear()
 	_track_name = ""
 	_ground_theme = TrackGround.DEFAULT_THEME
+	_decor_brush = TrackDecor.TOOL_SELECT
 	_file_path = ""
 	_seg_params.forced_space_count = 0
 	_sync_track_name_field()
 	_sync_ground_theme_field()
 	_sync_builtin_check()
+	_sync_decor_palette()
 	_dirty = false
 	_spline_ready = true
 	_recompute_segmentation()
@@ -875,6 +1071,9 @@ func _load_from_path(path: String) -> bool:
 				_sector_flip_race_line[int(item2.get("key", -1))] = true
 			elif item2 != null:
 				_sector_flip_race_line[int(item2)] = true
+	_decorations = TrackDecor.from_document(data)
+	_selected_decors.clear()
+	_clear_decor_drag()
 	_dirty = false
 	_spline_ready = true
 	_recompute_segmentation()
@@ -888,6 +1087,7 @@ func _load_from_path(path: String) -> bool:
 	_updating_seg_ui = false
 	_refresh_space_len_label()
 	_refresh_seg_mode_ui()
+	_sync_decor_palette()
 	_fit_view()
 	_canvas.queue_redraw()
 	return true
@@ -1242,6 +1442,9 @@ func _refresh_info() -> void:
 		_refresh_sector_ui()
 		_refresh_summary()
 		return
+	if _edit_mode == EditMode.DECOR:
+		_refresh_summary()
+		return
 	if _spline == null or _spline.point_count() == 0:
 		_refresh_summary()
 		return
@@ -1493,6 +1696,131 @@ func _draw_track(baked: PackedVector2Array, font: Font, xform: Transform2D) -> v
 	overlays.race_line = false
 	overlays.centerline = false
 	SplineTrackPainter.draw(_canvas, baked, ctx, overlays, xform)
+	TrackDecor.draw(_canvas, _decorations, xform)
+	_draw_decor_ghost(xform)
+	_draw_decor_selection(xform)
+
+
+func _draw_decor_ghost(xform: Transform2D) -> void:
+	if _edit_mode != EditMode.DECOR:
+		return
+	if not TrackDecor.is_place_brush(_decor_brush) or not _decor_ghost_active:
+		return
+	var ghost := TrackDecor.make_item(_decor_brush, _decor_ghost_pos, _decor_ghost_seed)
+	TrackDecor.draw_item(_canvas, ghost, xform, 0.45)
+
+
+func _draw_decor_selection(xform: Transform2D) -> void:
+	if _edit_mode != EditMode.DECOR:
+		return
+	_prune_decor_selection()
+	if _drag_decor_mode == "marquee":
+		_draw_decor_marquee(xform)
+	if _selected_decors.is_empty():
+		return
+	var frame := Color(0.95, 0.85, 0.2, 0.95)
+	var z := absf(xform.get_scale().x)
+	var line_w := maxf(1.5, 2.0 * z)
+	var handle_r := maxf(4.0, 5.0 * z)
+	for idx_v in _selected_decors:
+		var idx := int(idx_v)
+		var item := TrackDecor.parse_item(_decorations[idx])
+		if item.is_empty():
+			continue
+		_draw_decor_item_frame(item, xform, frame, line_w)
+	if _selected_decors.size() == 1:
+		var only := TrackDecor.parse_item(_decorations[int(_selected_decors[0])])
+		_draw_decor_oriented_handles(only, xform, frame, line_w, handle_r)
+	else:
+		_draw_decor_group_handles(xform, frame, line_w, handle_r)
+
+
+func _draw_decor_marquee(xform: Transform2D) -> void:
+	var a: Vector2 = xform * _decor_marquee_start
+	var b: Vector2 = xform * _decor_marquee_end
+	var rect := Rect2(a, Vector2.ZERO).expand(b)
+	var fill := Color(0.5, 0.78, 1.0, 0.12)
+	var edge := Color(0.5, 0.78, 1.0, 0.85)
+	var z := absf(xform.get_scale().x)
+	_canvas.draw_rect(rect, fill, true)
+	_canvas.draw_rect(rect, edge, false, maxf(1.0, 1.5 * z), true)
+
+
+func _draw_decor_item_frame(item: Dictionary, xform: Transform2D, frame: Color, line_w: float) -> void:
+	var corners := TrackDecor.selection_corners(item)
+	if corners.size() < 4:
+		return
+	var loop := PackedVector2Array()
+	for c in corners:
+		loop.append(xform * c)
+	loop.append(loop[0])
+	_canvas.draw_polyline(loop, frame, line_w, true)
+
+
+func _draw_decor_oriented_handles(
+	item: Dictionary, xform: Transform2D, frame: Color, line_w: float, handle_r: float
+) -> void:
+	if item.is_empty():
+		return
+	var corners := TrackDecor.selection_corners(item)
+	if corners.size() < 4:
+		return
+	for c2 in corners:
+		var p: Vector2 = xform * c2
+		_canvas.draw_rect(
+			Rect2(p - Vector2(handle_r, handle_r), Vector2(handle_r, handle_r) * 2.0),
+			frame,
+			true
+		)
+	var rot_world := TrackDecor.rotate_handle_world(item)
+	var rot_screen: Vector2 = xform * rot_world
+	var top_mid: Vector2 = xform * corners[0].lerp(corners[1], 0.5)
+	_canvas.draw_line(top_mid, rot_screen, frame, line_w, true)
+	_canvas.draw_circle(rot_screen, handle_r * 1.15, frame, true, -1.0, true)
+	_canvas.draw_arc(
+		rot_screen,
+		handle_r * 0.7,
+		-PI * 0.75,
+		PI * 0.75,
+		16,
+		Palette.INK,
+		maxf(1.0, 1.5 * absf(xform.get_scale().x)),
+		true
+	)
+
+
+func _draw_decor_group_handles(xform: Transform2D, frame: Color, line_w: float, handle_r: float) -> void:
+	var aabb := _decor_selection_aabb()
+	if aabb.size.x <= 0.0 or aabb.size.y <= 0.0:
+		return
+	var corners := _aabb_corners(aabb)
+	var loop := PackedVector2Array()
+	for c in corners:
+		loop.append(xform * c)
+	loop.append(loop[0])
+	_canvas.draw_polyline(loop, frame, line_w, true)
+	for c2 in corners:
+		var p: Vector2 = xform * c2
+		_canvas.draw_rect(
+			Rect2(p - Vector2(handle_r, handle_r), Vector2(handle_r, handle_r) * 2.0),
+			frame,
+			true
+		)
+	var rot_world := _decor_group_rotate_handle(aabb)
+	var rot_screen: Vector2 = xform * rot_world
+	var top_mid: Vector2 = xform * corners[0].lerp(corners[1], 0.5)
+	_canvas.draw_line(top_mid, rot_screen, frame, line_w, true)
+	_canvas.draw_circle(rot_screen, handle_r * 1.15, frame, true, -1.0, true)
+	_canvas.draw_arc(
+		rot_screen,
+		handle_r * 0.7,
+		-PI * 0.75,
+		PI * 0.75,
+		16,
+		Palette.INK,
+		maxf(1.0, 1.5 * absf(xform.get_scale().x)),
+		true
+	)
 
 
 func _draw_selection_fills(xform: Transform2D) -> void:
@@ -1612,6 +1940,9 @@ func _on_canvas_gui_input(event: InputEvent) -> void:
 	if _edit_mode == EditMode.SECTORS:
 		_on_sectors_gui_input(event)
 		return
+	if _edit_mode == EditMode.DECOR:
+		_on_decor_gui_input(event)
+		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		var world := _screen_to_world(mb.position)
@@ -1627,6 +1958,301 @@ func _on_canvas_gui_input(event: InputEvent) -> void:
 			_try_remove_at(world)
 	elif event is InputEventMouseMotion and _drag_mode != "":
 		_continue_drag(_screen_to_world((event as InputEventMouseMotion).position))
+
+
+func _on_decor_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		var motion := event as InputEventMouseMotion
+		var world_motion := _screen_to_world(motion.position)
+		if TrackDecor.is_place_brush(_decor_brush):
+			_decor_ghost_pos = world_motion
+			_decor_ghost_active = true
+			_canvas.queue_redraw()
+		elif _drag_decor_mode == "marquee":
+			_decor_marquee_end = world_motion
+			_canvas.queue_redraw()
+			_canvas.accept_event()
+		elif _drag_decor_mode != "" and not _drag_decor_snapshots.is_empty():
+			_continue_decor_drag(world_motion)
+			_canvas.accept_event()
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		var world := _screen_to_world(mb.position)
+		if mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+			_clear_decor_drag()
+			var hit := TrackDecor.hit_index(_decorations, world)
+			if hit < 0:
+				return
+			_remove_decoration_at(hit)
+			_canvas.accept_event()
+			return
+		if mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if mb.pressed:
+			if _decor_brush == TrackDecor.TOOL_SELECT:
+				_on_decor_select_press(world, mb.position, mb.shift_pressed)
+			else:
+				_on_decor_place_press(world)
+			_canvas.accept_event()
+		else:
+			if _drag_decor_mode == "marquee":
+				_finish_decor_marquee()
+			elif _drag_decor_mode != "":
+				_dirty = true
+			_clear_decor_drag()
+			_canvas.queue_redraw()
+		return
+
+
+func _clear_decor_drag() -> void:
+	_drag_decor_mode = ""
+	_drag_decor_snapshots.clear()
+
+
+func _prune_decor_selection() -> void:
+	var kept: Array = []
+	for idx_v in _selected_decors:
+		var idx := int(idx_v)
+		if idx >= 0 and idx < _decorations.size():
+			kept.append(idx)
+	_selected_decors = kept
+
+
+func _is_decor_selected(index: int) -> bool:
+	return _selected_decors.has(index)
+
+
+func _toggle_decor_selected(index: int) -> void:
+	if _is_decor_selected(index):
+		_selected_decors.erase(index)
+	else:
+		_selected_decors.append(index)
+
+
+func _set_decor_selection(indices: Array) -> void:
+	_selected_decors.clear()
+	for idx_v in indices:
+		var idx := int(idx_v)
+		if idx >= 0 and idx < _decorations.size() and not _selected_decors.has(idx):
+			_selected_decors.append(idx)
+
+
+func _aabb_corners(aabb: Rect2) -> PackedVector2Array:
+	return PackedVector2Array([
+		aabb.position,
+		Vector2(aabb.end.x, aabb.position.y),
+		aabb.end,
+		Vector2(aabb.position.x, aabb.end.y),
+	])
+
+
+func _decor_selection_aabb() -> Rect2:
+	_prune_decor_selection()
+	var has_any := false
+	var aabb := Rect2()
+	for idx_v in _selected_decors:
+		var item := TrackDecor.parse_item(_decorations[int(idx_v)])
+		if item.is_empty():
+			continue
+		for corner in TrackDecor.selection_corners(item):
+			if not has_any:
+				aabb = Rect2(corner, Vector2.ZERO)
+				has_any = true
+			else:
+				aabb = aabb.expand(corner)
+	return aabb
+
+
+func _decor_group_rotate_handle(aabb: Rect2) -> Vector2:
+	var top_mid := Vector2(aabb.get_center().x, aabb.position.y)
+	return top_mid + Vector2(0.0, -TrackDecor.ROTATE_HANDLE_GAP)
+
+
+func _decor_handle_at_screen(screen: Vector2) -> String:
+	_prune_decor_selection()
+	if _selected_decors.is_empty():
+		return ""
+	var view := _compose_view_xform()
+	var thresh := 12.0
+	if _selected_decors.size() == 1:
+		var item := TrackDecor.parse_item(_decorations[int(_selected_decors[0])])
+		if item.is_empty():
+			return ""
+		var rot_s: Vector2 = view * TrackDecor.rotate_handle_world(item)
+		if screen.distance_to(rot_s) <= thresh:
+			return "rotate"
+		for corner in TrackDecor.selection_corners(item):
+			if screen.distance_to(view * corner) <= thresh:
+				return "scale"
+		return ""
+	var aabb := _decor_selection_aabb()
+	if aabb.size.x <= 0.0 or aabb.size.y <= 0.0:
+		return ""
+	var rot_g: Vector2 = view * _decor_group_rotate_handle(aabb)
+	if screen.distance_to(rot_g) <= thresh:
+		return "rotate"
+	for corner2 in _aabb_corners(aabb):
+		if screen.distance_to(view * corner2) <= thresh:
+			return "scale"
+	return ""
+
+
+func _on_decor_select_press(world: Vector2, screen: Vector2, shift: bool) -> void:
+	_decor_ghost_active = false
+	var handle := _decor_handle_at_screen(screen)
+	if handle != "" and not _selected_decors.is_empty():
+		_begin_decor_group_drag(handle, world)
+		return
+	var hit_i := TrackDecor.hit_index(_decorations, world)
+	if hit_i >= 0:
+		if shift:
+			_toggle_decor_selected(hit_i)
+			_clear_decor_drag()
+		elif _is_decor_selected(hit_i):
+			_begin_decor_group_drag("move", world)
+		else:
+			_set_decor_selection([hit_i])
+			_begin_decor_group_drag("move", world)
+		_canvas.queue_redraw()
+		return
+	# Empty press: marquee (replace, or additive with Shift).
+	_decor_marquee_additive = shift
+	if not shift:
+		_selected_decors.clear()
+	_drag_decor_mode = "marquee"
+	_decor_marquee_start = world
+	_decor_marquee_end = world
+	_drag_decor_snapshots.clear()
+	_canvas.queue_redraw()
+
+
+func _begin_decor_group_drag(mode: String, world: Vector2) -> void:
+	_prune_decor_selection()
+	if _selected_decors.is_empty():
+		_clear_decor_drag()
+		return
+	_drag_decor_mode = mode
+	_drag_decor_start_mouse = world
+	_drag_decor_snapshots.clear()
+	for idx_v in _selected_decors:
+		var idx := int(idx_v)
+		var item := TrackDecor.parse_item(_decorations[idx])
+		if item.is_empty():
+			continue
+		_drag_decor_snapshots.append({"index": idx, "item": item.duplicate(true)})
+	if _drag_decor_snapshots.is_empty():
+		_clear_decor_drag()
+		return
+	if _selected_decors.size() == 1:
+		var only: Dictionary = _drag_decor_snapshots[0].item
+		_drag_decor_pivot = only.position
+	else:
+		_drag_decor_pivot = _decor_selection_aabb().get_center()
+	var delta: Vector2 = world - _drag_decor_pivot
+	_drag_decor_start_dist = maxf(delta.length(), 1.0)
+	_drag_decor_start_angle = delta.angle()
+
+
+func _continue_decor_drag(world: Vector2) -> void:
+	if _drag_decor_snapshots.is_empty():
+		_clear_decor_drag()
+		return
+	match _drag_decor_mode:
+		"move":
+			var move_delta: Vector2 = world - _drag_decor_start_mouse
+			for snap_v in _drag_decor_snapshots:
+				var snap: Dictionary = snap_v
+				var idx := int(snap.index)
+				var start_item: Dictionary = snap.item
+				var item := start_item.duplicate(true)
+				var start_pos: Vector2 = start_item.position
+				item.position = start_pos + move_delta
+				_decorations[idx] = item
+		"scale":
+			var dist: float = (world - _drag_decor_pivot).length()
+			var ratio: float = dist / _drag_decor_start_dist
+			for snap_v2 in _drag_decor_snapshots:
+				var snap2: Dictionary = snap_v2
+				var idx2 := int(snap2.index)
+				var start2: Dictionary = snap2.item
+				var item2 := start2.duplicate(true)
+				var start_pos2: Vector2 = start2.position
+				item2.position = _drag_decor_pivot + (start_pos2 - _drag_decor_pivot) * ratio
+				item2.scale = TrackDecor.clamp_scale(float(start2.scale) * ratio)
+				_decorations[idx2] = item2
+		"rotate":
+			var ang: float = (world - _drag_decor_pivot).angle()
+			var delta_ang: float = ang - _drag_decor_start_angle
+			for snap_v3 in _drag_decor_snapshots:
+				var snap3: Dictionary = snap_v3
+				var idx3 := int(snap3.index)
+				var start3: Dictionary = snap3.item
+				var item3 := start3.duplicate(true)
+				var start_pos3: Vector2 = start3.position
+				item3.position = _drag_decor_pivot + (start_pos3 - _drag_decor_pivot).rotated(delta_ang)
+				item3.rotation = float(start3.rotation) + delta_ang
+				_decorations[idx3] = item3
+		_:
+			return
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _finish_decor_marquee() -> void:
+	var rect := Rect2(_decor_marquee_start, Vector2.ZERO).expand(_decor_marquee_end)
+	# Ignore tiny drags — treat as empty click.
+	if rect.size.x < 2.0 and rect.size.y < 2.0:
+		if not _decor_marquee_additive:
+			_selected_decors.clear()
+		return
+	var picked: Array = []
+	for i in _decorations.size():
+		var item := TrackDecor.parse_item(_decorations[i])
+		if item.is_empty():
+			continue
+		var pos: Vector2 = item.position
+		if rect.has_point(pos):
+			picked.append(i)
+	if _decor_marquee_additive:
+		for idx_v in picked:
+			var idx := int(idx_v)
+			if not _selected_decors.has(idx):
+				_selected_decors.append(idx)
+	else:
+		_set_decor_selection(picked)
+
+
+func _on_decor_place_press(world: Vector2) -> void:
+	_clear_decor_drag()
+	_selected_decors.clear()
+	var place_pos := _decor_ghost_pos if _decor_ghost_active else world
+	_decorations.append(TrackDecor.make_item(_decor_brush, place_pos, _decor_ghost_seed))
+	_roll_decor_ghost_seed()
+	_decor_ghost_pos = place_pos
+	_decor_ghost_active = true
+	_dirty = true
+	_canvas.queue_redraw()
+
+
+func _remove_decoration_at(index: int) -> void:
+	if index < 0 or index >= _decorations.size():
+		return
+	_decorations.remove_at(index)
+	var kept: Array = []
+	for idx_v in _selected_decors:
+		var idx := int(idx_v)
+		if idx == index:
+			continue
+		if idx > index:
+			kept.append(idx - 1)
+		else:
+			kept.append(idx)
+	_selected_decors = kept
+	if _drag_decor_mode != "":
+		_clear_decor_drag()
+	_dirty = true
+	_canvas.queue_redraw()
 
 
 func _on_spaces_gui_input(event: InputEvent) -> void:

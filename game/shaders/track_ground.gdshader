@@ -3,7 +3,7 @@ render_mode blend_mix, unshaded;
 
 // Fond de plateau procédural (gazon / terre / sable). À mettre sur un ColorRect
 // plein panneau, sous le tracé, mouse_filter = IGNORE, color = blanc.
-// Densité basée sur FRAGCOORD pour rester stable au resize / stretch.
+// Échantillonné en world space : world = (VERTEX - view_pan) / view_zoom.
 
 uniform vec3 base_color : source_color = vec3(0.18, 0.32, 0.22);
 uniform vec3 accent_color : source_color = vec3(0.30, 0.46, 0.32);
@@ -12,6 +12,10 @@ uniform float pattern_scale : hint_range(4.0, 40.0) = 14.0;
 uniform float contrast : hint_range(0.0, 1.0) = 0.55;
 uniform float vein_strength : hint_range(0.0, 1.0) = 0.4;
 uniform float grit_amount : hint_range(0.0, 1.0) = 0.2;
+uniform vec2 view_pan = vec2(0.0);
+uniform float view_zoom = 1.0;
+
+varying vec2 v_local;
 
 float hash21(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -42,8 +46,13 @@ float fbm(vec2 p) {
 	return v;
 }
 
+void vertex() {
+	v_local = VERTEX;
+}
+
 void fragment() {
-	vec2 px = FRAGCOORD.xy / max(pattern_scale, 0.001);
+	vec2 world = (v_local - view_pan) / max(view_zoom, 0.0001);
+	vec2 px = world / max(pattern_scale, 0.001);
 	float n = fbm(px * 0.55);
 	float detail = fbm(px * 1.7 + 19.7);
 	float veins = abs(fbm(px * 0.35 + 7.3) - 0.5) * 2.0;
@@ -55,7 +64,7 @@ void fragment() {
 	vec3 col = mix(base_color, accent_color, clamp(blend, 0.0, 1.0));
 	col = mix(col, vein_color, veins * vein_strength);
 
-	float grit = step(0.92, hash21(floor(FRAGCOORD.xy * 0.5)));
+	float grit = step(0.92, hash21(floor(world * 0.5)));
 	col = mix(col, vein_color, grit * grit_amount);
 
 	COLOR = vec4(col, 1.0);

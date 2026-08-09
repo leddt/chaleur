@@ -1503,6 +1503,7 @@ func _on_canvas_draw() -> void:
 
 
 func _compose_view_xform() -> Transform2D:
+	TrackGround.set_view(_canvas, _view_pan, _view_zoom)
 	return Transform2D(0.0, Vector2(_view_zoom, _view_zoom), 0.0, _view_pan)
 
 
@@ -1537,7 +1538,7 @@ func _setup_reset_view_btn() -> void:
 	_reset_view_btn.offset_right = -8.0
 	_reset_view_btn.offset_bottom = 48.0
 	_reset_view_btn.custom_minimum_size = Vector2(40, 40)
-	_reset_view_btn.z_index = 10
+	_reset_view_btn.z_index = TrackGround.CLOUD_OVERLAY_Z + 1
 	_reset_view_btn.pressed.connect(reset_view)
 	_canvas.add_child(_reset_view_btn)
 	_reset_view_btn.add_theme_constant_override("icon_max_width", 28)
@@ -1606,6 +1607,7 @@ func _zoom_at(screen_pos: Vector2, factor: float) -> void:
 	_view_pan = screen_pos - (screen_pos - _view_pan) * (new_zoom / _view_zoom)
 	_view_zoom = new_zoom
 	_apply_view_to_cars()
+	TrackGround.set_view(_canvas, _view_pan, _view_zoom)
 	_update_reset_view_btn()
 	_canvas.queue_redraw()
 
@@ -1638,6 +1640,7 @@ func _handle_view_input(event: InputEvent) -> bool:
 		_apply_view_to_cars()
 		_update_reset_view_btn()
 		SplineTrackPainter.set_view_pan(_canvas, _view_pan)
+		TrackGround.set_view(_canvas, _view_pan, _view_zoom)
 		_canvas.accept_event()
 		return true
 	return false

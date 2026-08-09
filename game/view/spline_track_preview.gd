@@ -158,11 +158,14 @@ func _draw() -> void:
 	var bg := Rect2(Vector2.ZERO, size)
 	if not has_track():
 		SplineTrackPainter.clear_paint_layers(self)
+		TrackGround.set_view(self, Vector2.ZERO, 1.0)
 		_draw_placeholder()
 		return
 	var world := SplineTrackPainter.bounds(_baked, _ctx.half_width)
 	var xform := SplineTrackPainter.fit_transform(world, bg, 18.0)
-	var zoom_xform := Transform2D(0.0, Vector2(absf(xform.get_scale().x), absf(xform.get_scale().x)), 0.0, Vector2.ZERO)
+	var zoom := absf(xform.get_scale().x)
+	TrackGround.set_view(self, xform.origin, zoom)
+	var zoom_xform := Transform2D(0.0, Vector2(zoom, zoom), 0.0, Vector2.ZERO)
 	SplineTrackPainter.draw(
 		self,
 		_baked,

@@ -12,6 +12,10 @@ const THEME_ROCK := "rock"
 const DEFAULT_THEME := THEME_GRASS
 
 const SHADER := preload("res://shaders/track_ground.gdshader")
+const CLOUD_SHADER := preload("res://shaders/cloud_shadows.gdshader")
+
+## Au-dessus du tracé / voitures pour que les ombres couvrent tout le plateau.
+const CLOUD_OVERLAY_Z := 100
 
 const _THEME_ORDER: Array[String] = [
 	THEME_GRASS, THEME_DIRT, THEME_SAND, THEME_SNOW, THEME_ROCK,
@@ -92,7 +96,53 @@ static func attach(parent: Control, theme_id: String = DEFAULT_THEME) -> ColorRe
 			rect.material = mat
 		else:
 			apply(mat, theme_id)
+	attach_cloud_shadows(parent)
 	return rect
+
+
+static func make_cloud_material() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = CLOUD_SHADER
+	return mat
+
+
+static func attach_cloud_shadows(parent: Control) -> ColorRect:
+	## Overlay plein panneau : ombres de nuages au-dessus de tout le plateau.
+	if parent == null:
+		return null
+	var rect := parent.get_node_or_null("CloudShadows") as ColorRect
+	if rect == null:
+		rect = ColorRect.new()
+		rect.name = "CloudShadows"
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rect.color = Color.WHITE
+		rect.z_index = CLOUD_OVERLAY_Z
+		rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		rect.material = make_cloud_material()
+		parent.add_child(rect)
+	else:
+		rect.z_index = CLOUD_OVERLAY_Z
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if rect.material == null or (rect.material as ShaderMaterial) == null \
+				or (rect.material as ShaderMaterial).shader != CLOUD_SHADER:
+			rect.material = make_cloud_material()
+	return rect
+
+
+static func set_view(parent: Control, pan: Vector2, zoom: float) -> void:
+	## Aligne fond + ombres de nuages sur le pan/zoom monde de la piste.
+	if parent == null:
+		return
+	var z := maxf(zoom, 0.0001)
+	for node_name in ["TrackGround", "CloudShadows"]:
+		var rect := parent.get_node_or_null(node_name) as ColorRect
+		if rect == null:
+			continue
+		var mat := rect.material as ShaderMaterial
+		if mat == null:
+			continue
+		mat.set_shader_parameter("view_pan", pan)
+		mat.set_shader_parameter("view_zoom", z)
 
 
 static func _preset(theme_id: String) -> Dictionary:

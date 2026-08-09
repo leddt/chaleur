@@ -66,6 +66,7 @@ func _ready() -> void:
 	_reset_btn.offset_right = -8.0
 	_reset_btn.offset_bottom = 48.0
 	_reset_btn.custom_minimum_size = Vector2(40, 40)
+	_reset_btn.z_index = TrackGround.CLOUD_OVERLAY_Z + 1
 	_reset_btn.pressed.connect(reset_view)
 	add_child(_reset_btn)
 	_reset_btn.add_theme_constant_override("icon_max_width", 28)
@@ -262,6 +263,7 @@ func _reset_to_fit_values() -> void:
 
 func _compose_view_xform() -> void:
 	_view_xform = Transform2D(0.0, Vector2(_view_zoom, _view_zoom), 0.0, _view_pan)
+	TrackGround.set_view(self, _view_pan, _view_zoom)
 
 
 func _apply_view_to_cars() -> void:

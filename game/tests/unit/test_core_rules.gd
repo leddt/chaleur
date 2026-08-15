@@ -523,6 +523,54 @@ func test_starting_grid_order_follows_seed_not_seat_order() -> void:
 	assert_true(broke_seat_order)
 
 
+func test_race_place_follows_progress_then_spot() -> void:
+	var engine := HeatTestHelpers.make_engine(3, 1)
+	var a := engine.players[0]
+	var b := engine.players[1]
+	var c := engine.players[2]
+	a.progress = 4
+	a.spot = 1
+	b.progress = 4
+	b.spot = 0
+	c.progress = 9
+	c.spot = 0
+	assert_eq(engine.race_place(c.id), 1)
+	assert_eq(engine.race_place(b.id), 2)
+	assert_eq(engine.race_place(a.id), 3)
+	c.finished = true
+	c.finish_rank = 1
+	a.progress = 12
+	assert_eq(engine.race_place(c.id), 1)
+	assert_eq(engine.race_place(a.id), 2)
+	assert_eq(engine.race_place(b.id), 3)
+
+
+func test_round_order_frozen_while_race_place_updates() -> void:
+	var engine := HeatTestHelpers.make_engine(3, 1)
+	var a := engine.players[0]
+	var b := engine.players[1]
+	var c := engine.players[2]
+	a.progress = 10
+	a.spot = 0
+	b.progress = 4
+	b.spot = 0
+	c.progress = 1
+	c.spot = 0
+	engine._snapshot_round_order()
+	var ids: Array[int] = []
+	for p in engine.round_order():
+		ids.append(p.id)
+	assert_eq(ids, [a.id, b.id, c.id] as Array[int])
+	assert_eq(engine.race_place(a.id), 1)
+	c.progress = 20
+	assert_eq(engine.race_place(c.id), 1)
+	assert_eq(engine.race_place(a.id), 2)
+	var ids_after: Array[int] = []
+	for p in engine.round_order():
+		ids_after.append(p.id)
+	assert_eq(ids_after, ids)
+
+
 func test_next_landmark_shows_finish_in_last_sector() -> void:
 	# for_tests oval: corners at 5, 11, 17, 21 — last sector wraps past finish.
 	var track := HeatTrack.for_tests(1)

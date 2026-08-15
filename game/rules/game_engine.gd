@@ -53,6 +53,7 @@ func setup(player_names: Array[String], p_track: HeatTrack, seed: int = 1) -> vo
 		_draw_up_to(p, 7)
 		players.append(p)
 	_assign_unique_start_spots()
+	_snapshot_round_order()
 	phase = Phase.SHIFT_GEARS
 	_log("Race setup on %s (%d laps), seed=%d" % [track.display_name(), track.laps, seed])
 
@@ -415,7 +416,7 @@ func _try_advance_from_play() -> void:
 	_begin_turn_order()
 
 
-func _begin_turn_order() -> void:
+func _snapshot_round_order() -> void:
 	turn_order.clear()
 	var active: Array[PlayerState] = []
 	for p in players:
@@ -428,6 +429,12 @@ func _begin_turn_order() -> void:
 	)
 	for p in active:
 		turn_order.append(p.id)
+
+
+func _begin_turn_order() -> void:
+	# Order was frozen at round start; positions must not reshuffle mid-round.
+	if turn_order.is_empty():
+		_snapshot_round_order()
 	# Adrenaline for last / last two based on started count
 	var adrenaline_ids: Array[int] = []
 	if not turn_order.is_empty():
@@ -680,6 +687,7 @@ func _end_round() -> void:
 		phase = Phase.RACE_OVER
 		_log("Race over")
 		return
+	_snapshot_round_order()
 	phase = Phase.SHIFT_GEARS
 	_log("New round — shift gears")
 
@@ -729,15 +737,53 @@ func ranking() -> Array[PlayerState]:
 	for p in players:
 		if p.finished:
 			finished_players.append(p)
-	finished_players.sort_custom(func(a: PlayerState, b: PlayerState) -> bool:
-		if a.finish_rank == b.finish_rank:
-			if a.progress != b.progress:
-				return a.progress > b.progress
-			return a.spot < b.spot
-		if a.finish_rank < 0:
-			return false
-		if b.finish_rank < 0:
-			return true
-		return a.finish_rank < b.finish_rank
-	)
+	finished_players.sort_custom(_is_ahead)
 	return finished_players
+
+
+## Live order for every car: assigned finish ranks first, then track position
+## (progress, then race-line spot). Place is 1-based index in this list.
+func race_order() -> Array[PlayerState]:
+	var order: Array[PlayerState] = players.duplicate()
+	order.sort_custom(_is_ahead)
+	return order
+
+
+func race_place(player_id: int) -> int:
+	var i := 0
+	for p in race_order():
+		i += 1
+		if p.id == player_id:
+			return i
+	return 0
+
+
+## Badge row for this round: current turn_order, then earlier finishers.
+func round_order() -> Array[PlayerState]:
+	var seen: Dictionary = {}
+	var order: Array[PlayerState] = []
+	for id in turn_order:
+		if id < 0 or id >= players.size():
+			continue
+		var p: PlayerState = players[id]
+		order.append(p)
+		seen[id] = true
+	var rest: Array[PlayerState] = []
+	for p in players:
+		if not seen.has(p.id):
+			rest.append(p)
+	rest.sort_custom(_is_ahead)
+	order.append_array(rest)
+	return order
+
+
+func _is_ahead(a: PlayerState, b: PlayerState) -> bool:
+	if a.finish_rank > 0 and b.finish_rank > 0:
+		return a.finish_rank < b.finish_rank
+	if a.finish_rank > 0:
+		return true
+	if b.finish_rank > 0:
+		return false
+	if a.progress != b.progress:
+		return a.progress > b.progress
+	return a.spot < b.spot

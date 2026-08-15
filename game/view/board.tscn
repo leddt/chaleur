@@ -90,12 +90,7 @@ text = "Mute"
 [node name="HeaderPlayers" type="HBoxContainer" parent="Margin/Root/Header"]
 layout_mode = 2
 theme_override_constants/separation = 10
-
-[node name="PlayersLegend" type="Label" parent="Margin/Root/Header/HeaderPlayers"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-theme_override_colors/font_color = Color(0.65, 0.7, 0.75, 1)
-text = "Classement (… prêt / ✓ validé / ▶ actif)"
+alignment = 0
 
 [node name="PlayersHud" type="HBoxContainer" parent="Margin/Root/Header/HeaderPlayers"]
 unique_name_in_owner = true

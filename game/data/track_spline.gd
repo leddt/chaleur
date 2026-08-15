@@ -62,6 +62,27 @@ static func make_default_triangle(center: Vector2 = Vector2(640, 360), radius: f
 	return spline
 
 
+## Cardinal auto-smooth points; closed Catmull-style handles read as a stadium oval.
+static func make_default_oval(
+	center: Vector2 = Vector2.ZERO,
+	radii: Vector2 = Vector2(420, 260)
+) -> TrackSpline:
+	var spline := TrackSpline.new()
+	var offsets := [
+		Vector2(0.0, -radii.y),
+		Vector2(radii.x, 0.0),
+		Vector2(0.0, radii.y),
+		Vector2(-radii.x, 0.0),
+	]
+	for offset in offsets:
+		var p := ControlPoint.new()
+		p.position = center + offset
+		p.type = PointType.AUTO_SMOOTH
+		p.tension = DEFAULT_TENSION
+		spline.points.append(p)
+	return spline
+
+
 static func type_name(type: int) -> String:
 	return str(TYPE_NAMES.get(type, "?"))
 

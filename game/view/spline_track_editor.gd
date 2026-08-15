@@ -16,7 +16,9 @@ const DECOR_SELECT_ICON := preload("res://ui/kit/icons/selection.png")
 const HANDLE_HIT_RADIUS := 12.0
 const POINT_HIT_RADIUS := 14.0
 const CURVE_HIT_RADIUS := 14.0
-const MIN_CANVAS_SIZE := 32.0
+const MIN_CANVAS_SIZE := 200.0
+## World-space default loop (independent of canvas pixels at first layout).
+const DEFAULT_LOOP_RADII := Vector2(420, 260)
 ## Half-width of the asphalt band around the centerline (pixels).
 const ROAD_HALF_WIDTH := SplineTrackPainter.HALF_WIDTH
 const CORNER_BADGE_RADIUS := SplineTrackPainter.CORNER_BADGE_RADIUS
@@ -34,7 +36,7 @@ const CORNER_LINE_COLOR := SplineTrackPainter.CORNER_LINE_COLOR
 const MIN_VIEW_ZOOM := 0.25
 const MAX_VIEW_ZOOM := 4.0
 const VIEW_ZOOM_STEP := 1.12
-const FIT_MARGIN := 24.0
+const FIT_MARGIN := 48.0
 
 @onready var _canvas: Control = %Canvas
 @onready var _summary: Label = %SummaryLabel
@@ -1257,9 +1259,7 @@ func _reset_spline() -> void:
 		_spline_ready = false
 		_refresh_summary()
 		return
-	var center := _canvas.size * 0.5
-	var radius := mini(center.x, center.y) * 0.55
-	_spline = TrackSpline.make_default_triangle(center, radius)
+	_spline = TrackSpline.make_default_oval(Vector2.ZERO, DEFAULT_LOOP_RADII)
 	_selected = 0
 	_selected_space = -1
 	_start_space_index = 0
@@ -2183,7 +2183,7 @@ func _draw_selection_fills(xform: Transform2D) -> void:
 
 
 func _draw_control_points(font: Font, xform: Transform2D) -> void:
-	var z := maxf(absf(xform.get_scale().x), 0.0001)
+	var z := clampf(absf(xform.get_scale().x), 0.45, 1.2)
 	for i in _spline.point_count():
 		var cp := _spline.get_point(i)
 		var selected := i == _selected

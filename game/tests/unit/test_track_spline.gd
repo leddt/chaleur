@@ -10,6 +10,15 @@ func test_default_triangle_has_three_auto_points() -> void:
 		assert_eq(cp.tension, TrackSpline.DEFAULT_TENSION)
 
 
+func test_default_oval_has_four_auto_points() -> void:
+	var spline := TrackSpline.make_default_oval(Vector2.ZERO, Vector2(100, 60))
+	assert_eq(spline.point_count(), 4)
+	assert_eq(spline.get_point(0).position, Vector2(0, -60))
+	assert_eq(spline.get_point(1).position, Vector2(100, 0))
+	assert_eq(spline.get_point(2).position, Vector2(0, 60))
+	assert_eq(spline.get_point(3).position, Vector2(-100, 0))
+
+
 func test_closed_curve2d_repeats_first_point() -> void:
 	var spline := TrackSpline.make_default_triangle()
 	var curve := spline.to_curve2d()

@@ -14,6 +14,9 @@ uniform float rise_speed : hint_range(0.0, 6.0) = 3.2;
 uniform float flame_height : hint_range(8.0, 120.0) = 68.0;
 uniform float lean : hint_range(0.0, 1.5) = 0.62;
 uniform float intensity : hint_range(0.5, 3.0) = 1.85;
+// 1 = glyphe en feu (titre). 0 = glyphe teinte glyph_color, flammes inchangees.
+uniform float burn_glyph : hint_range(0.0, 1.0) = 1.0;
+uniform vec3 glyph_color : source_color = vec3(1.0, 1.0, 1.0);
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -101,6 +104,7 @@ void fragment() {
 	// Soft edge : alpha du glyphe seul (anti-alias natif), sans contour sombre.
 	if (fill > 0.001) {
 		vec3 col = mix(tongue_col, body, smoothstep(0.0, 0.45, fill));
+		col = mix(glyph_color, col, burn_glyph);
 		float a = max(fill, outer);
 		COLOR = vec4(col, a);
 	} else if (outer > 0.04) {

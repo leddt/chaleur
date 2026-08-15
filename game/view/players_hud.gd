@@ -179,14 +179,17 @@ func _ready_mark(engine: HeatGameEngine, p: PlayerState, pending: Array[int]) ->
 class PlaceReel extends PanelContainer:
 	const SLIDE_SEC := 0.64
 	const PLATE_SIZE := Vector2(32, 22)
+	const FLAME_SHADER := preload("res://shaders/flame_text.gdshader")
 
 	var _clip: Control
-	var _front: Label
-	var _back: Label
+	var _front: ShadedLabel
+	var _back: ShadedLabel
 	var _place := 0
 	var _tween: Tween
+	var _flame_mat: ShaderMaterial
 
 	func setup(seat: Color) -> void:
+		clip_contents = false
 		size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = seat
@@ -198,14 +201,14 @@ class PlaceReel extends PanelContainer:
 		sb.content_margin_bottom = 0
 		add_theme_stylebox_override("panel", sb)
 		_clip = Control.new()
-		_clip.clip_contents = true
+		_clip.clip_contents = false
 		_clip.custom_minimum_size = PLATE_SIZE
 		_clip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_clip.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		_clip.resized.connect(_sync_rest_layout)
 		add_child(_clip)
-		_front = _make_label()
-		_back = _make_label()
+		_front = _make_place_label()
+		_back = _make_place_label()
 		_clip.add_child(_front)
 		_clip.add_child(_back)
 		_back.visible = false
@@ -220,19 +223,40 @@ class PlaceReel extends PanelContainer:
 		if not animate or from <= 0 or not is_inside_tree():
 			_snap(to_text)
 			return
-		_slide("P%d" % from, to_text, place > from)
+		_slide("P%d" % from, to_text, from, place > from)
 
-	func _make_label() -> Label:
-		var label := Label.new()
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		var display := ThemeBuilder.display_font()
-		if display != null:
-			label.add_theme_font_override("font", display)
-		label.add_theme_font_size_override("font_size", 16)
-		label.add_theme_color_override("font_color", Palette.CARDBOARD)
+	func _make_place_label() -> ShadedLabel:
+		var label := ShadedLabel.new()
+		label.font_size = 16
+		label.pad_left = 16
+		label.pad_right = 10
+		label.pad_top = 32
+		label.pad_bottom = 8
+		label.set_font(ThemeBuilder.display_font())
 		return label
+
+	func _style_place(label: ShadedLabel, place: int, flames: bool = true) -> void:
+		if flames and place == 1:
+			label.modulate = Color.WHITE
+			label.set_shader_material(_flame_material())
+		else:
+			label.set_shader_material(null)
+			label.modulate = Palette.CARDBOARD
+
+	func _flame_material() -> ShaderMaterial:
+		if _flame_mat == null:
+			_flame_mat = ShaderMaterial.new()
+			_flame_mat.shader = FLAME_SHADER
+			_flame_mat.set_shader_parameter("flame_core", Vector3(1.0, 0.98, 0.55))
+			_flame_mat.set_shader_parameter("flame_mid", Vector3(1.0, 0.38, 0.0))
+			_flame_mat.set_shader_parameter("flame_tip", Vector3(1.0, 0.06, 0.0))
+			_flame_mat.set_shader_parameter("flame_height", 28.0)
+			_flame_mat.set_shader_parameter("lean", 0.72)
+			_flame_mat.set_shader_parameter("rise_speed", 3.0)
+			_flame_mat.set_shader_parameter("intensity", 1.55)
+			_flame_mat.set_shader_parameter("burn_glyph", 0.0)
+			_flame_mat.set_shader_parameter("glyph_color", Vector3(Palette.CARDBOARD.r, Palette.CARDBOARD.g, Palette.CARDBOARD.b))
+		return _flame_mat
 
 	func _plate_size() -> Vector2:
 		var sz := _clip.size if _clip != null else Vector2.ZERO
@@ -240,41 +264,51 @@ class PlaceReel extends PanelContainer:
 			return PLATE_SIZE
 		return sz
 
+	func _rest_pos(label: ShadedLabel) -> Vector2:
+		var plate := _plate_size()
+		var glyph := label.get_glyph_size()
+		if glyph.x < 1.0 or glyph.y < 1.0:
+			glyph = Vector2(20.0, 18.0)
+		return Vector2(
+			(plate.x - glyph.x) * 0.5 - float(label.pad_left),
+			(plate.y - glyph.y) * 0.5 - float(label.pad_top)
+		)
+
 	func _sync_rest_layout() -> void:
 		if _is_sliding():
 			return
-		var sz := _plate_size()
-		_front.size = sz
-		_front.position = Vector2.ZERO
-		_back.size = sz
-		_back.position = Vector2.ZERO
+		_front.position = _rest_pos(_front)
+		_back.position = _rest_pos(_back)
 
 	func _snap(text: String) -> void:
 		_kill()
 		_front.text = text
+		_style_place(_front, _place)
 		_back.visible = false
 		_sync_rest_layout()
 
-	func _slide(from_text: String, to_text: String, worse: bool) -> void:
+	func _slide(from_text: String, to_text: String, from_place: int, worse: bool) -> void:
 		_kill()
-		var sz := _plate_size()
+		var rest := _rest_pos(_front)
+		var h := _plate_size().y
 		_front.text = from_text
 		_back.text = to_text
-		_front.size = sz
-		_back.size = sz
-		_front.position = Vector2.ZERO
-		_back.position = Vector2(0.0, sz.y if worse else -sz.y)
+		_style_place(_front, from_place, false)
+		_style_place(_back, _place, false)
+		_front.position = rest
+		_back.position = Vector2(rest.x, rest.y + (h if worse else -h))
 		_back.visible = true
-		var delta := -sz.y if worse else sz.y
+		var to_y := rest.y + (-h if worse else h)
 		_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		_tween.set_parallel(true)
-		_tween.tween_property(_front, "position:y", delta, SLIDE_SEC)
-		_tween.tween_property(_back, "position:y", 0.0, SLIDE_SEC)
+		_tween.tween_property(_front, "position:y", to_y, SLIDE_SEC)
+		_tween.tween_property(_back, "position:y", rest.y, SLIDE_SEC)
 		_tween.set_parallel(false)
 		_tween.tween_callback(_finish_slide)
 
 	func _finish_slide() -> void:
 		_front.text = _back.text
+		_style_place(_front, _place)
 		_back.visible = false
 		_kill()
 		_sync_rest_layout()

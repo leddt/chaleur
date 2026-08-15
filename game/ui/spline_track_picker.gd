@@ -16,7 +16,6 @@ var _pending_delete_index: int = -1
 
 
 func _ready() -> void:
-	theme = ThemeBuilder.build()
 	_apply_kit_chrome()
 	%NewButton.pressed.connect(_on_new_pressed)
 	%OpenButton.pressed.connect(_on_open_pressed)
@@ -61,12 +60,12 @@ func _apply_kit_chrome() -> void:
 func _ensure_delete_confirm() -> void:
 	if _delete_confirm != null:
 		return
-	_delete_confirm = ConfirmationDialog.new()
-	_delete_confirm.title = "Supprimer la piste"
-	_delete_confirm.ok_button_text = "Supprimer"
+	_delete_confirm = %DeleteConfirm
+	_delete_confirm.transparent = false
+	if get_tree().root.theme != null:
+		_delete_confirm.theme = get_tree().root.theme
 	_delete_confirm.cancel_button_text = "Annuler"
 	_delete_confirm.confirmed.connect(_on_delete_confirmed)
-	add_child(_delete_confirm)
 
 
 func _refresh_list() -> void:

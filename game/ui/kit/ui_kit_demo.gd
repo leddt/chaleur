@@ -14,9 +14,6 @@ var _selected: Card = null
 
 
 func _ready() -> void:
-	# Applique sur ce Control plutot que sur root : la demo reste isolee et
-	# ne repeint pas le reste du jeu si elle est ouverte en cours de partie.
-	theme = ThemeBuilder.build()
 	_build_background()
 	_build_header()
 	_build_dashboard()

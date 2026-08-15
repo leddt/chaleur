@@ -1,0 +1,107 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://view/spline_track_preview.gd" id="1_preview"]
+
+[node name="SessionPanel" type="VBoxContainer" unique_id=1236034322]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="ShareRow" type="HBoxContainer" parent="." unique_id=402266226]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ShareCodeEdit" type="LineEdit" parent="ShareRow" unique_id=884614281]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Game ID"
+alignment = 1
+editable = false
+
+[node name="CopyShareButton" type="Button" parent="ShareRow" unique_id=1459056693]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Copier"
+
+[node name="UpnpLabel" type="Label" parent="." unique_id=209724813]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="RacePanel" type="VBoxContainer" parent="." unique_id=547269531]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TrackLabel" type="Label" parent="RacePanel" unique_id=404691882]
+layout_mode = 2
+text = "Piste"
+
+[node name="TrackOption" type="OptionButton" parent="RacePanel" unique_id=1631060970]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="TrackPreview" type="Control" parent="RacePanel" unique_id=533607063]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 160)
+layout_mode = 2
+script = ExtResource("1_preview")
+
+[node name="LapsRow" type="HBoxContainer" parent="RacePanel" unique_id=27676375]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LapsLabel" type="Label" parent="RacePanel/LapsRow" unique_id=1016028379]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Tours"
+
+[node name="LapsSpin" type="SpinBox" parent="RacePanel/LapsRow" unique_id=1003402771]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 5.0
+value = 1.0
+rounded = true
+
+[node name="RaceSummary" type="Label" parent="RacePanel" unique_id=1160342581]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Piste 1 — 1 tour"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="PlayersTitle" type="Label" parent="." unique_id=1240321913]
+layout_mode = 2
+text = "Joueurs"
+
+[node name="PlayersList" type="ItemList" parent="." unique_id=1895872245]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ReadyButton" type="Button" parent="." unique_id=524623637]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Prêt"
+
+[node name="StartButton" type="Button" parent="." unique_id=2121832182]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Démarrer la course"
+
+[node name="LeaveButton" type="Button" parent="." unique_id=494175286]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Quitter le lobby"
+

@@ -1,0 +1,40 @@
+[gd_scene format=3]
+
+[node name="PassOverlay" type="ColorRect"]
+visible = false
+z_index = 200
+z_as_relative = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.06, 0.08, 0.92)
+
+[node name="PassCenter" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Inner" type="VBoxContainer" parent="PassCenter"]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="PassLabel" type="Label" parent="PassCenter/Inner"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "Passez l'appareil"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="PassContinueButton" type="Button" parent="PassCenter/Inner"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Primary"
+text = "C'est bon — afficher ma main"

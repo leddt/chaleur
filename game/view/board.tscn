@@ -1,19 +1,14 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://view/board.gd" id="1_board"]
 [ext_resource type="Script" path="res://view/track_view.gd" id="2_track"]
-[ext_resource type="Script" path="res://view/card_hand.gd" id="3_hand"]
 [ext_resource type="Script" path="res://view/players_hud.gd" id="4_hud"]
-[ext_resource type="Script" path="res://view/player_sidebar.gd" id="5_sidebar"]
-[ext_resource type="Script" path="res://view/action_panel.gd" id="6_actions"]
-[ext_resource type="Script" path="res://ui/kit/kerb.gd" id="7_kerb"]
-[ext_resource type="Script" path="res://view/gear_gate.gd" id="8_gate"]
-[ext_resource type="Script" path="res://ui/kit/heat_gauge.gd" id="9_gauge"]
 [ext_resource type="Script" path="res://view/event_journal.gd" id="10_journal"]
 [ext_resource type="Shader" path="res://shaders/paper_grain.gdshader" id="11_grain"]
-[ext_resource type="Script" path="res://view/corner_board.gd" id="12_corner"]
-[ext_resource type="Script" path="res://view/reserve_dial.gd" id="13_dial"]
-[ext_resource type="Script" path="res://view/pile_stack.gd" id="14_pile"]
+[ext_resource type="PackedScene" path="res://view/binnacle.tscn" id="12_binnacle"]
+[ext_resource type="PackedScene" path="res://view/cockpit.tscn" id="13_cockpit"]
+[ext_resource type="PackedScene" path="res://view/pass_overlay.tscn" id="14_pass"]
+[ext_resource type="PackedScene" path="res://view/finish_overlay.tscn" id="15_finish"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_grain"]
 shader = ExtResource("11_grain")
@@ -67,7 +62,7 @@ theme_override_constants/separation = 8
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 16
+theme_type_variation = &"Caption"
 text = "Phase"
 autowrap_mode = 3
 
@@ -75,11 +70,13 @@ autowrap_mode = 3
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+theme_type_variation = &"Compact"
 text = "Lobby"
 
 [node name="MenuButton" type="Button" parent="Margin/Root/Header/HeaderTop"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_type_variation = &"Compact"
 text = "Menu"
 
 [node name="MusicMuteCheck" type="CheckBox" parent="Margin/Root/Header/HeaderTop"]
@@ -99,7 +96,8 @@ size_flags_horizontal = 3
 theme_override_constants/separation = 14
 script = ExtResource("4_hud")
 
-[node name="MainRow" type="HBoxContainer" parent="Margin/Root"]
+[node name="MainRow" type="BoxContainer" parent="Margin/Root"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 8
@@ -126,243 +124,33 @@ size_flags_vertical = 0
 mouse_filter = 1
 script = ExtResource("10_journal")
 
-[node name="Binnacle" type="PanelContainer" parent="Margin/Root/MainRow"]
-layout_mode = 2
-size_flags_horizontal = 0
-size_flags_vertical = 3
-custom_minimum_size = Vector2(262, 0)
-custom_maximum_size = Vector2(262, 16384)
-theme_type_variation = &"Binnacle"
-
-[node name="Sidebar" type="VBoxContainer" parent="Margin/Root/MainRow/Binnacle"]
+[node name="Binnacle" parent="Margin/Root/MainRow" instance=ExtResource("12_binnacle")]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 10
-script = ExtResource("5_sidebar")
 
-[node name="CornerPanel" type="PanelContainer" parent="Margin/Root/MainRow/Binnacle/Sidebar"]
-layout_mode = 2
-theme_type_variation = &"Instrument"
-
-[node name="CornerBoard" type="Control" parent="Margin/Root/MainRow/Binnacle/Sidebar/CornerPanel"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 64)
-layout_mode = 2
-mouse_filter = 2
-script = ExtResource("12_corner")
-
-[node name="HeatGearRow" type="HBoxContainer" parent="Margin/Root/MainRow/Binnacle/Sidebar"]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="HeatPanel" type="PanelContainer" parent="Margin/Root/MainRow/Binnacle/Sidebar/HeatGearRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_type_variation = &"Instrument"
-
-[node name="HeatInner" type="VBoxContainer" parent="Margin/Root/MainRow/Binnacle/Sidebar/HeatGearRow/HeatPanel"]
-layout_mode = 2
-alignment = 1
-theme_override_constants/separation = 2
-
-[node name="HeatTitle" type="Label" parent="Margin/Root/MainRow/Binnacle/Sidebar/HeatGearRow/HeatPanel/HeatInner"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 11
-text = "RÉSERVE"
-horizontal_alignment = 1
-
-[node name="HeatDial" type="Control" parent="Margin/Root/MainRow/Binnacle/Sidebar/HeatGearRow/HeatPanel/HeatInner"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(92, 74)
-layout_mode = 2
-mouse_filter = 2
-script = ExtResource("13_dial")
-max_value = 6
-
-[node name="GearCol" type="VBoxContainer" parent="Margin/Root/MainRow/Binnacle/Sidebar/HeatGearRow"]
+[node name="Cockpit" parent="Margin/Root" instance=ExtResource("13_cockpit")]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 2
 
-[node name="GearTitle" type="Label" parent="Margin/Root/MainRow/Binnacle/Sidebar/HeatGearRow/GearCol"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 11
-text = "RAPPORT"
-horizontal_alignment = 1
-
-[node name="GearGate" type="Control" parent="Margin/Root/MainRow/Binnacle/Sidebar/HeatGearRow/GearCol"]
+[node name="PassOverlay" parent="." instance=ExtResource("14_pass")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(88, 146)
-layout_mode = 2
-size_flags_horizontal = 4
-script = ExtResource("8_gate")
-
-[node name="PilesPanel" type="PanelContainer" parent="Margin/Root/MainRow/Binnacle/Sidebar"]
-layout_mode = 2
-theme_type_variation = &"Instrument"
-
-[node name="PilesRow" type="HBoxContainer" parent="Margin/Root/MainRow/Binnacle/Sidebar/PilesPanel"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="DrawStack" type="Control" parent="Margin/Root/MainRow/Binnacle/Sidebar/PilesPanel/PilesRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 86)
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-script = ExtResource("14_pile")
-title = "PIOCHE"
-
-[node name="DiscardStack" type="Control" parent="Margin/Root/MainRow/Binnacle/Sidebar/PilesPanel/PilesRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 86)
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-script = ExtResource("14_pile")
-title = "DÉFAUSSE"
-
-[node name="StatusLabel" type="Label" parent="Margin/Root/MainRow/Binnacle/Sidebar"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-autowrap_mode = 3
-theme_override_font_sizes/font_size = 13
-text = "Status"
-
-[node name="Cockpit" type="VBoxContainer" parent="Margin/Root"]
-layout_mode = 2
-size_flags_vertical = 0
-theme_override_constants/separation = 8
-
-[node name="CockpitKerb" type="Control" parent="Margin/Root/Cockpit"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 10)
-layout_mode = 2
-mouse_filter = 2
-script = ExtResource("7_kerb")
-stripe_width = 18.0
-slant = 12.0
-
-[node name="CockpitRow" type="HBoxContainer" parent="Margin/Root/Cockpit"]
-layout_mode = 2
-theme_override_constants/separation = 20
-
-[node name="CardHand" type="Control" parent="Margin/Root/Cockpit/CockpitRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 206)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-script = ExtResource("3_hand")
-
-[node name="ActionBox" type="VBoxContainer" parent="Margin/Root/Cockpit/CockpitRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(300, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-size_flags_vertical = 4
-theme_override_constants/separation = 6
-script = ExtResource("6_actions")
-
-[node name="PassOverlay" type="ColorRect" parent="."]
-unique_name_in_owner = true
-visible = false
-z_index = 200
-z_as_relative = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.05, 0.06, 0.08, 0.92)
 
-[node name="PassCenter" type="VBoxContainer" parent="PassOverlay"]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -220.0
-offset_top = -80.0
-offset_right = 220.0
-offset_bottom = 80.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 16
-
-[node name="PassLabel" type="Label" parent="PassOverlay/PassCenter"]
+[node name="FinishOverlay" parent="." instance=ExtResource("15_finish")]
 unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "Passez l'appareil"
-horizontal_alignment = 1
-
-[node name="PassContinueButton" type="Button" parent="PassOverlay/PassCenter"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "C'est bon — afficher ma main"
-
-[node name="FinishOverlay" type="ColorRect" parent="."]
-unique_name_in_owner = true
-visible = false
-z_index = 200
-z_as_relative = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-color = Color(0.05, 0.06, 0.08, 0.92)
-
-[node name="FinishCenter" type="VBoxContainer" parent="FinishOverlay"]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -100.0
-offset_right = 200.0
-offset_bottom = 100.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 12
-
-[node name="FinishLabel" type="Label" parent="FinishOverlay/FinishCenter"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 22
-text = "Classement"
-horizontal_alignment = 1
-
-[node name="RematchButton" type="Button" parent="FinishOverlay/FinishCenter"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Rejouer"
-
-[node name="FinishLobbyButton" type="Button" parent="FinishOverlay/FinishCenter"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-text = "Retour lobby"
-
-[node name="FinishMenuButton" type="Button" parent="FinishOverlay/FinishCenter"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Menu (quitter réseau)"
 
 [node name="RevealBanner" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
-z_index = 20
+z_index = 150
+z_as_relative = false
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
@@ -376,7 +164,7 @@ grow_horizontal = 2
 [node name="RevealLabel" type="Label" parent="RevealBanner"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_type_variation = &"Stat"
 text = "Révélation"
 horizontal_alignment = 1
 vertical_alignment = 1

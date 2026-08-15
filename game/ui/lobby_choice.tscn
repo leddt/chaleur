@@ -1,0 +1,24 @@
+[gd_scene format=3]
+
+[node name="ChoicePanel" type="VBoxContainer" unique_id=171525738]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameEdit" type="LineEdit" parent="." unique_id=1981991009]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Player"
+placeholder_text = "Pseudo"
+alignment = 1
+
+[node name="HostButton" type="Button" parent="." unique_id=1303444216]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Héberger"
+
+[node name="JoinButton" type="Button" parent="." unique_id=1110944670]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Rejoindre"
+

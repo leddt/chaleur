@@ -32,6 +32,9 @@ func _ready() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	tooltip_text = "Journal de la course"
 	clip_contents = false
+	# Track paint layers use z 100–102 (clouds, badges, recadrer). Stay above them.
+	z_as_relative = false
+	z_index = 120
 	_build()
 
 
@@ -55,6 +58,8 @@ func _build() -> void:
 	_panel.anchor_bottom = 0.0
 	_panel.offset_top = -EXPANDED_HEIGHT
 	_panel.offset_bottom = 0.0
+	_panel.z_as_relative = false
+	_panel.z_index = 121
 	add_child(_panel)
 
 	_full = RichTextLabel.new()

@@ -5,35 +5,35 @@ enum Step { CHOICE, HOST_SETUP, JOIN_SETUP, SESSION }
 const SETTINGS_PATH := "user://chaleur_settings.cfg"
 
 @onready var _status: Label = %StatusLabel
-@onready var _name: LineEdit = %NameEdit
-@onready var _noray_host: LineEdit = %NorayHostEdit
-@onready var _host_port: LineEdit = %HostPortEdit
-@onready var _host_internet: Button = %HostInternetButton
-@onready var _host_direct: Button = %HostDirectButton
-@onready var _host_hint: Label = %HostHint
-@onready var _game_id: LineEdit = %GameIdEdit
-@onready var _address: LineEdit = %AddressEdit
-@onready var _join_port: LineEdit = %JoinPortEdit
-@onready var _join_internet: Button = %JoinInternetButton
-@onready var _join_direct: Button = %JoinDirectButton
-@onready var _join_hint: Label = %JoinHint
-@onready var _players: ItemList = %PlayersList
-@onready var _upnp: Label = %UpnpLabel
-@onready var _share_row: HBoxContainer = %ShareRow
-@onready var _share_code: LineEdit = %ShareCodeEdit
-@onready var _copy_share: Button = %CopyShareButton
+@onready var _name: LineEdit = %ChoicePanel/%NameEdit
+@onready var _noray_host: LineEdit = %HostPanel/%NorayHostEdit
+@onready var _host_port: LineEdit = %HostPanel/%HostPortEdit
+@onready var _host_internet: Button = %HostPanel/%HostInternetButton
+@onready var _host_direct: Button = %HostPanel/%HostDirectButton
+@onready var _host_hint: Label = %HostPanel/%HostHint
+@onready var _game_id: LineEdit = %JoinPanel/%GameIdEdit
+@onready var _address: LineEdit = %JoinPanel/%AddressEdit
+@onready var _join_port: LineEdit = %JoinPanel/%JoinPortEdit
+@onready var _join_internet: Button = %JoinPanel/%JoinInternetButton
+@onready var _join_direct: Button = %JoinPanel/%JoinDirectButton
+@onready var _join_hint: Label = %JoinPanel/%JoinHint
+@onready var _players: ItemList = %SessionPanel/%PlayersList
+@onready var _upnp: Label = %SessionPanel/%UpnpLabel
+@onready var _share_row: HBoxContainer = %SessionPanel/%ShareRow
+@onready var _share_code: LineEdit = %SessionPanel/%ShareCodeEdit
+@onready var _copy_share: Button = %SessionPanel/%CopyShareButton
 @onready var _choice_panel: VBoxContainer = %ChoicePanel
 @onready var _host_panel: VBoxContainer = %HostPanel
 @onready var _join_panel: VBoxContainer = %JoinPanel
 @onready var _session_panel: VBoxContainer = %SessionPanel
-@onready var _race_panel: VBoxContainer = %RacePanel
-@onready var _track_option: OptionButton = %TrackOption
-@onready var _track_preview: SplineTrackPreview = %TrackPreview
-@onready var _laps_spin: SpinBox = %LapsSpin
-@onready var _laps_label: Label = %LapsLabel
-@onready var _race_summary: Label = %RaceSummary
-@onready var _ready_button: Button = %ReadyButton
-@onready var _start_button: Button = %StartButton
+@onready var _race_panel: VBoxContainer = %SessionPanel/%RacePanel
+@onready var _track_option: OptionButton = %SessionPanel/%TrackOption
+@onready var _track_preview: SplineTrackPreview = %SessionPanel/%TrackPreview
+@onready var _laps_spin: SpinBox = %SessionPanel/%LapsSpin
+@onready var _laps_label: Label = %SessionPanel/%LapsLabel
+@onready var _race_summary: Label = %SessionPanel/%RaceSummary
+@onready var _ready_button: Button = %SessionPanel/%ReadyButton
+@onready var _start_button: Button = %SessionPanel/%StartButton
 @onready var _back_button: Button = %BackButton
 @onready var _hint: Label = %Hint
 
@@ -46,18 +46,19 @@ var _join_mode_group: ButtonGroup
 
 
 func _ready() -> void:
+	_apply_kit_chrome()
 	_setup_mode_toggles()
 	_setup_track_options()
 	_load_settings()
-	%HostButton.pressed.connect(_on_choose_host)
-	%JoinButton.pressed.connect(_on_choose_join)
-	%HostConfirmButton.pressed.connect(_on_host_confirm)
-	%HostCancelButton.pressed.connect(_on_setup_cancel)
-	%JoinConfirmButton.pressed.connect(_on_join_confirm)
-	%JoinCancelButton.pressed.connect(_on_setup_cancel)
+	%ChoicePanel/%HostButton.pressed.connect(_on_choose_host)
+	%ChoicePanel/%JoinButton.pressed.connect(_on_choose_join)
+	%HostPanel/%HostConfirmButton.pressed.connect(_on_host_confirm)
+	%HostPanel/%HostCancelButton.pressed.connect(_on_setup_cancel)
+	%JoinPanel/%JoinConfirmButton.pressed.connect(_on_join_confirm)
+	%JoinPanel/%JoinCancelButton.pressed.connect(_on_setup_cancel)
 	_ready_button.pressed.connect(_on_ready_pressed)
 	_start_button.pressed.connect(_on_start_pressed)
-	%LeaveButton.pressed.connect(_on_leave_pressed)
+	%SessionPanel/%LeaveButton.pressed.connect(_on_leave_pressed)
 	_back_button.pressed.connect(_on_back_pressed)
 	_copy_share.pressed.connect(_on_copy_share)
 	_name.text_changed.connect(_on_name_changed)
@@ -86,6 +87,40 @@ func _ready() -> void:
 	_refresh_players()
 	_refresh_ready_button()
 	_refresh_track_preview()
+
+
+func _apply_kit_chrome() -> void:
+	var bg := get_node_or_null("Background") as ColorRect
+	if bg != null:
+		bg.color = Palette.ASPHALT
+	var title := get_node_or_null("Margin/VBox/Title") as Label
+	if title != null:
+		title.theme_type_variation = &"TitleLabel"
+		title.remove_theme_font_size_override("font_size")
+	_status.theme_type_variation = &"Caption"
+	_host_hint.theme_type_variation = &"Caption"
+	_join_hint.theme_type_variation = &"Caption"
+	_hint.theme_type_variation = &"Caption"
+	_upnp.theme_type_variation = &"Caption"
+	_race_summary.theme_type_variation = &"Caption"
+	%ChoicePanel/%HostButton.theme_type_variation = &"Primary"
+	%HostPanel/%HostConfirmButton.theme_type_variation = &"Primary"
+	%JoinPanel/%JoinConfirmButton.theme_type_variation = &"Primary"
+	_start_button.theme_type_variation = &"Primary"
+	_back_button.theme_type_variation = &"Compact"
+	%HostPanel/%HostCancelButton.theme_type_variation = &"Compact"
+	%JoinPanel/%JoinCancelButton.theme_type_variation = &"Compact"
+	%SessionPanel/%LeaveButton.theme_type_variation = &"Compact"
+	_copy_share.theme_type_variation = &"Compact"
+	_track_option.theme_type_variation = &"CompactOption"
+	for path in [
+		"RacePanel/TrackLabel",
+		"PlayersTitle",
+	]:
+		var eyebrow := %SessionPanel.get_node_or_null(path) as Label
+		if eyebrow != null:
+			eyebrow.theme_type_variation = &"Eyebrow"
+			eyebrow.text = eyebrow.text.to_upper()
 
 
 func _setup_mode_toggles() -> void:

@@ -41,6 +41,12 @@ static func build() -> Theme:
 	_setup_checkboxes(t, body)
 	_setup_sliders(t)
 	_setup_spinboxes(t, body)
+	_setup_option_buttons(t, body)
+	_setup_item_lists(t, body)
+	_setup_scroll(t)
+	_setup_rich_text(t, body)
+	_setup_separators(t)
+	_setup_dialogs(t, body)
 	_setup_panels(t)
 	_setup_binnacle(t)
 	return t
@@ -290,17 +296,206 @@ static func _setup_spinboxes(t: Theme, body: Font) -> void:
 	t.set_color("font_color", "LineEdit", Palette.CARDBOARD)
 	t.set_color("font_placeholder_color", "LineEdit", Palette.SMOKE)
 	t.set_color("caret_color", "LineEdit", Palette.MUSTARD)
-	var field := StyleBoxFlat.new()
-	field.bg_color = Palette.ASPHALT
-	field.border_color = Palette.SMOKE
-	field.set_border_width_all(1)
-	field.set_corner_radius_all(2)
-	field.set_content_margin_all(6)
-	t.set_stylebox("normal", "LineEdit", field)
-	var focus := field.duplicate() as StyleBoxFlat
-	focus.border_color = Palette.CARDBOARD
-	t.set_stylebox("focus", "LineEdit", focus)
-	t.set_stylebox("read_only", "LineEdit", field)
+	t.set_color("selection_color", "LineEdit", Palette.MUSTARD * Color(1, 1, 1, 0.35))
+	t.set_color("font_selected_color", "LineEdit", Palette.INK)
+	t.set_stylebox("normal", "LineEdit", _field_box(false))
+	t.set_stylebox("focus", "LineEdit", _field_box(true))
+	t.set_stylebox("read_only", "LineEdit", _field_box(false, true))
+
+	t.set_font("font", "SpinBox", body)
+	t.set_font_size("font_size", "SpinBox", SIZE_S)
+	t.set_color("font_color", "SpinBox", Palette.CARDBOARD)
+	t.set_icon("updown", "SpinBox", _spin_updown(Palette.CARDBOARD))
+
+
+## Puits enfoncé : distinct des boutons en contour (fond transparent + bord 2 px).
+static func _field_box(focused: bool, read_only: bool = false) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Palette.INK if not read_only else Palette.INK.darkened(0.12)
+	sb.set_corner_radius_all(2)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	# Ombre interne en haut/gauche : ça se lit comme un creux, pas comme un bouton.
+	sb.border_color = Palette.MUSTARD if focused else Color(0, 0, 0, 0.72)
+	sb.border_width_top = 2
+	sb.border_width_left = 2
+	sb.border_width_right = 1
+	sb.border_width_bottom = 1
+	if focused:
+		sb.border_width_right = 2
+		sb.border_width_bottom = 2
+	return sb
+
+
+static func _spin_updown(color: Color) -> Texture2D:
+	var img := Image.create(8, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	# Top: increment (apex up). Bottom: decrement (apex down).
+	for i in 4:
+		var x0 := 3 - i
+		var x1 := 4 + i
+		for x in range(maxi(x0, 0), mini(x1, 7) + 1):
+			img.set_pixel(x, 2 + i, color)
+			img.set_pixel(x, 13 - i, color)
+	return ImageTexture.create_from_image(img)
+
+
+static func _setup_option_buttons(t: Theme, body: Font) -> void:
+	t.set_font("font", "OptionButton", body)
+	t.set_font_size("font_size", "OptionButton", SIZE_S)
+	t.set_color("font_color", "OptionButton", Palette.CARDBOARD)
+	t.set_color("font_hover_color", "OptionButton", Palette.MUSTARD)
+	t.set_color("font_pressed_color", "OptionButton", Palette.INK)
+	t.set_color("font_disabled_color", "OptionButton", Palette.SMOKE)
+	t.set_stylebox("normal", "OptionButton", _compact_button_box(Color(0, 0, 0, 0), Palette.SMOKE))
+	t.set_stylebox("hover", "OptionButton", _compact_button_box(Color(0, 0, 0, 0), Palette.MUSTARD))
+	t.set_stylebox("pressed", "OptionButton", _compact_button_box(Palette.MUSTARD, Palette.MUSTARD))
+	t.set_stylebox("disabled", "OptionButton", _compact_button_box(Color(0, 0, 0, 0), Palette.INK))
+	t.set_stylebox("focus", "OptionButton", _compact_button_box(Color(0, 0, 0, 0), Palette.CARDBOARD))
+	t.set_icon("arrow", "OptionButton", _option_arrow(Palette.CARDBOARD))
+
+	t.add_type("CompactOption")
+	t.set_type_variation("CompactOption", "OptionButton")
+	t.set_font("font", "CompactOption", body)
+	t.set_font_size("font_size", "CompactOption", SIZE_S)
+	t.set_stylebox("normal", "CompactOption", _compact_button_box(Color(0, 0, 0, 0), Palette.SMOKE))
+	t.set_stylebox("hover", "CompactOption", _compact_button_box(Color(0, 0, 0, 0), Palette.MUSTARD))
+	t.set_stylebox("pressed", "CompactOption", _compact_button_box(Palette.MUSTARD, Palette.MUSTARD))
+	t.set_stylebox("disabled", "CompactOption", _compact_button_box(Color(0, 0, 0, 0), Palette.INK))
+	t.set_stylebox("focus", "CompactOption", _compact_button_box(Color(0, 0, 0, 0), Palette.CARDBOARD))
+
+	t.set_font("font", "PopupMenu", body)
+	t.set_font_size("font_size", "PopupMenu", SIZE_S)
+	t.set_color("font_color", "PopupMenu", Palette.CARDBOARD)
+	t.set_color("font_hover_color", "PopupMenu", Palette.MUSTARD)
+	t.set_color("font_accelerator_color", "PopupMenu", Palette.SMOKE)
+	t.set_color("font_separator_color", "PopupMenu", Palette.SMOKE)
+	var menu_panel := StyleBoxFlat.new()
+	menu_panel.bg_color = Palette.INK
+	menu_panel.border_color = Palette.SMOKE
+	menu_panel.set_border_width_all(1)
+	menu_panel.set_content_margin_all(8)
+	t.set_stylebox("panel", "PopupMenu", menu_panel)
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = Palette.ASPHALT
+	hover.border_color = Palette.MUSTARD
+	hover.border_width_left = 2
+	hover.set_content_margin_all(4)
+	t.set_stylebox("hover", "PopupMenu", hover)
+	t.set_stylebox("labeled_separator_left", "PopupMenu", StyleBoxEmpty.new())
+	t.set_stylebox("labeled_separator_right", "PopupMenu", StyleBoxEmpty.new())
+
+
+static func _option_arrow(color: Color) -> Texture2D:
+	var img := Image.create(10, 6, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for y in 5:
+		for x in range(y, 10 - y):
+			img.set_pixel(x, y, color)
+	return ImageTexture.create_from_image(img)
+
+
+static func _setup_item_lists(t: Theme, body: Font) -> void:
+	t.set_font("font", "ItemList", body)
+	t.set_font_size("font_size", "ItemList", SIZE_S)
+	t.set_color("font_color", "ItemList", Palette.CARDBOARD)
+	t.set_color("font_hovered_color", "ItemList", Palette.MUSTARD)
+	t.set_color("font_selected_color", "ItemList", Palette.INK)
+	t.set_constant("v_separation", "ItemList", 4)
+	var panel := StyleBoxFlat.new()
+	panel.bg_color = Palette.ASPHALT
+	panel.border_color = Palette.SMOKE
+	panel.set_border_width_all(1)
+	panel.set_content_margin_all(6)
+	t.set_stylebox("panel", "ItemList", panel)
+	var selected := StyleBoxFlat.new()
+	selected.bg_color = Palette.MUSTARD
+	selected.set_corner_radius_all(2)
+	t.set_stylebox("selected", "ItemList", selected)
+	t.set_stylebox("selected_focus", "ItemList", selected)
+	var hovered := StyleBoxFlat.new()
+	hovered.bg_color = Color(Palette.MUSTARD.r, Palette.MUSTARD.g, Palette.MUSTARD.b, 0.18)
+	t.set_stylebox("hovered", "ItemList", hovered)
+	t.set_stylebox("cursor", "ItemList", StyleBoxEmpty.new())
+	t.set_stylebox("cursor_unfocused", "ItemList", StyleBoxEmpty.new())
+	t.set_stylebox("focus", "ItemList", _compact_button_box(Color(0, 0, 0, 0), Palette.CARDBOARD))
+
+
+static func _setup_scroll(t: Theme) -> void:
+	var grabber := StyleBoxFlat.new()
+	grabber.bg_color = Palette.SMOKE
+	grabber.set_corner_radius_all(2)
+	t.set_stylebox("grabber", "VScrollBar", grabber)
+	t.set_stylebox("grabber_highlight", "VScrollBar", grabber)
+	t.set_stylebox("grabber_pressed", "VScrollBar", grabber)
+	var scroll := StyleBoxFlat.new()
+	scroll.bg_color = Palette.INK
+	t.set_stylebox("scroll", "VScrollBar", scroll)
+	t.set_stylebox("grabber", "HScrollBar", grabber)
+	t.set_stylebox("scroll", "HScrollBar", scroll)
+	t.set_stylebox("panel", "ScrollContainer", StyleBoxEmpty.new())
+
+
+static func _setup_rich_text(t: Theme, body: Font) -> void:
+	t.set_font("normal_font", "RichTextLabel", body)
+	t.set_font_size("normal_font_size", "RichTextLabel", SIZE_S)
+	t.set_color("default_color", "RichTextLabel", Palette.CARDBOARD)
+	t.set_stylebox("normal", "RichTextLabel", StyleBoxEmpty.new())
+	t.set_stylebox("focus", "RichTextLabel", StyleBoxEmpty.new())
+
+
+static func _setup_separators(t: Theme) -> void:
+	var sep := StyleBoxFlat.new()
+	sep.bg_color = Palette.SMOKE
+	sep.content_margin_top = 1
+	sep.content_margin_bottom = 1
+	t.set_stylebox("separator", "HSeparator", sep)
+	t.set_stylebox("separator", "VSeparator", sep)
+
+
+static func _setup_dialogs(t: Theme, body: Font) -> void:
+	t.set_font("title_font", "Window", display_font())
+	t.set_font_size("title_font_size", "Window", SIZE_M)
+	t.set_color("title_color", "Window", Palette.CARDBOARD)
+	t.set_color("title_outline_modulate", "Window", Palette.INK)
+	t.set_constant("title_height", "Window", 36)
+	t.set_constant("title_outline_size", "Window", 0)
+	t.set_constant("close_h_offset", "Window", 22)
+	t.set_constant("close_v_offset", "Window", 18)
+
+	var chrome := StyleBoxFlat.new()
+	chrome.bg_color = Palette.INK
+	chrome.border_color = Palette.SMOKE
+	chrome.set_border_width_all(2)
+	chrome.set_corner_radius_all(4)
+	chrome.content_margin_left = 12
+	chrome.content_margin_right = 12
+	chrome.content_margin_top = 12
+	chrome.content_margin_bottom = 12
+	chrome.expand_margin_top = 36
+	chrome.shadow_color = Color(0, 0, 0, 0.45)
+	chrome.shadow_size = 10
+	chrome.shadow_offset = Vector2(0, 4)
+	t.set_stylebox("embedded_border", "Window", chrome)
+	t.set_stylebox("embedded_unfocused_border", "Window", chrome)
+	t.set_stylebox("panel", "Window", chrome)
+
+	var body_panel := StyleBoxFlat.new()
+	body_panel.bg_color = Palette.INK
+	body_panel.border_color = Palette.SMOKE
+	body_panel.set_border_width_all(2)
+	body_panel.set_corner_radius_all(4)
+	# The title is drawn above the panel rect; expand the fill so it is not see-through.
+	body_panel.expand_margin_top = 36
+	body_panel.content_margin_left = 16
+	body_panel.content_margin_right = 16
+	body_panel.content_margin_top = 12
+	body_panel.content_margin_bottom = 16
+	t.set_stylebox("panel", "AcceptDialog", body_panel)
+	t.set_font("font", "AcceptDialog", body)
+	t.set_font_size("font_size", "AcceptDialog", SIZE_M)
 
 
 ## La casquette du tableau de bord : une seule masse sombre, un bord superieur

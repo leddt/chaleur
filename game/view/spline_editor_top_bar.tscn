@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[node name="TopBar" type="HBoxContainer" unique_id=323888166]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="." unique_id=1184482065]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Créateur de piste"
+
+[node name="BuiltinCheck" type="CheckBox" parent="." unique_id=331413953]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Enregistrer dans res://tracks (debug uniquement)"
+text = "Built-in (ressources)"
+
+[node name="SaveButton" type="Button" parent="." unique_id=638010588]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Enregistrer"
+
+[node name="BackButton" type="Button" parent="." unique_id=496166146]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Menu"
+

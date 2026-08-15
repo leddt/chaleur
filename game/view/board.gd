@@ -1,20 +1,20 @@
 extends Control
 
 @onready var _track: TrackView = %TrackView
-@onready var _status: Label = %StatusLabel
+@onready var _status: Label = %Binnacle/%StatusLabel
 @onready var _phase: Label = %PhaseLabel
 @onready var _log: EventJournal = %EventLog
-@onready var _hand: CardHandView = %CardHand
-@onready var _actions: ActionPanel = %ActionBox
-@onready var _sidebar: PlayerSidebar = %Sidebar
+@onready var _hand: CardHandView = %Cockpit/%CardHand
+@onready var _actions: ActionPanel = %Cockpit/%ActionBox
+@onready var _sidebar: PlayerSidebar = %Binnacle/%Sidebar
 @onready var _hud: PlayersHud = %PlayersHud
 @onready var _pass_overlay: ColorRect = %PassOverlay
-@onready var _pass_label: Label = %PassLabel
+@onready var _pass_label: Label = %PassOverlay/%PassLabel
 @onready var _finish_overlay: ColorRect = %FinishOverlay
-@onready var _finish_label: Label = %FinishLabel
+@onready var _finish_label: Label = %FinishOverlay/%FinishLabel
 @onready var _reveal_banner: PanelContainer = %RevealBanner
 @onready var _reveal_label: Label = %RevealLabel
-@onready var _kerb: Kerb = %CockpitKerb
+@onready var _kerb: Kerb = %Cockpit/%CockpitKerb
 
 var _engine: HeatGameEngine
 var _revealed_seat: int = -1
@@ -24,13 +24,11 @@ var _ui_context_key: String = ""
 var _reveal_tween: Tween
 var _last_hand_key: String = ""
 var _kerb_scrolling: bool = false
+const NARROW_WIDTH := 1000.0
+const DESIGN_HEIGHT := 720.0
 
 
 func _ready() -> void:
-	# Applied here rather than on the root so the kit's look stays scoped to the
-	# board. Without it the cards fall back to Godot's default font and lose the
-	# whole printed-cardboard effect.
-	theme = ThemeBuilder.build()
 	_actions.setup(_hand, _sidebar)
 	_actions.action_requested.connect(_dispatch)
 	if Game.engine == null and not Game.is_online():
@@ -40,14 +38,16 @@ func _ready() -> void:
 	if _engine != null:
 		_track.set_engine(_engine, true)
 	_hand.selection_changed.connect(_on_hand_selection_changed)
-	%PassContinueButton.pressed.connect(_on_pass_continue)
+	%PassOverlay/%PassContinueButton.pressed.connect(_on_pass_continue)
 	%MenuButton.pressed.connect(_on_menu)
-	%FinishMenuButton.pressed.connect(_on_menu)
-	%RematchButton.pressed.connect(_on_rematch)
+	%FinishOverlay/%FinishMenuButton.pressed.connect(_on_menu)
+	%FinishOverlay/%RematchButton.pressed.connect(_on_rematch)
 	%LobbyButton.pressed.connect(_on_lobby)
-	%FinishLobbyButton.pressed.connect(_on_lobby)
+	%FinishOverlay/%FinishLobbyButton.pressed.connect(_on_lobby)
 	%MusicMuteCheck.button_pressed = Sfx.music_muted
 	%MusicMuteCheck.toggled.connect(_on_music_mute_toggled)
+	resized.connect(_adapt_layout)
+	_adapt_layout()
 	_reveal_banner.visible = false
 	Net.state_updated.connect(_on_net_state)
 	Net.net_error.connect(_on_net_error)
@@ -117,8 +117,8 @@ func _refresh_all() -> void:
 		_show_finish()
 		return
 	_finish_overlay.visible = false
-	%RematchButton.disabled = false
-	%RematchButton.text = "Rejouer"
+	%FinishOverlay/%RematchButton.disabled = false
+	%FinishOverlay/%RematchButton.text = "Rejouer"
 
 	if Game.is_online():
 		_refresh_online()
@@ -441,13 +441,13 @@ func _show_finish() -> void:
 	_status.text = "Bravo !"
 	_actions.clear()
 	_set_hand([] as Array[HeatCard], false)
-	%FinishLobbyButton.visible = Game.is_online()
+	%FinishOverlay/%FinishLobbyButton.visible = Game.is_online()
 	if Game.is_online() and not Net.is_server():
-		%RematchButton.text = "En attente de l'hôte…"
-		%RematchButton.disabled = true
+		%FinishOverlay/%RematchButton.text = "En attente de l'hôte…"
+		%FinishOverlay/%RematchButton.disabled = true
 	else:
-		%RematchButton.text = "Rejouer"
-		%RematchButton.disabled = false
+		%FinishOverlay/%RematchButton.text = "Rejouer"
+		%FinishOverlay/%RematchButton.disabled = false
 
 
 func _on_hand_selection_changed(_ids: Array[String]) -> void:
@@ -494,3 +494,28 @@ func _on_rematch() -> void:
 	_log.clear()
 	Sfx.start_race_music()
 	_refresh_all()
+
+
+func _adapt_layout() -> void:
+	# Stack only when the window is narrow *and* taller than the 720 design
+	# height. Wide/16:9 keeps a 720 logical height — stacking would clip.
+	var stack := size.x < NARROW_WIDTH and size.y > DESIGN_HEIGHT
+	var main_row := %MainRow as BoxContainer
+	if main_row != null:
+		main_row.vertical = stack
+	var binnacle := %Binnacle as Control
+	if binnacle != null:
+		if stack:
+			binnacle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			binnacle.custom_minimum_size.x = 0
+		else:
+			binnacle.size_flags_horizontal = Control.SIZE_SHRINK_END
+			binnacle.custom_minimum_size.x = 220
+	var cockpit_row := %Cockpit.get_node_or_null("%CockpitRow") as BoxContainer
+	if cockpit_row != null:
+		cockpit_row.vertical = stack
+	var action_scroll := %Cockpit.get_node_or_null("%ActionScroll") as Control
+	if action_scroll != null:
+		action_scroll.size_flags_horizontal = (
+			Control.SIZE_EXPAND_FILL if stack else Control.SIZE_SHRINK_END
+		)

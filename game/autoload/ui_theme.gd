@@ -9,8 +9,11 @@ extends Node
 
 const ENABLED := true
 
+var theme: Theme
+
 
 func _ready() -> void:
 	if not ENABLED:
 		return
-	get_tree().root.theme = ThemeBuilder.build()
+	theme = ThemeBuilder.build()
+	get_tree().root.theme = theme

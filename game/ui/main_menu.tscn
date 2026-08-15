@@ -1,6 +1,15 @@
-[gd_scene load_steps=2 format=3 uid="uid://dsdgnuifhavei"]
+[gd_scene load_steps=5 format=3 uid="uid://dsdgnuifhavei"]
 
 [ext_resource type="Script" uid="uid://r7x1rr6nlhna" path="res://ui/main_menu.gd" id="1_script"]
+[ext_resource type="Script" path="res://ui/kit/shaded_label.gd" id="2_shaded"]
+[ext_resource type="Script" path="res://ui/kit/kerb.gd" id="3_kerb"]
+[ext_resource type="Shader" path="res://shaders/paper_grain.gdshader" id="4_grain"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_grain"]
+shader = ExtResource("4_grain")
+shader_parameter/grain_amount = 0.035
+shader_parameter/vignette_amount = 0.10
+shader_parameter/grain_tint = Color(0.92, 0.88, 0.79, 1)
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -20,6 +29,17 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.106, 0.114, 0.129, 1)
 
+[node name="Kerb" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 10.0
+grow_horizontal = 2
+mouse_filter = 2
+script = ExtResource("3_kerb")
+stripe_width = 22.0
+slant = 14.0
+
 [node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -32,7 +52,8 @@ theme_override_constants/margin_top = 48
 theme_override_constants/margin_right = 56
 theme_override_constants/margin_bottom = 48
 
-[node name="Row" type="HBoxContainer" parent="Margin"]
+[node name="Row" type="BoxContainer" parent="Margin"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 48
 alignment = 1
@@ -42,7 +63,29 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 size_flags_stretch_ratio = 1.35
-theme_override_constants/separation = 10
+theme_override_constants/separation = 0
+
+[node name="Title" type="Control" parent="Margin/Row/Brand"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("2_shaded")
+text = "CHALEUR"
+font_size = 96
+pad_left = 56
+pad_top = 80
+pad_right = 32
+pad_bottom = 6
+
+[node name="Subtitle" type="Control" parent="Margin/Row/Brand"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("2_shaded")
+text = "PÉDALE SU'L'COIN D'LA YEULE"
+font_size = 28
+pad_left = 56
+pad_right = 32
+pad_top = 2
+pad_bottom = 12
 
 [node name="Actions" type="VBoxContainer" parent="Margin/Row"]
 layout_mode = 2
@@ -69,6 +112,16 @@ text = "Créateur de piste"
 unique_name_in_owner = true
 layout_mode = 2
 text = "Quitter"
+
+[node name="Grain" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+material = SubResource("ShaderMaterial_grain")
 
 [connection signal="pressed" from="Margin/Row/Actions/PlayButton" to="." method="_on_play_pressed"]
 [connection signal="pressed" from="Margin/Row/Actions/LobbyButton" to="." method="_on_lobby_pressed"]

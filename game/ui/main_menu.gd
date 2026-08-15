@@ -1,21 +1,18 @@
 extends Control
 
-const ShadedLabelScn := preload("res://ui/kit/shaded_label.gd")
 const FLAME_SHADER := preload("res://shaders/flame_text.gdshader")
 const CHROME_SHADER := preload("res://shaders/chrome_text.gdshader")
-const GRAIN_SHADER := preload("res://shaders/paper_grain.gdshader")
 
-const TITLE_SIZE := 96
-const SUBTITLE_SIZE := 28
+const NARROW_WIDTH := 900.0
 
 
 func _ready() -> void:
-	theme = ThemeBuilder.build()
 	_apply_background()
-	_build_brand_labels()
+	_style_brand()
 	_apply_actions()
-	_build_kerb()
-	_build_grain_overlay()
+	_start_kerb()
+	resized.connect(_adapt_layout)
+	_adapt_layout()
 
 
 func _apply_background() -> void:
@@ -24,35 +21,14 @@ func _apply_background() -> void:
 		bg.color = Palette.ASPHALT
 
 
-func _build_brand_labels() -> void:
-	var brand := get_node("Margin/Row/Brand") as VBoxContainer
-	brand.add_theme_constant_override("separation", 0)
-
-	var title: ShadedLabel = ShadedLabelScn.new()
-	title.name = "Title"
-	title.text = "CHALEUR"
-	title.font_size = TITLE_SIZE
-	title.pad_left = 56
-	title.pad_top = 80
-	title.pad_right = 32
-	title.pad_bottom = 6
+func _style_brand() -> void:
+	var title := %Title as ShadedLabel
 	title.set_font(ThemeBuilder.display_font())
 	title.set_shader_material(_flame_material())
-	brand.add_child(title)
-
-	var subtitle: ShadedLabel = ShadedLabelScn.new()
-	subtitle.name = "Subtitle"
-	subtitle.text = "pédale su'l'coin d'la yeule".to_upper()
-	subtitle.font_size = SUBTITLE_SIZE
-	subtitle.pad_left = title.pad_left
-	subtitle.pad_right = title.pad_right
-	subtitle.pad_top = 2
-	subtitle.pad_bottom = 12
+	var subtitle := %Subtitle as ShadedLabel
 	subtitle.set_font(ThemeBuilder.display_font())
 	subtitle.set_shader_material(_chrome_material())
-	brand.add_child(subtitle)
-
-	await _align_subtitle_width(title, subtitle)
+	_align_subtitle_width(title, subtitle)
 
 
 func _align_subtitle_width(title: ShadedLabel, subtitle: ShadedLabel) -> void:
@@ -72,8 +48,6 @@ func _align_subtitle_width(title: ShadedLabel, subtitle: ShadedLabel) -> void:
 		8, int(round(title.custom_minimum_size.x - target_left - target_w))
 	)
 	await subtitle.fit_glyph_width(target_w)
-	# Affine : aligne le bord gauche d'encre du sous-titre sur celui du titre,
-	# puis corrige le scale pour coller aussi le bord droit.
 	await get_tree().process_frame
 	var sub_ink := subtitle.get_ink_rect(0.25)
 	if sub_ink.size.x > 1.0:
@@ -93,6 +67,19 @@ func _align_subtitle_width(title: ShadedLabel, subtitle: ShadedLabel) -> void:
 
 func _apply_actions() -> void:
 	%PlayButton.theme_type_variation = &"Primary"
+
+
+func _start_kerb() -> void:
+	var kerb := get_node_or_null("Kerb") as Kerb
+	if kerb != null:
+		kerb.animate(40.0)
+
+
+func _adapt_layout() -> void:
+	var row := %Row as BoxContainer
+	if row == null:
+		return
+	row.vertical = size.x < NARROW_WIDTH
 
 
 func _flame_material() -> ShaderMaterial:
@@ -119,29 +106,6 @@ func _chrome_material() -> ShaderMaterial:
 	mat.set_shader_parameter("emboss_width", 2.1)
 	mat.set_shader_parameter("emboss_strength", 0.55)
 	return mat
-
-
-func _build_kerb() -> void:
-	var kerb := Kerb.new()
-	kerb.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	kerb.offset_bottom = 10
-	kerb.stripe_width = 22.0
-	kerb.slant = 14.0
-	kerb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(kerb)
-	move_child(kerb, 1)
-	kerb.animate(40.0)
-
-
-func _build_grain_overlay() -> void:
-	var mat := ShaderMaterial.new()
-	mat.shader = GRAIN_SHADER
-	var overlay := ColorRect.new()
-	overlay.material = mat
-	overlay.color = Color.WHITE
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(overlay)
 
 
 func _on_play_pressed() -> void:

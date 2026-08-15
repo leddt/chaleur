@@ -39,61 +39,61 @@ const VIEW_ZOOM_STEP := 1.12
 const FIT_MARGIN := 48.0
 
 @onready var _canvas: Control = %Canvas
-@onready var _summary: Label = %SummaryLabel
-@onready var _track_name_edit: LineEdit = %TrackNameEdit
-@onready var _ground_theme_option: OptionButton = %GroundThemeOption
-@onready var _decor_select: Button = %DecorSelect
-@onready var _decor_tree: Button = %DecorTree
-@onready var _decor_rock: Button = %DecorRock
-@onready var _decor_bleachers: Button = %DecorBleachers
-@onready var _builtin_check: CheckBox = %BuiltinCheck
-@onready var _mode_trace: Button = %ModeTrace
-@onready var _mode_spaces: Button = %ModeSpaces
-@onready var _mode_sectors: Button = %ModeSectors
-@onready var _mode_decor: Button = %ModeDecor
-@onready var _mode_colors: Button = %ModeColors
-@onready var _trace_section: Control = %TraceSection
-@onready var _spaces_section: Control = %SpacesSection
-@onready var _sectors_section: Control = %SectorsSection
-@onready var _decor_section: Control = %DecorSection
-@onready var _colors_section: Control = %ColorsSection
-@onready var _asphalt_color_picker: ColorPickerButton = %AsphaltColorPicker
-@onready var _asphalt_light_picker: ColorPickerButton = %AsphaltLightPicker
-@onready var _asphalt_dark_picker: ColorPickerButton = %AsphaltDarkPicker
-@onready var _grain_lock_check: CheckBox = %GrainLockCheck
-@onready var _race_line_color_picker: ColorPickerButton = %RaceLineColorPicker
-@onready var _kerb_a_color_picker: ColorPickerButton = %KerbAColorPicker
-@onready var _kerb_b_color_picker: ColorPickerButton = %KerbBColorPicker
-@onready var _centerline_color_picker: ColorPickerButton = %CenterlineColorPicker
-@onready var _start_line_color_picker: ColorPickerButton = %StartLineColorPicker
-@onready var _corner_line_color_picker: ColorPickerButton = %CornerLineColorPicker
-@onready var _space_edge_color_picker: ColorPickerButton = %SpaceEdgeColorPicker
-@onready var _vegetation_a_color_picker: ColorPickerButton = %VegetationAColorPicker
-@onready var _vegetation_b_color_picker: ColorPickerButton = %VegetationBColorPicker
-@onready var _sector_info_label: Label = %SectorInfoLabel
-@onready var _sector_race_line_button: Button = %SectorRaceLineButton
-@onready var _type_auto: BaseButton = %TypeAuto
-@onready var _type_tension: BaseButton = %TypeTension
-@onready var _type_free: BaseButton = %TypeFree
-@onready var _algo_center: BaseButton = %AlgoCenter
-@onready var _algo_inner: BaseButton = %AlgoInner
-@onready var _algo_adaptive: BaseButton = %AlgoAdaptive
-@onready var _seg_mode_auto: Button = %SegModeAuto
-@onready var _seg_mode_fixed: Button = %SegModeFixed
-@onready var _len_row: Control = %LenRow
-@onready var _count_row: Control = %CountRow
-@onready var _space_len_slider: HSlider = %SpaceLenSlider
-@onready var _space_len_value: Label = %SpaceLenValue
-@onready var _space_count_spin: SpinBox = %SpaceCountSpin
-@onready var _hide_space_numbers: CheckBox = %HideSpaceNumbers
-@onready var _set_start_button: Button = %SetStartButton
-@onready var _corner_speed_spin: SpinBox = %CornerSpeedSpin
-@onready var _set_corner_button: Button = %SetCornerButton
-@onready var _corner_side_button: Button = %CornerSideButton
-@onready var _corner_details: Control = %CornerDetails
-@onready var _kerb_details: Control = %KerbDetails
-@onready var _kerb_inside_check: CheckBox = %KerbInsideCheck
-@onready var _kerb_outside_check: CheckBox = %KerbOutsideCheck
+@onready var _summary: Label = %SidePanel/%SummaryLabel
+@onready var _track_name_edit: LineEdit = %SidePanel/%TrackNameEdit
+@onready var _ground_theme_option: OptionButton = %SidePanel/%GroundThemeOption
+@onready var _decor_select: Button = %SidePanel/%DecorSelect
+@onready var _decor_tree: Button = %SidePanel/%DecorTree
+@onready var _decor_rock: Button = %SidePanel/%DecorRock
+@onready var _decor_bleachers: Button = %SidePanel/%DecorBleachers
+@onready var _builtin_check: CheckBox = %TopBar/%BuiltinCheck
+@onready var _mode_trace: Button = %SidePanel/%ModeTrace
+@onready var _mode_spaces: Button = %SidePanel/%ModeSpaces
+@onready var _mode_sectors: Button = %SidePanel/%ModeSectors
+@onready var _mode_decor: Button = %SidePanel/%ModeDecor
+@onready var _mode_colors: Button = %SidePanel/%ModeColors
+@onready var _trace_section: Control = %SidePanel/%TraceSection
+@onready var _spaces_section: Control = %SidePanel/%SpacesSection
+@onready var _sectors_section: Control = %SidePanel/%SectorsSection
+@onready var _decor_section: Control = %SidePanel/%DecorSection
+@onready var _colors_section: Control = %SidePanel/%ColorsSection
+@onready var _asphalt_color_picker: ColorPickerButton = %SidePanel/%AsphaltColorPicker
+@onready var _asphalt_light_picker: ColorPickerButton = %SidePanel/%AsphaltLightPicker
+@onready var _asphalt_dark_picker: ColorPickerButton = %SidePanel/%AsphaltDarkPicker
+@onready var _grain_lock_check: CheckBox = %SidePanel/%GrainLockCheck
+@onready var _race_line_color_picker: ColorPickerButton = %SidePanel/%RaceLineColorPicker
+@onready var _kerb_a_color_picker: ColorPickerButton = %SidePanel/%KerbAColorPicker
+@onready var _kerb_b_color_picker: ColorPickerButton = %SidePanel/%KerbBColorPicker
+@onready var _centerline_color_picker: ColorPickerButton = %SidePanel/%CenterlineColorPicker
+@onready var _start_line_color_picker: ColorPickerButton = %SidePanel/%StartLineColorPicker
+@onready var _corner_line_color_picker: ColorPickerButton = %SidePanel/%CornerLineColorPicker
+@onready var _space_edge_color_picker: ColorPickerButton = %SidePanel/%SpaceEdgeColorPicker
+@onready var _vegetation_a_color_picker: ColorPickerButton = %SidePanel/%VegetationAColorPicker
+@onready var _vegetation_b_color_picker: ColorPickerButton = %SidePanel/%VegetationBColorPicker
+@onready var _sector_info_label: Label = %SidePanel/%SectorInfoLabel
+@onready var _sector_race_line_button: Button = %SidePanel/%SectorRaceLineButton
+@onready var _type_auto: BaseButton = %SidePanel/%TypeAuto
+@onready var _type_tension: BaseButton = %SidePanel/%TypeTension
+@onready var _type_free: BaseButton = %SidePanel/%TypeFree
+@onready var _algo_center: BaseButton = %SidePanel/%AlgoCenter
+@onready var _algo_inner: BaseButton = %SidePanel/%AlgoInner
+@onready var _algo_adaptive: BaseButton = %SidePanel/%AlgoAdaptive
+@onready var _seg_mode_auto: Button = %SidePanel/%SegModeAuto
+@onready var _seg_mode_fixed: Button = %SidePanel/%SegModeFixed
+@onready var _len_row: Control = %SidePanel/%LenRow
+@onready var _count_row: Control = %SidePanel/%CountRow
+@onready var _space_len_slider: HSlider = %SidePanel/%SpaceLenSlider
+@onready var _space_len_value: Label = %SidePanel/%SpaceLenValue
+@onready var _space_count_spin: SpinBox = %SidePanel/%SpaceCountSpin
+@onready var _hide_space_numbers: CheckBox = %SidePanel/%HideSpaceNumbers
+@onready var _set_start_button: Button = %SidePanel/%SetStartButton
+@onready var _corner_speed_spin: SpinBox = %SidePanel/%CornerSpeedSpin
+@onready var _set_corner_button: Button = %SidePanel/%SetCornerButton
+@onready var _corner_side_button: Button = %SidePanel/%CornerSideButton
+@onready var _corner_details: Control = %SidePanel/%CornerDetails
+@onready var _kerb_details: Control = %SidePanel/%KerbDetails
+@onready var _kerb_inside_check: CheckBox = %SidePanel/%KerbInsideCheck
+@onready var _kerb_outside_check: CheckBox = %SidePanel/%KerbOutsideCheck
 
 var _spline: TrackSpline
 var _track_name: String = ""
@@ -186,7 +186,6 @@ var _panning := false
 var _reset_view_btn: Button
 
 func _ready() -> void:
-	theme = ThemeBuilder.build()
 	_apply_kit_chrome()
 	_setup_name_ui()
 	_setup_decor_palette()
@@ -197,8 +196,8 @@ func _ready() -> void:
 	_canvas.gui_input.connect(_on_canvas_gui_input)
 	_canvas.resized.connect(_on_canvas_resized)
 	_canvas.mouse_exited.connect(_on_canvas_mouse_exited)
-	%BackButton.pressed.connect(_on_back)
-	%SaveButton.pressed.connect(_on_save)
+	%TopBar/%BackButton.pressed.connect(_on_back)
+	%TopBar/%SaveButton.pressed.connect(_on_save)
 	_setup_mode_ui()
 	_setup_asphalt_color_ui()
 	_setup_type_ui()
@@ -213,21 +212,35 @@ func _ready() -> void:
 		_canvas.move_child(_reset_view_btn, -1)
 	# Layout may still report 0-height here — wait for a usable canvas size.
 	call_deferred("_try_init_spline")
+	resized.connect(_adapt_layout)
+	_adapt_layout()
+
+
+func _adapt_layout() -> void:
+	var row := %MainRow as BoxContainer
+	if row == null:
+		return
+	var narrow := size.x < 1000.0
+	row.vertical = narrow
+	var side := %SidePanel as Control
+	if side != null:
+		side.size_flags_horizontal = Control.SIZE_EXPAND_FILL if narrow else Control.SIZE_SHRINK_END
+		side.custom_minimum_size.x = 0.0 if narrow else 260.0
 
 
 func _apply_kit_chrome() -> void:
 	var bg := get_node_or_null("Background") as ColorRect
 	if bg != null:
 		bg.color = Palette.ASPHALT
-	var title := get_node_or_null("Root/TopBar/Title") as Label
+	var title := %TopBar/%Title as Label
 	if title != null:
 		title.theme_type_variation = &"TitleLabel"
 		title.remove_theme_font_size_override("font_size")
-	%BackButton.theme_type_variation = &"Compact"
-	%SaveButton.theme_type_variation = &"Primary"
+	%TopBar/%BackButton.theme_type_variation = &"Compact"
+	%TopBar/%SaveButton.theme_type_variation = &"Primary"
 	_builtin_check.visible = SplineTrackFile.can_write_builtin()
 	_builtin_check.disabled = not SplineTrackFile.can_write_builtin()
-	_ground_theme_option.theme_type_variation = &"Compact"
+	_ground_theme_option.theme_type_variation = &"CompactOption"
 	_seg_mode_auto.theme_type_variation = &"Compact"
 	_seg_mode_fixed.theme_type_variation = &"Compact"
 	_mode_trace.theme_type_variation = &"Compact"
@@ -243,36 +256,36 @@ func _apply_kit_chrome() -> void:
 	_set_corner_button.theme_type_variation = &"Compact"
 	_corner_side_button.theme_type_variation = &"Compact"
 	_sector_race_line_button.theme_type_variation = &"Compact"
-	var side := get_node_or_null("Root/MainRow/SidePanel") as PanelContainer
+	var side := %SidePanel as PanelContainer
 	if side != null:
 		side.theme_type_variation = &"Instrument"
 	for path in [
-		"Root/MainRow/SidePanel/Margin/PanelVBox/NameSection/NameTitle",
-		"Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/GroundTitle",
-		"Root/MainRow/SidePanel/Margin/PanelVBox/DecorSection/DecorItemsTitle",
-		"Root/MainRow/SidePanel/Margin/PanelVBox/PrioSection/PrioTitle",
-		"Root/MainRow/SidePanel/Margin/PanelVBox/EditSection/EditTitle",
+		"Margin/PanelVBox/NameSection/NameTitle",
+		"Margin/PanelVBox/DecorSection/GroundTitle",
+		"Margin/PanelVBox/DecorSection/DecorItemsTitle",
+		"Margin/PanelVBox/PrioSection/PrioTitle",
+		"Margin/PanelVBox/EditSection/EditTitle",
 	]:
-		var section := get_node_or_null(path) as Label
+		var section := side.get_node_or_null(path) as Label
 		if section != null:
 			section.theme_type_variation = &"Eyebrow"
 			section.remove_theme_font_size_override("font_size")
 			section.text = section.text.to_upper()
 	for path2 in [
-		"Root/MainRow/SidePanel/Margin/PanelVBox/SectorsSection/SectorHint",
-		"Root/MainRow/SidePanel/Margin/PanelVBox/SummaryLabel",
+		"Margin/PanelVBox/SectorsSection/SectorHint",
+		"Margin/PanelVBox/SummaryLabel",
 	]:
-		var caption := get_node_or_null(path2) as Label
+		var caption := side.get_node_or_null(path2) as Label
 		if caption != null:
 			caption.theme_type_variation = &"Caption"
 			caption.remove_theme_color_override("font_color")
 			caption.remove_theme_font_size_override("font_size")
 	for swatch_label_path in [
-		"Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/BaseCol/AsphaltBaseLabel",
-		"Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/LightCol/AsphaltLightLabel",
-		"Root/MainRow/SidePanel/Margin/PanelVBox/ColorsSection/AsphaltSwatches/DarkCol/AsphaltDarkLabel",
+		"Margin/PanelVBox/ColorsSection/AsphaltSwatches/BaseCol/AsphaltBaseLabel",
+		"Margin/PanelVBox/ColorsSection/AsphaltSwatches/LightCol/AsphaltLightLabel",
+		"Margin/PanelVBox/ColorsSection/AsphaltSwatches/DarkCol/AsphaltDarkLabel",
 	]:
-		var swatch_label := get_node_or_null(swatch_label_path) as Label
+		var swatch_label := side.get_node_or_null(swatch_label_path) as Label
 		if swatch_label != null:
 			swatch_label.theme_type_variation = &"Caption"
 			swatch_label.remove_theme_color_override("font_color")

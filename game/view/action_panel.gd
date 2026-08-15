@@ -69,9 +69,7 @@ func _build_shift_ui(p: PlayerState) -> void:
 	_sidebar.ensure_chosen_gear(p)
 	_sidebar.set_gear_editable(true, p)
 	add_child(_make_eyebrow("ÉTAPE 1 — RAPPORT"))
-	add_child(_make_label(
-		"Choisis ton rapport — tu es en %d. Deux crans coûtent 1 Heat." % p.gear
-	))
+	add_child(_make_label("En %d · deux crans = 1 Heat" % p.gear))
 	var confirm := _make_button("Engager", true)
 	confirm.pressed.connect(func() -> void:
 		action_requested.emit("shift_gear", {"gear": _sidebar.chosen_gear}, p.id)
@@ -196,31 +194,38 @@ func _build_react_ui(p: PlayerState) -> void:
 		"Ta vitesse est %d%s" % [p.round_speed, " — ADRÉNALINE" if p.has_adrenaline else ""]
 	))
 
-	var ad_btn := _make_button("Adrénaline\n+1 vitesse")
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+
+	var ad_btn := _make_button("Adrénaline · +1 vitesse", false, true)
 	ad_btn.disabled = not p.can_use_adrenaline()
 	ad_btn.pressed.connect(func() -> void:
 		action_requested.emit("adrenaline", {}, p.id)
 	)
-	add_child(ad_btn)
+	grid.add_child(ad_btn)
 
-	var boost_btn := _make_button("Boost\n+1 carte")
+	var boost_btn := _make_button("Boost · +1 carte", false, true)
 	boost_btn.disabled = not p.can_use_boost()
 	boost_btn.pressed.connect(func() -> void:
 		action_requested.emit("boost", {}, p.id)
 	)
-	add_child(boost_btn)
+	grid.add_child(boost_btn)
 
 	var remaining := p.cooldown_remaining()
-	var cd_btn := _make_button("Cooldown (%d)\nRemet un heat dans le moteur" % remaining)
+	var cd_btn := _make_button("Cooldown (%d) · Remet un heat" % remaining, false, true)
 	cd_btn.disabled = not p.can_use_cooldown()
 	cd_btn.pressed.connect(func() -> void:
 		action_requested.emit("cooldown", {}, p.id)
 	)
-	add_child(cd_btn)
+	grid.add_child(cd_btn)
 
 	var finish := _make_button("Terminer", true)
 	finish.pressed.connect(_on_finish_react_pressed.bind(p.id))
-	add_child(finish)
+	grid.add_child(finish)
+	add_child(grid)
 
 
 func _on_finish_react_pressed(player_id: int) -> void:
@@ -239,13 +244,12 @@ func _on_finish_react_pressed(player_id: int) -> void:
 func _ensure_finish_confirm() -> void:
 	if _finish_confirm != null:
 		return
-	_finish_confirm = ConfirmationDialog.new()
-	_finish_confirm.title = "Terminer la réaction"
-	_finish_confirm.ok_button_text = "Terminer"
+	_finish_confirm = %FinishReactDialog
+	_finish_confirm.transparent = false
+	if get_tree().root.theme != null:
+		_finish_confirm.theme = get_tree().root.theme
 	_finish_confirm.cancel_button_text = "Annuler"
 	_finish_confirm.confirmed.connect(_on_finish_react_confirmed)
-	# Keep outside clear() so the dialog is not freed while shown mid-REACT rebuilds.
-	get_tree().root.add_child(_finish_confirm)
 
 
 func _on_finish_react_confirmed() -> void:
@@ -261,7 +265,7 @@ func _make_label(text: String) -> Label:
 	label.text = text
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.add_theme_font_size_override("font_size", 14)
+	label.theme_type_variation = "Caption"
 	return label
 
 
@@ -274,7 +278,7 @@ func _make_eyebrow(text: String) -> Label:
 	return label
 
 
-func _make_button(text: String, primary: bool = false) -> Button:
+func _make_button(text: String, primary: bool = false, compact: bool = false) -> Button:
 	var btn := Button.new()
 	btn.text = text
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -282,4 +286,6 @@ func _make_button(text: String, primary: bool = false) -> Button:
 	btn.clip_text = false
 	if primary:
 		btn.theme_type_variation = "Primary"
+	elif compact:
+		btn.theme_type_variation = "Compact"
 	return btn

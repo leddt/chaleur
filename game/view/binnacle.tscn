@@ -1,0 +1,112 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://view/player_sidebar.gd" id="1_sidebar"]
+[ext_resource type="Script" path="res://view/corner_board.gd" id="2_corner"]
+[ext_resource type="Script" path="res://view/reserve_dial.gd" id="3_dial"]
+[ext_resource type="Script" path="res://view/gear_gate.gd" id="4_gate"]
+[ext_resource type="Script" path="res://view/pile_stack.gd" id="5_pile"]
+
+[node name="Binnacle" type="PanelContainer"]
+size_flags_horizontal = 0
+size_flags_vertical = 3
+custom_minimum_size = Vector2(220, 0)
+theme_type_variation = &"Binnacle"
+
+[node name="Sidebar" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+script = ExtResource("1_sidebar")
+
+[node name="CornerPanel" type="PanelContainer" parent="Sidebar"]
+layout_mode = 2
+theme_type_variation = &"Instrument"
+
+[node name="CornerBoard" type="Control" parent="Sidebar/CornerPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("2_corner")
+
+[node name="HeatGearRow" type="HBoxContainer" parent="Sidebar"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HeatPanel" type="PanelContainer" parent="Sidebar/HeatGearRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Instrument"
+
+[node name="HeatInner" type="VBoxContainer" parent="Sidebar/HeatGearRow/HeatPanel"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 2
+
+[node name="HeatTitle" type="Label" parent="Sidebar/HeatGearRow/HeatPanel/HeatInner"]
+layout_mode = 2
+theme_type_variation = &"Eyebrow"
+text = "RÉSERVE"
+horizontal_alignment = 1
+
+[node name="HeatDial" type="Control" parent="Sidebar/HeatGearRow/HeatPanel/HeatInner"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(92, 74)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("3_dial")
+max_value = 6
+
+[node name="GearCol" type="VBoxContainer" parent="Sidebar/HeatGearRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="GearTitle" type="Label" parent="Sidebar/HeatGearRow/GearCol"]
+layout_mode = 2
+theme_type_variation = &"Eyebrow"
+text = "RAPPORT"
+horizontal_alignment = 1
+
+[node name="GearGate" type="Control" parent="Sidebar/HeatGearRow/GearCol"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(88, 146)
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("4_gate")
+
+[node name="PilesPanel" type="PanelContainer" parent="Sidebar"]
+layout_mode = 2
+theme_type_variation = &"Instrument"
+
+[node name="PilesRow" type="HBoxContainer" parent="Sidebar/PilesPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DrawStack" type="Control" parent="Sidebar/PilesPanel/PilesRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 86)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+script = ExtResource("5_pile")
+title = "PIOCHE"
+
+[node name="DiscardStack" type="Control" parent="Sidebar/PilesPanel/PilesRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 86)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+script = ExtResource("5_pile")
+title = "DÉFAUSSE"
+
+[node name="StatusLabel" type="Label" parent="Sidebar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+theme_type_variation = &"Caption"
+text = "Status"

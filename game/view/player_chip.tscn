@@ -1,0 +1,29 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://view/player_chip.gd" id="1"]
+
+[node name="PlayerChip" type="HBoxContainer"]
+script = ExtResource("1")
+
+[node name="Body" type="PanelContainer" parent="."]
+layout_mode = 2
+
+[node name="Col" type="VBoxContainer" parent="Body"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="NameRow" type="HBoxContainer" parent="Body/Col"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Mark" type="Label" parent="Body/Col/NameRow"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+
+[node name="NameLabel" type="Label" parent="Body/Col/NameRow"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+
+[node name="Stats" type="Label" parent="Body/Col"]
+layout_mode = 2
+theme_type_variation = &"Eyebrow"

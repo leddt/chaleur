@@ -26,8 +26,8 @@ var _cards: Array[Card] = []
 
 
 func _ready() -> void:
-	if custom_minimum_size == Vector2.ZERO:
-		custom_minimum_size = Vector2(0, CARD_SIZE.y + FAN_LIFT * 2.0 + 20.0)
+	if custom_minimum_size.y <= 0.0:
+		custom_minimum_size.y = 160.0
 	clip_contents = false
 	resized.connect(_layout_fan)
 

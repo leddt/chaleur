@@ -1,0 +1,59 @@
+[gd_scene format=3]
+
+[node name="HostPanel" type="VBoxContainer" unique_id=776635364]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HostModeRow" type="HBoxContainer" parent="." unique_id=1174254716]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="HostInternetButton" type="Button" parent="HostModeRow" unique_id=1403867053]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_pressed = true
+text = "Partie Internet"
+
+[node name="HostDirectButton" type="Button" parent="HostModeRow" unique_id=1627360927]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = "Direct IP"
+
+[node name="HostHint" type="Label" parent="." unique_id=497858353]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Adresse du serveur relay"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="NorayHostEdit" type="LineEdit" parent="." unique_id=1579835938]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Serveur relay (IP ou hostname)"
+alignment = 1
+
+[node name="HostPortEdit" type="LineEdit" parent="." unique_id=836577419]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "7777"
+placeholder_text = "Port (7777)"
+alignment = 1
+
+[node name="HostConfirmButton" type="Button" parent="." unique_id=1815242287]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Confirmer"
+
+[node name="HostCancelButton" type="Button" parent="." unique_id=1203706582]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Annuler"
+

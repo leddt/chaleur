@@ -13,6 +13,12 @@ const DEFAULT_TYPE := TYPE_TREE
 const TOOL_SELECT := "select"
 
 const SELECT_ICON := preload("res://ui/kit/icons/selection.png")
+const CROWD_SHADER := preload("res://shaders/crowd_dots.gdshader")
+const FOLIAGE_SHADER := preload("res://shaders/foliage_dots.gdshader")
+const DISC_SHADER := preload("res://shaders/dot_disc.gdshader")
+const CROWD_NODE := "_CrowdDots"
+const FOLIAGE_NODE := "_FoliageDots"
+const TRUNK_NODE := "_TrunkDots"
 
 const _TYPE_ORDER: Array[String] = [TYPE_TREE, TYPE_ROCK, TYPE_BLEACHERS]
 
@@ -244,6 +250,14 @@ static func hit_index(items: Array, world: Vector2) -> int:
 	return -1
 
 
+static func has_bleachers(items: Array) -> bool:
+	for raw in items:
+		var item := parse_item(raw)
+		if str(item.get("type", "")) == TYPE_BLEACHERS:
+			return true
+	return false
+
+
 static func draw(
 	canvas: CanvasItem,
 	items: Array,
@@ -257,7 +271,12 @@ static func draw(
 		var item := parse_item(raw)
 		if item.is_empty():
 			continue
-		draw_item(canvas, item, xform, 1.0, foliage_a, foliage_b)
+		draw_item(canvas, item, xform, 1.0, foliage_a, foliage_b, false, false)
+	var host := canvas.get_parent() as Node2D
+	if host != null:
+		sync_foliage_mesh(host, items, xform, foliage_a, foliage_b)
+		sync_trunk_mesh(host, items, xform)
+		sync_crowd_mesh(host, items, xform)
 
 
 static func draw_item(
@@ -267,6 +286,8 @@ static func draw_item(
 	alpha: float = 1.0,
 	foliage_a: Color = TrackColors.DEFAULT_VEGETATION_A,
 	foliage_b: Color = TrackColors.DEFAULT_VEGETATION_B,
+	include_crowd: bool = true,
+	include_foliage: bool = true,
 ) -> void:
 	var parsed := parse_item(item)
 	if parsed.is_empty() or canvas == null:
@@ -277,9 +298,9 @@ static func draw_item(
 		TYPE_ROCK:
 			_draw_rock(canvas, params_for(parsed), full, a)
 		TYPE_BLEACHERS:
-			_draw_bleachers(canvas, params_for(parsed), full, a)
+			_draw_bleachers(canvas, params_for(parsed), full, a, include_crowd)
 		_:
-			_draw_tree(canvas, params_for(parsed), full, a, foliage_a, foliage_b)
+			_draw_tree(canvas, params_for(parsed), full, a, foliage_a, foliage_b, include_foliage)
 
 
 static func preview_texture(type_id: String, px: int = 48, seed: int = 1) -> Texture2D:
@@ -331,6 +352,7 @@ static func _params_tree(rng: RandomNumberGenerator) -> Dictionary:
 			"radius": canopy_r * rng.randf_range(0.42, 0.72),
 			"light": rng.randf_range(-0.08, 0.18),
 			"dark": rng.randf_range(0.0, 0.22),
+			"phase": rng.randf() * TAU,
 		})
 	return {
 		"hit_radius": canopy_r,
@@ -370,27 +392,14 @@ static func _params_bleachers(rng: RandomNumberGenerator, item: Dictionary) -> D
 	for _t in tiers:
 		## Delta subtil autour du béton de base (lighten +, darken -).
 		tier_shades.append(rng.randf_range(-0.028, 0.032))
-	## Quelques plaques de variation locale réparties au hasard.
-	var patches: Array = []
-	var patch_count := rng.randi_range(maxi(1, tiers), maxi(2, tiers * 2))
-	for _p in patch_count:
-		var tier_i := rng.randi_range(0, maxi(tiers - 1, 0))
-		var pw := width * rng.randf_range(0.12, 0.38)
-		var px := rng.randf_range(-0.5, 0.5) * (width - pw)
-		patches.append({
-			"tier": tier_i,
-			"x": px,
-			"w": pw,
-			"shade": rng.randf_range(-0.022, 0.026),
-		})
 	## Spectateurs régénérés selon seed + dimensions (répartition stable pour une taille donnée).
 	var spectators: Array = []
-	var slot_w := 3.6
+	var slot_w := 3.3
 	var cols := maxi(2, int(floor(width / slot_w)))
 	for t in tiers:
 		for c in cols:
-			## ~48% d'occupation : foule lisible sans masquer les marches.
-			if rng.randf() > 0.48:
+			## ~62% d'occupation : foule plus dense, marches encore lisibles.
+			if rng.randf() > 0.62:
 				continue
 			var u := (float(c) + 0.5) / float(cols)
 			var x := (u - 0.5) * width * 0.92 + rng.randf_range(-0.7, 0.7)
@@ -401,6 +410,8 @@ static func _params_bleachers(rng: RandomNumberGenerator, item: Dictionary) -> D
 				"y": y,
 				"r": rng.randf_range(0.85, 1.25),
 				"shade": rng.randf_range(0.0, 0.22),
+				"phase": rng.randf() * TAU,
+				"bob": rng.randf_range(0.45, 1.0),
 			})
 	return {
 		"hit_radius": maxf(width, float(tiers) * BLEACHER_TIER_DEPTH) * 0.5,
@@ -409,7 +420,6 @@ static func _params_bleachers(rng: RandomNumberGenerator, item: Dictionary) -> D
 		"depth": float(tiers) * BLEACHER_TIER_DEPTH,
 		"base_tint": base_tint,
 		"tier_shades": tier_shades,
-		"patches": patches,
 		"spectators": spectators,
 	}
 
@@ -439,29 +449,33 @@ static func _draw_tree(
 	alpha: float = 1.0,
 	foliage_a: Color = TrackColors.DEFAULT_VEGETATION_A,
 	foliage_b: Color = TrackColors.DEFAULT_VEGETATION_B,
+	include_foliage: bool = true,
 ) -> void:
 	var canopy_r: float = float(params.canopy_r)
 	var shadow := foliage_a.lerp(foliage_b, 0.75).darkened(0.35)
 	shadow.a = 0.55 * alpha
 	var s := _sx(xform)
 	canvas.draw_circle(xform * Vector2(1.2, 1.6), canopy_r * 0.92 * s, shadow, true, -1.0, true)
-	var blobs: Array = params.blobs
-	for i in blobs.size():
-		var b: Dictionary = blobs[i]
-		var br: float = float(b.radius)
-		var tint := _foliage_mix(foliage_a, foliage_b, float(b.light), float(b.dark))
-		if i == 0:
-			tint = foliage_a.lerp(foliage_b, 0.55)
-		tint.a *= alpha
-		var p := Vector2(cos(float(b.ang)), sin(float(b.ang))) * float(b.dist)
-		canvas.draw_circle(xform * p, br * s, tint, true, -1.0, true)
+	if include_foliage:
+		var blobs: Array = params.blobs
+		for i in blobs.size():
+			var b: Dictionary = blobs[i]
+			var br: float = float(b.radius)
+			var tint := _foliage_mix(foliage_a, foliage_b, float(b.light), float(b.dark))
+			if i == 0:
+				tint = foliage_a.lerp(foliage_b, 0.55)
+			tint.a *= alpha
+			var p := Vector2(cos(float(b.ang)), sin(float(b.ang))) * float(b.dist)
+			canvas.draw_circle(xform * p, br * s, tint, true, -1.0, true)
+		var hi := Vector2(cos(float(params.hi_ang)), sin(float(params.hi_ang))) * canopy_r * 0.28
+		var hi_col := foliage_a.lerp(foliage_b, 0.15).lightened(0.12)
+		hi_col.a = 0.55 * alpha
+		canvas.draw_circle(xform * hi, canopy_r * 0.22 * s, hi_col, true, -1.0, true)
+	else:
+		return
 	var trunk := Color(0.28, 0.20, 0.14, 1.0).lightened(float(params.trunk_tint))
 	trunk.a *= alpha
 	canvas.draw_circle(xform * Vector2.ZERO, canopy_r * 0.16 * s, trunk, true, -1.0, true)
-	var hi := Vector2(cos(float(params.hi_ang)), sin(float(params.hi_ang))) * canopy_r * 0.28
-	var hi_col := foliage_a.lerp(foliage_b, 0.15).lightened(0.12)
-	hi_col.a = 0.55 * alpha
-	canvas.draw_circle(xform * hi, canopy_r * 0.22 * s, hi_col, true, -1.0, true)
 
 
 static func _draw_rock(canvas: CanvasItem, params: Dictionary, xform: Transform2D, alpha: float = 1.0) -> void:
@@ -507,6 +521,7 @@ static func _draw_bleachers(
 	params: Dictionary,
 	xform: Transform2D,
 	alpha: float = 1.0,
+	include_crowd: bool = true,
 ) -> void:
 	var tiers := int(params.tiers)
 	var width: float = float(params.width)
@@ -550,26 +565,6 @@ static func _draw_bleachers(
 			maxf(1.0, 1.2 * _sx(xform)),
 			true
 		)
-	## Plaques de nuance locale (au-dessus des bandes, avant les spectateurs).
-	var patches: Array = params.patches
-	for raw_p in patches:
-		var p: Dictionary = raw_p
-		var ti := int(p.tier)
-		if ti < 0 or ti >= tiers:
-			continue
-		var y0p := -hy + float(ti) * BLEACHER_TIER_DEPTH
-		var y1p := y0p + BLEACHER_TIER_DEPTH
-		var px: float = float(p.x)
-		var pw: float = float(p.w)
-		var patch_col := _bleacher_tint(concrete, float(p.shade))
-		patch_col.a *= alpha
-		var patch_pts := PackedVector2Array([
-			xform * Vector2(px - pw * 0.5, y0p + 0.8),
-			xform * Vector2(px + pw * 0.5, y0p + 0.8),
-			xform * Vector2(px + pw * 0.5, y1p - 0.8),
-			xform * Vector2(px - pw * 0.5, y1p - 0.8),
-		])
-		canvas.draw_colored_polygon(patch_pts, patch_col)
 	## Contour + garde-corps avant (côté +Y).
 	var outline := PackedVector2Array(base_pts)
 	outline.append(base_pts[0])
@@ -581,7 +576,9 @@ static func _draw_bleachers(
 		maxf(1.4, 2.0 * _sx(xform)),
 		true
 	)
-	## Spectateurs: petits points foncés.
+	## Spectateurs CPU (fantôme d'éditeur / repli). La vue piste utilise un MultiMesh GPU.
+	if not include_crowd:
+		return
 	var crowd: Array = params.spectators
 	for raw in crowd:
 		var s: Dictionary = raw
@@ -599,6 +596,219 @@ static func _draw_bleachers(
 
 static func _sx(xform: Transform2D) -> float:
 	return absf(xform.get_scale().x)
+
+
+static var _crowd_mesh: ArrayMesh
+static var _crowd_mat: ShaderMaterial
+static var _crowd_tex: Texture2D
+
+
+static func _crowd_quad_mesh() -> ArrayMesh:
+	if _crowd_mesh != null:
+		return _crowd_mesh
+	_crowd_mesh = ArrayMesh.new()
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([
+		Vector3(-1, -1, 0), Vector3(1, -1, 0), Vector3(1, 1, 0),
+		Vector3(-1, -1, 0), Vector3(1, 1, 0), Vector3(-1, 1, 0),
+	])
+	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([
+		Vector2(0, 1), Vector2(1, 1), Vector2(1, 0),
+		Vector2(0, 1), Vector2(1, 0), Vector2(0, 0),
+	])
+	_crowd_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return _crowd_mesh
+
+
+static func _crowd_white_tex() -> Texture2D:
+	if _crowd_tex != null:
+		return _crowd_tex
+	var img := Image.create(2, 2, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	_crowd_tex = ImageTexture.create_from_image(img)
+	return _crowd_tex
+
+
+static func sync_crowd_mesh(host: Node2D, items: Array, xform: Transform2D) -> void:
+	if host == null:
+		return
+	var node := host.get_node_or_null(CROWD_NODE) as MultiMeshInstance2D
+	if node == null:
+		node = MultiMeshInstance2D.new()
+		node.name = CROWD_NODE
+		node.z_as_relative = true
+		node.z_index = 6
+		node.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		node.texture = _crowd_white_tex()
+		host.add_child(node)
+	if _crowd_mat == null:
+		_crowd_mat = ShaderMaterial.new()
+		_crowd_mat.shader = CROWD_SHADER
+	var dots: Array = []
+	for raw in items:
+		var item := parse_item(raw)
+		if str(item.get("type", "")) != TYPE_BLEACHERS:
+			continue
+		var full := xform * item_xform(item)
+		var sx := _sx(full)
+		for spec_v in params_for(item).spectators:
+			var s: Dictionary = spec_v
+			var r_local := maxf(float(s.r), 0.35)
+			var bob := float(s.get("bob", 1.0))
+			dots.append({
+				"pos": full * Vector2(float(s.x), float(s.y)),
+				"r": r_local * sx,
+				"col": Palette.INK.lightened(float(s.shade)),
+				"phase": float(s.get("phase", 0.0)),
+				"bob": bob,
+				"amp": 0.32 * bob / r_local,
+			})
+	if dots.is_empty():
+		node.visible = false
+		if node.multimesh != null:
+			node.multimesh.instance_count = 0
+		return
+	node.visible = true
+	var mm := node.multimesh
+	if mm == null:
+		mm = MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_2D
+		mm.use_colors = true
+		mm.use_custom_data = true
+		mm.mesh = _crowd_quad_mesh()
+		node.multimesh = mm
+		node.material = _crowd_mat
+	mm.instance_count = dots.size()
+	for i in dots.size():
+		var d: Dictionary = dots[i]
+		var r: float = float(d.r)
+		var xf := Transform2D(0.0, Vector2(r, r), 0.0, d.pos)
+		mm.set_instance_transform_2d(i, xf)
+		var col: Color = d.col
+		col.a = 0.82
+		mm.set_instance_color(i, col)
+		mm.set_instance_custom_data(i, Color(float(d.phase), float(d.bob), float(d.amp), 0.0))
+
+
+static var _foliage_mat: ShaderMaterial
+static var _disc_mat: ShaderMaterial
+
+
+static func sync_foliage_mesh(
+	host: Node2D,
+	items: Array,
+	xform: Transform2D,
+	foliage_a: Color,
+	foliage_b: Color,
+) -> void:
+	if _foliage_mat == null:
+		_foliage_mat = ShaderMaterial.new()
+		_foliage_mat.shader = FOLIAGE_SHADER
+	var dots: Array = []
+	for raw in items:
+		var item := parse_item(raw)
+		if str(item.get("type", "")) != TYPE_TREE:
+			continue
+		var params := params_for(item)
+		var full := xform * item_xform(item)
+		var sx := _sx(full)
+		var canopy_r := float(params.canopy_r)
+		var blobs: Array = params.blobs
+		for i in blobs.size():
+			var b: Dictionary = blobs[i]
+			var r_local := maxf(float(b.radius), 0.5)
+			var tint := _foliage_mix(foliage_a, foliage_b, float(b.light), float(b.dark))
+			if i == 0:
+				tint = foliage_a.lerp(foliage_b, 0.55)
+			var local := Vector2(cos(float(b.ang)), sin(float(b.ang))) * float(b.dist)
+			dots.append({
+				"pos": full * local,
+				"r": r_local * sx,
+				"col": tint,
+				"phase": float(b.get("phase", 0.0)),
+				"amp": 2.2 / r_local,
+			})
+		var hi := Vector2(cos(float(params.hi_ang)), sin(float(params.hi_ang))) * canopy_r * 0.28
+		var hi_col := foliage_a.lerp(foliage_b, 0.15).lightened(0.12)
+		hi_col.a = 0.55
+		dots.append({
+			"pos": full * hi,
+			"r": canopy_r * 0.22 * sx,
+			"col": hi_col,
+			"phase": float(params.hi_ang),
+			"amp": 2.2 / maxf(canopy_r * 0.22, 0.5),
+		})
+	_apply_dot_multimesh(host, FOLIAGE_NODE, 4, _foliage_mat, dots)
+
+
+static func sync_trunk_mesh(host: Node2D, items: Array, xform: Transform2D) -> void:
+	if _disc_mat == null:
+		_disc_mat = ShaderMaterial.new()
+		_disc_mat.shader = DISC_SHADER
+	var dots: Array = []
+	for raw in items:
+		var item := parse_item(raw)
+		if str(item.get("type", "")) != TYPE_TREE:
+			continue
+		var params := params_for(item)
+		var full := xform * item_xform(item)
+		var sx := _sx(full)
+		var canopy_r := float(params.canopy_r)
+		var trunk := Color(0.28, 0.20, 0.14, 1.0).lightened(float(params.trunk_tint))
+		dots.append({
+			"pos": full * Vector2.ZERO,
+			"r": canopy_r * 0.16 * sx,
+			"col": trunk,
+			"phase": 0.0,
+			"amp": 0.0,
+		})
+	_apply_dot_multimesh(host, TRUNK_NODE, 5, _disc_mat, dots)
+
+
+static func _apply_dot_multimesh(
+	host: Node2D,
+	node_name: String,
+	z: int,
+	mat: ShaderMaterial,
+	dots: Array,
+) -> void:
+	if host == null:
+		return
+	var node := host.get_node_or_null(node_name) as MultiMeshInstance2D
+	if node == null:
+		node = MultiMeshInstance2D.new()
+		node.name = node_name
+		node.z_as_relative = true
+		node.z_index = z
+		node.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		node.texture = _crowd_white_tex()
+		host.add_child(node)
+	if dots.is_empty():
+		node.visible = false
+		if node.multimesh != null:
+			node.multimesh.instance_count = 0
+		return
+	node.visible = true
+	var mm := node.multimesh
+	if mm == null:
+		mm = MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_2D
+		mm.use_colors = true
+		mm.use_custom_data = true
+		mm.mesh = _crowd_quad_mesh()
+		node.multimesh = mm
+		node.material = mat
+	mm.instance_count = dots.size()
+	for i in dots.size():
+		var d: Dictionary = dots[i]
+		var r: float = float(d.r)
+		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(r, r), 0.0, d.pos))
+		var col: Color = d.col
+		if col.a >= 0.99:
+			col.a = 1.0
+		mm.set_instance_color(i, col)
+		mm.set_instance_custom_data(i, Color(float(d.get("phase", 0.0)), 0.0, float(d.get("amp", 0.0)), 0.0))
 
 
 static func _stamp_tree(img: Image, center: Vector2, params: Dictionary, fit: float) -> void:
@@ -666,20 +876,6 @@ static func _stamp_bleachers(
 			center + Vector2(hx - fit, y0 + tier_h - 0.4 * fit),
 			center + Vector2(-hx + fit, y0 + tier_h - 0.4 * fit),
 		]), band)
-	for raw_p in params.patches:
-		var p: Dictionary = raw_p
-		var ti := int(p.tier)
-		if ti < 0 or ti >= tiers:
-			continue
-		var y0p := -hy + float(ti) * tier_h
-		var px: float = float(p.x) * fit
-		var pw: float = float(p.w) * fit
-		_fill_polygon(img, PackedVector2Array([
-			center + Vector2(px - pw * 0.5, y0p + 0.5 * fit),
-			center + Vector2(px + pw * 0.5, y0p + 0.5 * fit),
-			center + Vector2(px + pw * 0.5, y0p + tier_h - 0.5 * fit),
-			center + Vector2(px - pw * 0.5, y0p + tier_h - 0.5 * fit),
-		]), _bleacher_tint(concrete, float(p.shade)))
 	for raw in params.spectators:
 		var s: Dictionary = raw
 		var pos := center + Vector2(float(s.x), float(s.y)) * fit

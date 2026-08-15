@@ -89,6 +89,11 @@ func test_params_are_seed_stable() -> void:
 	var bb := TrackDecor.make_item(TrackDecor.TYPE_BLEACHERS, Vector2.ZERO, 7)
 	assert_eq(TrackDecor.params_for(ba).spectators.size(), TrackDecor.params_for(bb).spectators.size())
 	assert_gt(TrackDecor.params_for(ba).spectators.size(), 0)
+	assert_true(TrackDecor.has_bleachers([ba]))
+	assert_false(TrackDecor.has_bleachers([a]))
+	var spec: Dictionary = TrackDecor.params_for(ba).spectators[0]
+	assert_true(spec.has("phase"))
+	assert_true(spec.has("bob"))
 
 
 func test_hit_index_topmost() -> void:

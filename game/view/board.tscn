@@ -276,6 +276,8 @@ script = ExtResource("6_actions")
 [node name="PassOverlay" type="ColorRect" parent="."]
 unique_name_in_owner = true
 visible = false
+z_index = 200
+z_as_relative = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -314,6 +316,8 @@ text = "C'est bon — afficher ma main"
 [node name="FinishOverlay" type="ColorRect" parent="."]
 unique_name_in_owner = true
 visible = false
+z_index = 200
+z_as_relative = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

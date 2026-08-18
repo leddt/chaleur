@@ -46,10 +46,10 @@ func test_stress_resolved_before_react_step() -> void:
 	assert_true(HeatTestHelpers.shift_all(engine, 1))
 	var p0 := engine.players[0]
 	p0.hand.clear()
-	p0.hand.add(HeatCard.new("stress_t", HeatCard.Kind.STRESS, 0))
+	p0.hand.add(HeatTestHelpers.card("stress_t", "stress"))
 	p0.draw_pile.clear()
 	p0.discard.clear()
-	p0.draw_pile.add(HeatCard.new("flip_spd", HeatCard.Kind.SPEED, 4))
+	p0.draw_pile.add(HeatTestHelpers.card("flip_spd", "speed_4"))
 	assert_true(engine.play_cards(0, ["stress_t"]).ok)
 	assert_eq(engine.phase, HeatGameEngine.Phase.PLAYER_TURN)
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
@@ -78,10 +78,10 @@ func test_boost_increases_corner_speed_slipstream_does_not() -> void:
 	p.progress = 5
 	p.round_speed = 0
 	p.play_area.clear()
-	p.play_area.add(HeatCard.new("s3", HeatCard.Kind.SPEED, 3))
+	p.play_area.add(HeatTestHelpers.card("s3", "speed_3"))
 	p.skipped_move = false
 	p.draw_pile.clear()
-	p.draw_pile.add(HeatCard.new("boost_spd", HeatCard.Kind.SPEED, 2))
+	p.draw_pile.add(HeatTestHelpers.card("boost_spd", "speed_2"))
 	HeatTestHelpers.ensure_engine_heat(p, 6)
 	engine.debug_begin_turns([0, 1] as Array[int])
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
@@ -218,7 +218,7 @@ func test_boost_allowed_in_any_gear() -> void:
 		assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
 		p.draw_pile.clear()
 		p.discard.clear()
-		p.draw_pile.add(HeatCard.new("boost_spd_g%d" % gear, HeatCard.Kind.SPEED, 2))
+		p.draw_pile.add(HeatTestHelpers.card("boost_spd_g%d" % gear, "speed_2"))
 		var speed_before := p.round_speed
 		var heat_before := p.engine_heat()
 		var r := engine.use_boost(0)
@@ -250,7 +250,7 @@ func test_react_boost_and_adrenaline_order_independent() -> void:
 		HeatTestHelpers.ensure_engine_heat(p, 6)
 		p.draw_pile.clear()
 		p.discard.clear()
-		p.draw_pile.add(HeatCard.new("ord_spd", HeatCard.Kind.SPEED, 2))
+		p.draw_pile.add(HeatTestHelpers.card("ord_spd", "speed_2"))
 		var prog0 := p.progress
 		var speed0 := p.round_speed
 		if adrenaline_first:
@@ -283,8 +283,8 @@ func test_unit_cooldown_until_exhausted() -> void:
 	# Put Heat in hand for cooldown.
 	p.hand.clear()
 	for i in 4:
-		p.hand.add(HeatCard.new("hh%d" % i, HeatCard.Kind.HEAT, 0))
-	p.hand.add(HeatCard.new("spd", HeatCard.Kind.SPEED, 1))
+		p.hand.add(HeatTestHelpers.card("hh%d" % i, "heat"))
+	p.hand.add(HeatTestHelpers.card("spd", "speed_1"))
 	assert_true(engine.play_cards(0, ["spd"]).ok)
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
 	# Solo races still grant adrenaline to the sole mover; isolate cooldown quota.
@@ -328,11 +328,11 @@ func test_replenish_to_seven_and_recycle_discard() -> void:
 	p.draw_pile.clear()
 	p.discard.clear()
 	for i in 3:
-		p.discard.add(HeatCard.new("d%d" % i, HeatCard.Kind.SPEED, 1))
+		p.discard.add(HeatTestHelpers.card("d%d" % i, "speed_1"))
 	# Need 4 more in discard/draw to reach 7 after replenish (play area card also discarded)
 	for i in 4:
-		p.discard.add(HeatCard.new("e%d" % i, HeatCard.Kind.SPEED, 1))
-	p.hand.add(HeatCard.new("only", HeatCard.Kind.SPEED, 2))
+		p.discard.add(HeatTestHelpers.card("e%d" % i, "speed_1"))
+	p.hand.add(HeatTestHelpers.card("only", "speed_2"))
 	assert_true(engine.play_cards(0, ["only"]).ok)
 	assert_true(engine.finish_react(0).ok)
 	if engine.turn_step == HeatGameEngine.TurnStep.SLIPSTREAM:

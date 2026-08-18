@@ -16,6 +16,8 @@ enum Kind {
 @export var kind: Kind = Kind.SPEED
 @export var value: int = 1
 @export var title: String = ""
+## When set, overrides big_text() (e.g. upgrade Heat shows "H").
+@export var center_text: String = ""
 @export_multiline var effect: String = ""
 ## Symbole optionnel : "flame", "gear", "chevron", "" (aucun)
 @export var symbol: String = ""
@@ -45,6 +47,8 @@ func ink() -> Color:
 
 ## Ce qui s'affiche en gros au centre.
 func big_text() -> String:
+	if not center_text.is_empty():
+		return center_text
 	match kind:
 		Kind.HEAT:
 			return "H"
@@ -80,6 +84,16 @@ static func upgrade(v: int) -> CardData:
 	c.value = v
 	c.title = "AMÉLIORATION"
 	c.symbol = "gear"
+	return c
+
+
+static func upgrade_heat() -> CardData:
+	var c := CardData.new()
+	c.kind = Kind.UPGRADE
+	c.value = 0
+	c.center_text = "H"
+	c.title = "AMÉLIORATION"
+	c.symbol = "flame"
 	return c
 
 

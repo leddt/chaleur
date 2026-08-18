@@ -1,17 +1,30 @@
 class_name HeatCard
 extends RefCounted
 
-enum Kind { SPEED, HEAT, STRESS, UPGRADE }
+## Alias — CardDefinition.Kind is the single source of truth.
+const Kind = CardDefinition.Kind
 
 var id: String
-var kind: Kind
-var speed_value: int = 0
+var def_id: String
 
 
-func _init(p_id: String = "", p_kind: Kind = Kind.SPEED, p_speed: int = 0) -> void:
+func _init(p_id: String = "", p_def_id: String = "speed_1") -> void:
 	id = p_id
-	kind = p_kind
-	speed_value = p_speed
+	def_id = p_def_id
+
+
+func _def() -> CardDefinition:
+	return CardCatalog.get_def(def_id)
+
+
+var kind: Kind:
+	get:
+		return _def().kind
+
+
+var speed_value: int:
+	get:
+		return _def().speed_value
 
 
 func is_speed_card() -> bool:
@@ -23,12 +36,12 @@ func is_playable() -> bool:
 
 
 func can_discard() -> bool:
-	return kind != Kind.HEAT and kind != Kind.STRESS
+	return _def().discardable
 
 
 func contributes_speed_when_played() -> bool:
-	return kind == Kind.SPEED or kind == Kind.UPGRADE
+	return _def().contributes_speed
 
 
 func duplicate_card() -> HeatCard:
-	return HeatCard.new(id, kind, speed_value)
+	return HeatCard.new(id, def_id)

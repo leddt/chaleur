@@ -150,7 +150,7 @@ static func _decode_player(data: Dictionary) -> PlayerState:
 	if bool(data.get("hand_hidden", false)) and p.hand.is_empty():
 		# Placeholder backs so UI can show count without revealing cards.
 		for i in int(data.get("hand_count", 0)):
-			p.hand.add(HeatCard.new("hidden_%d_%d" % [p.id, i], HeatCard.Kind.SPEED, 0))
+			p.hand.add(HeatCard.new("hidden_%d_%d" % [p.id, i], "speed_1"))
 	p.play_area = _decode_pile(data.get("play_area", []))
 	p.discard = _decode_pile(data.get("discard", []))
 	p.engine = _decode_pile(data.get("engine", []))
@@ -173,12 +173,19 @@ static func _decode_player(data: Dictionary) -> PlayerState:
 static func _encode_pile(pile: CardPile) -> Array:
 	var out: Array = []
 	for card in pile.cards:
-		out.append({"id": card.id, "kind": int(card.kind), "speed_value": card.speed_value})
+		out.append({"id": card.id, "def_id": card.def_id})
 	return out
 
 
 static func _decode_pile(data: Array) -> CardPile:
 	var pile := CardPile.new()
 	for c in data:
-		pile.add(HeatCard.new(str(c.get("id", "")), c.get("kind", 0) as HeatCard.Kind, int(c.get("speed_value", 0))))
+		var card_id := str(c.get("id", ""))
+		var def_id := str(c.get("def_id", ""))
+		if def_id.is_empty():
+			def_id = CardCatalog.legacy_def_id(
+				c.get("kind", 0) as CardDefinition.Kind,
+				int(c.get("speed_value", 0))
+			)
+		pile.add(HeatCard.new(card_id, def_id))
 	return pile

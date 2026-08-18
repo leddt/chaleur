@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://cllk178b4bsqd"]
+
+[ext_resource type="Script" uid="uid://ws8nb5bj284y" path="res://data/card_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "starter_speed_5"
+kind = 3
+speed_value = 5
+contributes_speed = true

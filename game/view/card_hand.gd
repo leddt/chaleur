@@ -174,12 +174,4 @@ func _card_by_id(card_id: String) -> Card:
 
 ## Rules-side HeatCard to the kit's presentation-side CardData.
 func _to_card_data(card: HeatCard) -> CardData:
-	match card.kind:
-		HeatCard.Kind.UPGRADE:
-			return CardData.upgrade(card.speed_value)
-		HeatCard.Kind.HEAT:
-			return CardData.heat()
-		HeatCard.Kind.STRESS:
-			return CardData.stress()
-		_:
-			return CardData.speed(card.speed_value)
+	return CardCatalog.to_card_data(card.def_id)

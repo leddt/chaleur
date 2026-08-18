@@ -286,11 +286,8 @@ func discard_cards(player_id: int, card_ids: Array[String]) -> ActionResult:
 		var card := p.hand.get_by_id(cid)
 		if card == null:
 			return ActionResult.fail("Card not in hand")
-		if card.kind == HeatCard.Kind.HEAT or card.kind == HeatCard.Kind.STRESS:
-			return ActionResult.fail("Cannot discard Heat or Stress")
-		# Starting upgrades also cannot be discarded per p.6 note ("even the Upgrade ones") for Stress/Heat —
-		# the note says: never discard Stress or Heat (even the Upgrade ones) — meaning upgrade variants of those.
-		# Speed/Upgrade speed cards may be discarded.
+		if not card.can_discard():
+			return ActionResult.fail("Cannot discard this card")
 	for cid in card_ids:
 		var card := p.hand.remove_id(cid)
 		p.discard.add(card)
@@ -481,7 +478,8 @@ func _resolve_reveal_and_move(p: PlayerState) -> void:
 
 	p.round_speed = 0
 	for card in p.play_area.cards:
-		p.round_speed += card.speed_value
+		if card.contributes_speed_when_played():
+			p.round_speed += card.speed_value
 
 	_move_player(p, p.round_speed, false)
 	_log("%s reveals speed %d and moves" % [p.display_name, p.round_speed])

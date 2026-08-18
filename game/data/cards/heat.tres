@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3 uid="uid://b2u3monoyd0f8"]
+
+[ext_resource type="Script" uid="uid://ws8nb5bj284y" path="res://data/card_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "heat"
+kind = 1
+discardable = false

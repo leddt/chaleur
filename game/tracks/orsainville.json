@@ -806,6 +806,8 @@
 		}
 	],
 	"name": "Orsainville",
+	"start_heat": 6,
+	"start_stress": 3,
 	"sector_flip_race_line": [
 		{
 			"key": 7

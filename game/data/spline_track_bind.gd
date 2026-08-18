@@ -152,8 +152,8 @@ func to_heat_track(laps: int = 1) -> HeatTrack:
 			speed = int(entry)
 		var play_from := geom_to_play(geom)
 		track.corners.append(HeatCorner.new(play_from, speed, "c%d" % play_from))
-	track.start_heat = 6
-	track.start_stress = 3
+	track.start_heat = int(document.get("start_heat", 6))
+	track.start_stress = int(document.get("start_stress", 3))
 	track.start_behind_finish_line = true
 	track.start_max_per_space = 2
 	track.spline_bind = self

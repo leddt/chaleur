@@ -21,6 +21,7 @@ var race_track_id: String = ""
 var race_laps: int = 1
 ## Host-selected spline document; broadcast to clients for preview + race start.
 var race_track_document: Dictionary = {}
+var race_options: RaceOptions = RaceOptions.new()
 
 var _port: int = DEFAULT_PORT
 var upnp_status: String = ""
@@ -488,11 +489,13 @@ func set_ready(is_ready: bool) -> void:
 		rpc_set_ready.rpc_id(1, is_ready)
 
 
-func set_race_settings(track_id: String, laps: int) -> void:
+func set_race_settings(track_id: String, laps: int, options: RaceOptions = null) -> void:
 	if not is_server():
 		return
 	race_track_id = track_id
 	race_laps = maxi(1, laps)
+	if options != null:
+		race_options = options.duplicate_options()
 	race_track_document = {}
 	if not track_id.is_empty():
 		race_track_document = SplineTrackFile.load_document(track_id)
@@ -529,7 +532,7 @@ func start_race(laps: int = 1, track_id: String = "") -> void:
 	var seed := int(Time.get_unix_time_from_system())
 	race_laps = maxi(1, laps)
 	Game.engine = HeatGameEngine.new()
-	Game.engine.setup(names, track, seed)
+	Game.engine.setup(names, track, seed, race_options.duplicate_options())
 	Game.local_player_id = my_seat()
 	_broadcast_lobby()
 	for peer_id in lobby:
@@ -609,6 +612,7 @@ func rpc_lobby_sync(
 	track_id: String = "",
 	laps: int = 1,
 	track_document: Dictionary = {},
+	options_data: Dictionary = {},
 ) -> void:
 	lobby = lobby_data
 	race_track_id = track_id
@@ -617,6 +621,8 @@ func rpc_lobby_sync(
 		race_track_document = track_document
 	elif not track_id.is_empty() and race_track_document.is_empty():
 		race_track_document = SplineTrackFile.load_document(track_id)
+	if not options_data.is_empty():
+		race_options = RaceOptions.from_dict(options_data)
 	if Game.mode == Game.Mode.CLIENT:
 		Game.local_player_id = my_seat()
 	lobby_changed.emit()
@@ -752,7 +758,13 @@ func _peers_by_seat() -> Array:
 
 
 func _broadcast_lobby() -> void:
-	rpc_lobby_sync.rpc(lobby.duplicate(true), race_track_id, race_laps, race_track_document.duplicate(true))
+	rpc_lobby_sync.rpc(
+		lobby.duplicate(true),
+		race_track_id,
+		race_laps,
+		race_track_document.duplicate(true),
+		race_options.to_dict(),
+	)
 	lobby_changed.emit()
 
 
@@ -779,7 +791,8 @@ func _apply_action(player_id: int, action: String, payload: Dictionary) -> Actio
 			var ids: Array[String] = []
 			for id in payload.get("card_ids", []):
 				ids.append(str(id))
-			return Game.engine.play_cards(player_id, ids)
+			var choices: Dictionary = payload.get("speed_choices", {})
+			return Game.engine.play_cards(player_id, ids, choices)
 		"boost":
 			return Game.engine.use_boost(player_id)
 		"adrenaline":
@@ -795,6 +808,16 @@ func _apply_action(player_id: int, action: String, payload: Dictionary) -> Actio
 			for id in payload.get("card_ids", []):
 				dids.append(str(id))
 			return Game.engine.discard_cards(player_id, dids)
+		"pick_garage":
+			return Game.engine.pick_garage_card(player_id, str(payload.get("card_id", "")))
+		"upgrade_symbol":
+			return Game.engine.use_upgrade_symbol(
+				player_id, str(payload.get("uid", "")), payload
+			)
+		"direct_play":
+			return Game.engine.use_direct_play(
+				player_id, str(payload.get("card_id", "")), int(payload.get("speed_choice", -1))
+			)
 		_:
 			return ActionResult.fail("Unknown action")
 

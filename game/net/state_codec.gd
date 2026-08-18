@@ -21,6 +21,13 @@ static func encode(engine: HeatGameEngine, viewer_player_id: int = -1) -> Dictio
 		"players": players,
 		"stress_reserve": _encode_pile(engine.stress_reserve),
 		"rng_state": engine.rng.state,
+		"options": engine.options.to_dict(),
+		"grid_order": engine.grid_order.duplicate(),
+		"garage_deck": _encode_pile(engine.garage_deck),
+		"garage_market": _encode_pile(engine.garage_market),
+		"garage_discard": _encode_pile(engine.garage_discard),
+		"garage_draft_round": engine.garage_draft_round,
+		"garage_pick_index": engine.garage_pick_index,
 	}
 
 
@@ -43,6 +50,15 @@ static func decode(data: Dictionary) -> HeatGameEngine:
 		engine.players.append(_decode_player(pdata))
 	engine.stress_reserve = _decode_pile(data.get("stress_reserve", []))
 	engine.rng.state = int(data.get("rng_state", 0))
+	engine.options = RaceOptions.from_dict(data.get("options", {}))
+	engine.grid_order.clear()
+	for id in data.get("grid_order", []):
+		engine.grid_order.append(int(id))
+	engine.garage_deck = _decode_pile(data.get("garage_deck", []))
+	engine.garage_market = _decode_pile(data.get("garage_market", []))
+	engine.garage_discard = _decode_pile(data.get("garage_discard", []))
+	engine.garage_draft_round = int(data.get("garage_draft_round", 0))
+	engine.garage_pick_index = int(data.get("garage_pick_index", 0))
 	return engine
 
 
@@ -132,7 +148,15 @@ static func _encode_player(p: PlayerState, viewer_player_id: int) -> Dictionary:
 		"boost_used": p.boost_used,
 		"adrenaline_speed_used": p.adrenaline_speed_used,
 		"cooldown_used": p.cooldown_used,
+		"cooldown_bonus": p.cooldown_bonus,
 		"turn_complete": p.turn_complete,
+		"speed_limit_adjust": p.speed_limit_adjust,
+		"slipstream_bonus": p.slipstream_bonus,
+		"plus_symbols_used": p.plus_symbols_used,
+		"refresh_card_ids": p.refresh_card_ids.duplicate(),
+		"accelerate_used": p.accelerate_used,
+		"pending_symbols": p.pending_symbols.duplicate(true),
+		"garage_upgrades": _encode_pile(p.garage_upgrades),
 	}
 
 
@@ -166,14 +190,27 @@ static func _decode_player(data: Dictionary) -> PlayerState:
 	p.boost_used = bool(data.get("boost_used", false))
 	p.adrenaline_speed_used = bool(data.get("adrenaline_speed_used", false))
 	p.cooldown_used = int(data.get("cooldown_used", 0))
+	p.cooldown_bonus = int(data.get("cooldown_bonus", 0))
 	p.turn_complete = bool(data.get("turn_complete", false))
+	p.speed_limit_adjust = int(data.get("speed_limit_adjust", 0))
+	p.slipstream_bonus = int(data.get("slipstream_bonus", 0))
+	p.plus_symbols_used = int(data.get("plus_symbols_used", 0))
+	p.refresh_card_ids.clear()
+	for cid in data.get("refresh_card_ids", []):
+		p.refresh_card_ids.append(str(cid))
+	p.accelerate_used = bool(data.get("accelerate_used", false))
+	p.pending_symbols.clear()
+	for entry in data.get("pending_symbols", []):
+		if entry is Dictionary:
+			p.pending_symbols.append(entry)
+	p.garage_upgrades = _decode_pile(data.get("garage_upgrades", []))
 	return p
 
 
 static func _encode_pile(pile: CardPile) -> Array:
 	var out: Array = []
 	for card in pile.cards:
-		out.append({"id": card.id, "def_id": card.def_id})
+		out.append({"id": card.id, "def_id": card.def_id, "chosen_speed": card.chosen_speed})
 	return out
 
 
@@ -188,4 +225,6 @@ static func _decode_pile(data: Array) -> CardPile:
 				int(c.get("speed_value", 0))
 			)
 		pile.add(HeatCard.new(card_id, def_id))
+		if pile.cards.size() > 0:
+			pile.cards[pile.cards.size() - 1].chosen_speed = int(c.get("chosen_speed", -1))
 	return pile

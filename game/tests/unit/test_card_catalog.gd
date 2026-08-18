@@ -6,6 +6,8 @@ func test_catalog_loads_core_definitions() -> void:
 	assert_true(CardCatalog.has("starter_speed_0"))
 	assert_true(CardCatalog.has("starter_speed_5"))
 	assert_true(CardCatalog.has("starter_heat"))
+	assert_true(CardCatalog.has("upg_01_4wd"))
+	assert_true(CardCatalog.has("upg_24_gas_pedal"))
 
 
 func test_starter_draw_composition() -> void:

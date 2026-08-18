@@ -6,6 +6,8 @@ const Kind = CardDefinition.Kind
 
 var id: String
 var def_id: String
+## Chosen speed for cards with multiple speed_options. -1 = default.
+var chosen_speed: int = -1
 
 
 func _init(p_id: String = "", p_def_id: String = "speed_1") -> void:
@@ -24,15 +26,24 @@ var kind: Kind:
 
 var speed_value: int:
 	get:
-		return _def().speed_value
+		if chosen_speed >= 0:
+			return chosen_speed
+		var def := _def()
+		var opts := def.resolved_speed_options()
+		if not opts.is_empty():
+			return opts[0]
+		return def.speed_value
 
 
 func is_speed_card() -> bool:
-	return kind == Kind.SPEED
+	return contributes_speed_when_played()
 
 
 func is_playable() -> bool:
-	return kind != Kind.HEAT
+	if kind == Kind.HEAT:
+		return false
+	# Direct Play (Gas Pedal, etc.) stays in hand until React.
+	return not _def().has_symbol(CardSymbol.Kind.DIRECT_PLAY)
 
 
 func can_discard() -> bool:
@@ -44,4 +55,6 @@ func contributes_speed_when_played() -> bool:
 
 
 func duplicate_card() -> HeatCard:
-	return HeatCard.new(id, def_id)
+	var copy := HeatCard.new(id, def_id)
+	copy.chosen_speed = chosen_speed
+	return copy

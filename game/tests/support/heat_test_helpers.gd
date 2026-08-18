@@ -2,12 +2,14 @@ class_name HeatTestHelpers
 extends RefCounted
 
 
-static func make_engine(player_count: int = 2, seed: int = 42, laps: int = 1) -> HeatGameEngine:
+static func make_engine(
+	player_count: int = 2, seed: int = 42, laps: int = 1, options: RaceOptions = null
+) -> HeatGameEngine:
 	var names: Array[String] = []
 	for i in player_count:
 		names.append("P%d" % i)
 	var engine := HeatGameEngine.new()
-	engine.setup(names, HeatTrack.for_tests(laps), seed)
+	engine.setup(names, HeatTrack.for_tests(laps), seed, options)
 	return engine
 
 

@@ -281,7 +281,7 @@ func _dispatch(action: String, payload: Dictionary, player_id: int) -> void:
 			var ids: Array[String] = []
 			for id in payload.get("card_ids", []):
 				ids.append(str(id))
-			result = _engine.play_cards(player_id, ids)
+			result = _engine.play_cards(player_id, ids, payload.get("speed_choices", {}))
 		"boost":
 			result = _engine.use_boost(player_id)
 		"adrenaline":
@@ -297,6 +297,14 @@ func _dispatch(action: String, payload: Dictionary, player_id: int) -> void:
 			for id in payload.get("card_ids", []):
 				dids.append(str(id))
 			result = _engine.discard_cards(player_id, dids)
+		"pick_garage":
+			result = _engine.pick_garage_card(player_id, str(payload.get("card_id", "")))
+		"upgrade_symbol":
+			result = _engine.use_upgrade_symbol(player_id, str(payload.get("uid", "")), payload)
+		"direct_play":
+			result = _engine.use_direct_play(
+				player_id, str(payload.get("card_id", "")), int(payload.get("speed_choice", -1))
+			)
 		_:
 			result = ActionResult.fail("Unknown action")
 	_handle_local_result(result)
@@ -363,6 +371,8 @@ func _refresh_kerb() -> void:
 ## have no business appearing in the header.
 func _phase_text() -> String:
 	match _engine.phase:
+		HeatGameEngine.Phase.GARAGE_DRAFT:
+			return "Draft garage"
 		HeatGameEngine.Phase.SHIFT_GEARS:
 			return "Choisis ton rapport"
 		HeatGameEngine.Phase.PLAY_CARDS:

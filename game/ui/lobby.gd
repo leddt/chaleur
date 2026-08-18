@@ -71,6 +71,10 @@ func _ready() -> void:
 	_join_mode_group.pressed.connect(_on_join_mode_changed)
 	_track_option.item_selected.connect(_on_track_selected)
 	_laps_spin.value_changed.connect(_on_laps_changed)
+	%SessionPanel/%GarageCheck.toggled.connect(_on_garage_toggled)
+	%SessionPanel/%GarageBasicCheck.toggled.connect(_on_garage_toggled)
+	%SessionPanel/%GarageAdvancedCheck.toggled.connect(_on_garage_toggled)
+	%SessionPanel/%GarageQuickCheck.toggled.connect(_on_garage_toggled)
 
 	Net.host_started.connect(_on_host_started)
 	Net.join_started.connect(_on_join_started)
@@ -277,6 +281,15 @@ func _apply_race_controls_editable(is_host: bool) -> void:
 	_race_summary.visible = not is_host
 	_track_option.disabled = not is_host
 	_laps_spin.editable = is_host
+	%SessionPanel/%GarageCheck.visible = is_host
+	%SessionPanel/%GarageBasicCheck.visible = is_host
+	%SessionPanel/%GarageAdvancedCheck.visible = is_host
+	%SessionPanel/%GarageQuickCheck.visible = is_host
+	%SessionPanel/%GarageCheck.disabled = not is_host
+	var garage_on: bool = %SessionPanel/%GarageCheck.button_pressed
+	%SessionPanel/%GarageBasicCheck.disabled = not is_host or not garage_on
+	%SessionPanel/%GarageAdvancedCheck.disabled = not is_host or not garage_on
+	%SessionPanel/%GarageQuickCheck.disabled = not is_host or not garage_on
 
 
 func _track_display_name(track_id: String) -> String:
@@ -301,6 +314,10 @@ func _refresh_race_display() -> void:
 	_syncing_race_ui = true
 	_select_track_id(track_id)
 	_laps_spin.value = clampf(float(laps), _laps_spin.min_value, _laps_spin.max_value)
+	%SessionPanel/%GarageCheck.button_pressed = Net.race_options.garage_enabled
+	%SessionPanel/%GarageBasicCheck.button_pressed = Net.race_options.garage_include_basic
+	%SessionPanel/%GarageAdvancedCheck.button_pressed = Net.race_options.garage_include_advanced
+	%SessionPanel/%GarageQuickCheck.button_pressed = Net.race_options.garage_quick_start
 	_syncing_race_ui = false
 	_refresh_track_preview_for(track_id)
 	var name := _track_display_name(track_id)
@@ -326,7 +343,23 @@ func _refresh_track_preview_for(track_id: String) -> void:
 func _publish_race_settings() -> void:
 	if Game.mode != Game.Mode.HOST:
 		return
-	Net.set_race_settings(_selected_track_id(), int(_laps_spin.value))
+	Net.set_race_settings(_selected_track_id(), int(_laps_spin.value), _lobby_race_options())
+
+
+func _lobby_race_options() -> RaceOptions:
+	var o := RaceOptions.new()
+	o.garage_enabled = %SessionPanel/%GarageCheck.button_pressed
+	o.garage_include_basic = %SessionPanel/%GarageBasicCheck.button_pressed
+	o.garage_include_advanced = %SessionPanel/%GarageAdvancedCheck.button_pressed
+	o.garage_quick_start = %SessionPanel/%GarageQuickCheck.button_pressed
+	return o
+
+
+func _on_garage_toggled(_on: bool = false) -> void:
+	if _syncing_race_ui:
+		return
+	_apply_race_controls_editable(Game.mode == Game.Mode.HOST)
+	_publish_race_settings()
 
 
 func _refresh_track_preview() -> void:
@@ -633,7 +666,7 @@ func _on_lobby_changed() -> void:
 
 
 func _on_race_started() -> void:
-	get_tree().change_scene_to_file("res://view/board.tscn")
+	get_tree().change_scene_to_file(Game.race_scene_path())
 
 
 func _on_net_error(message: String) -> void:

@@ -38,6 +38,7 @@ func clear() -> void:
 	_play_actor_id = -1
 	_discard_confirm = null
 	_hand.set_selection_limit(-1)
+	_speed_choices.clear()
 	for child in get_children():
 		child.queue_free()
 	_sidebar.set_gear_editable(false)
@@ -48,6 +49,9 @@ func build_for(engine: HeatGameEngine, actor_id: int) -> void:
 	clear()
 	var p := engine.players[actor_id]
 	match engine.phase:
+		HeatGameEngine.Phase.GARAGE_DRAFT:
+			_sidebar.set_gear_editable(false, p)
+			_build_garage_ui()
 		HeatGameEngine.Phase.SHIFT_GEARS:
 			_build_shift_ui(p)
 		HeatGameEngine.Phase.PLAY_CARDS:
@@ -63,6 +67,20 @@ func build_for(engine: HeatGameEngine, actor_id: int) -> void:
 func on_hand_selection_changed() -> void:
 	_update_play_confirm()
 	_update_discard_confirm()
+
+
+var _speed_choices: Dictionary = {}
+var _salvage_ids: Dictionary = {}
+
+
+func _build_garage_ui() -> void:
+	add_child(_make_eyebrow("GARAGE"))
+	var picker := _engine.garage_picker_id()
+	var name := "?"
+	if picker >= 0 and picker < _engine.players.size():
+		name = _engine.players[picker].display_name
+	add_child(_make_label("Ronde %d — à %s de choisir" % [_engine.garage_draft_round, name]))
+	add_child(_make_label("Ouvre l'écran de draft si tu ne vois pas le marché."))
 
 
 func _build_shift_ui(p: PlayerState) -> void:
@@ -96,9 +114,15 @@ func _build_play_ui(p: PlayerState) -> void:
 	_play_confirm = _make_button("Jouer", true)
 	_play_confirm.disabled = true
 	_play_confirm.pressed.connect(func() -> void:
-		action_requested.emit("play_cards", {"card_ids": _hand.selected_ids()}, p.id)
+		action_requested.emit(
+			"play_cards",
+			{"card_ids": _hand.selected_ids(), "speed_choices": _speed_choices.duplicate()},
+			p.id
+		)
 	)
 	add_child(_play_confirm)
+	_speed_choices.clear()
+	_add_speed_choice_ui(p)
 	_update_play_confirm()
 
 
@@ -137,6 +161,29 @@ func _update_play_confirm() -> void:
 	if _play_confirm == null:
 		return
 	_play_confirm.disabled = not _play_selection_valid()
+
+
+func _add_speed_choice_ui(p: PlayerState) -> void:
+	for card in p.hand.cards:
+		var def := CardCatalog.get_def(card.def_id)
+		if def.has_symbol(CardSymbol.Kind.DIRECT_PLAY):
+			continue
+		var opts := def.resolved_speed_options()
+		if opts.size() <= 1:
+			continue
+		_speed_choices[card.id] = opts[0]
+		var row := HBoxContainer.new()
+		var lab := _make_label("%s :" % (def.title if not def.title.is_empty() else card.def_id))
+		row.add_child(lab)
+		for v in opts:
+			var btn := _make_button(str(v), false, true)
+			var cid := card.id
+			var speed := v
+			btn.pressed.connect(func() -> void:
+				_speed_choices[cid] = speed
+			)
+			row.add_child(btn)
+		add_child(row)
 
 
 func _build_turn_ui(p: PlayerState) -> void:
@@ -222,10 +269,108 @@ func _build_react_ui(p: PlayerState) -> void:
 	)
 	grid.add_child(cd_btn)
 
+	for entry in p.pending_symbols:
+		var uid := str(entry.get("uid", ""))
+		var kind := int(entry.get("kind", 0))
+		var count := int(entry.get("count", 1))
+		var card_id := str(entry.get("card_id", ""))
+		if kind == int(CardSymbol.Kind.DIRECT_PLAY):
+			_add_direct_play_ui(grid, p, card_id)
+			continue
+		if kind == int(CardSymbol.Kind.SALVAGE):
+			_add_salvage_ui(grid, p, uid, count)
+			continue
+		var sym := CardSymbol.make(kind as CardSymbol.Kind, count)
+		var extra := ""
+		if kind == int(CardSymbol.Kind.ACCELERATE):
+			extra = " (+%d)" % p.plus_symbols_used
+		var is_stress := kind == int(CardSymbol.Kind.REDUCE_STRESS)
+		var payload := {"uid": uid, "card_ids": []}
+		var btn := _make_button(sym.label() + extra, false, true)
+		btn.pressed.connect(func() -> void:
+			if is_stress:
+				payload["card_ids"] = _selected_stress_ids(p)
+			action_requested.emit("upgrade_symbol", payload, p.id)
+		)
+		grid.add_child(btn)
+
 	var finish := _make_button("Terminer", true)
 	finish.pressed.connect(_on_finish_react_pressed.bind(p.id))
 	grid.add_child(finish)
 	add_child(grid)
+
+
+func _selected_stress_ids(p: PlayerState) -> Array:
+	var ids: Array = []
+	for cid in _hand.selected_ids():
+		var card := p.hand.get_by_id(cid)
+		if card != null and card.kind == HeatCard.Kind.STRESS:
+			ids.append(cid)
+	return ids
+
+
+func _add_direct_play_ui(grid: GridContainer, p: PlayerState, card_id: String) -> void:
+	var card := p.hand.get_by_id(card_id)
+	var def := CardCatalog.get_def(card.def_id) if card != null else null
+	var label := "Direct Play"
+	if def != null and not def.title.is_empty():
+		label = "Direct Play · %s" % def.title
+	var opts := def.resolved_speed_options() if def != null else PackedInt32Array()
+	if not _speed_choices.has(card_id) and not opts.is_empty():
+		_speed_choices[card_id] = opts[0]
+	if opts.size() > 1:
+		for v in opts:
+			var speed := v
+			var spd := _make_button("%s %d" % [label, speed], false, true)
+			spd.pressed.connect(func() -> void:
+				_speed_choices[card_id] = speed
+				action_requested.emit(
+					"direct_play",
+					{"card_id": card_id, "speed_choice": speed},
+					p.id
+				)
+			)
+			grid.add_child(spd)
+		return
+	var dp := _make_button(label, false, true)
+	dp.pressed.connect(func() -> void:
+		var choice := int(_speed_choices.get(card_id, -1))
+		action_requested.emit(
+			"direct_play", {"card_id": card_id, "speed_choice": choice}, p.id
+		)
+	)
+	grid.add_child(dp)
+
+
+func _add_salvage_ui(grid: GridContainer, p: PlayerState, uid: String, count: int) -> void:
+	if not _salvage_ids.has(uid):
+		_salvage_ids[uid] = []
+	var btn := _make_button("Salvage %d" % count, false, true)
+	btn.pressed.connect(func() -> void:
+		action_requested.emit(
+			"upgrade_symbol", {"uid": uid, "card_ids": _salvage_ids.get(uid, [])}, p.id
+		)
+	)
+	grid.add_child(btn)
+	for card in p.discard.cards:
+		var cid := card.id
+		var def := CardCatalog.get_def(card.def_id)
+		var title := def.title if not def.title.is_empty() else card.def_id
+		var pick := _make_button(title, false, true)
+		pick.toggle_mode = true
+		pick.button_pressed = cid in _salvage_ids[uid]
+		pick.toggled.connect(func(on: bool) -> void:
+			var chosen: Array = _salvage_ids.get(uid, [])
+			if on:
+				if cid not in chosen:
+					chosen.append(cid)
+				while chosen.size() > count:
+					chosen.remove_at(0)
+			else:
+				chosen.erase(cid)
+			_salvage_ids[uid] = chosen
+		)
+		grid.add_child(pick)
 
 
 func _on_finish_react_pressed(player_id: int) -> void:

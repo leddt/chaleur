@@ -162,7 +162,7 @@ func _draw() -> void:
 	if face_up:
 		var box := ThemeBuilder.card_box(data.face(), data.accent(), _hovered or selected)
 		box.draw(get_canvas_item(), r)
-		_draw_symbol(data.symbol, data.accent())
+		_draw_symbols(data.accent())
 	else:
 		# Le verso : carton fonce + un seul chevron. Rien de plus.
 		var box := ThemeBuilder.card_box(Palette.CARDBOARD_DARK, Palette.INK, _hovered)
@@ -178,17 +178,69 @@ func _draw() -> void:
 		draw_rect(r, Palette.ASPHALT * Color(1, 1, 1, 0.55))
 
 
-func _draw_symbol(symbol: String, col: Color) -> void:
-	if symbol == "":
+func _draw_symbols(col: Color) -> void:
+	var icons: PackedStringArray = PackedStringArray()
+	if data != null and not data.symbols.is_empty():
+		icons = data.symbols
+	elif data != null and data.symbol != "":
+		icons = PackedStringArray([data.symbol])
+	if icons.is_empty():
 		return
-	var center := Vector2(size.x - 30, 34)
+	var n := mini(icons.size(), 4)
+	for i in n:
+		var center := Vector2(size.x - 22.0 - float(i) * 18.0, 28.0)
+		_draw_one_symbol(icons[i], center, 9.0, col)
+
+
+func _draw_one_symbol(symbol: String, center: Vector2, s: float, col: Color) -> void:
 	match symbol:
 		"flame":
-			_draw_flame(center, 15.0, col)
+			_draw_flame(center, s)
 		"chevron":
-			_draw_chevron(center, 15.0, col)
+			_draw_chevron(center, s, col)
 		"gear":
-			_draw_gear(center, 14.0, col)
+			_draw_gear(center, s, col)
+		"plus":
+			draw_line(center + Vector2(-s, 0), center + Vector2(s, 0), col, 2.0)
+			draw_line(center + Vector2(0, -s), center + Vector2(0, s), col, 2.0)
+		"snow":
+			draw_circle(center, s * 0.55, col)
+		"refresh":
+			draw_arc(center, s * 0.8, 0.4, TAU - 0.6, 12, col, 2.0)
+		"play":
+			var pts := PackedVector2Array([
+				center + Vector2(-s * 0.5, -s),
+				center + Vector2(s, 0),
+				center + Vector2(-s * 0.5, s),
+			])
+			draw_colored_polygon(pts, col)
+		"accel":
+			_draw_chevron(center + Vector2(0, -3), s * 0.7, col)
+			_draw_chevron(center + Vector2(0, 4), s * 0.7, col)
+		"scrap":
+			draw_line(center + Vector2(-s, -s), center + Vector2(s, s), col, 2.0)
+			draw_line(center + Vector2(s, -s), center + Vector2(-s, s), col, 2.0)
+		"corner":
+			draw_polyline(
+				PackedVector2Array([
+					center + Vector2(-s, s),
+					center + Vector2(-s, -s),
+					center + Vector2(s, -s),
+				]),
+				col,
+				2.0,
+				true
+			)
+		"salvage":
+			draw_rect(Rect2(center + Vector2(-s * 0.7, -s * 0.4), Vector2(s * 1.1, s * 1.0)), col, false, 2.0)
+			draw_line(center + Vector2(s * 0.1, 0), center + Vector2(s, 0), col, 2.0)
+			draw_line(center + Vector2(s * 0.45, -s * 0.4), center + Vector2(s, 0), col, 2.0)
+			draw_line(center + Vector2(s * 0.45, s * 0.4), center + Vector2(s, 0), col, 2.0)
+		"stress":
+			draw_line(center + Vector2(-s * 0.7, 0), center + Vector2(s * 0.7, 0), col, 2.0)
+			_draw_chevron(center + Vector2(0, s * 0.15), s * 0.55, col)
+		_:
+			_draw_gear(center, s, col)
 
 
 func _draw_chevron(center: Vector2, s: float, col: Color) -> void:
@@ -200,8 +252,9 @@ func _draw_chevron(center: Vector2, s: float, col: Color) -> void:
 	draw_polyline(pts, col, maxf(2.0, s * 0.22), true)
 
 
-func _draw_flame(center: Vector2, s: float, col: Color) -> void:
-	# Une flamme lisible en 8 points. Pas besoin d'illustration.
+func _draw_flame(center: Vector2, s: float, col: Color = Color()) -> void:
+	if col.a <= 0.0:
+		col = data.accent() if data else Palette.RACE_RED
 	var pts := PackedVector2Array([
 		center + Vector2(0, -s),
 		center + Vector2(s * 0.45, -s * 0.2),

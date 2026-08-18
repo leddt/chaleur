@@ -3,6 +3,7 @@ extends RefCounted
 
 enum Phase {
 	SETUP,
+	GARAGE_DRAFT,
 	SHIFT_GEARS,
 	PLAY_CARDS,
 	PLAYER_TURN,
@@ -30,16 +31,36 @@ var turn_order: Array[int] = []
 var turn_index: int = 0
 var started_player_count: int = 0
 var next_finish_rank: int = 1
+var options: RaceOptions = RaceOptions.new()
+var grid_order: Array[int] = []
+var garage_deck: CardPile = CardPile.new()
+var garage_market: CardPile = CardPile.new()
+var garage_discard: CardPile = CardPile.new()
+var garage_draft_round: int = 0
+var garage_pick_index: int = 0
 
 
-func setup(player_names: Array[String], p_track: HeatTrack, seed: int = 1) -> void:
+func setup(
+	player_names: Array[String],
+	p_track: HeatTrack,
+	seed: int = 1,
+	p_options: RaceOptions = null,
+) -> void:
 	track = p_track
 	rng.seed = seed
+	options = p_options if p_options != null else RaceOptions.new()
 	players.clear()
 	event_log.clear()
+	grid_order.clear()
+	garage_deck.clear()
+	garage_market.clear()
+	garage_discard.clear()
+	garage_draft_round = 0
+	garage_pick_index = 0
 	stress_reserve = DeckFactory.build_stress_reserve()
 	started_player_count = player_names.size()
 	next_finish_rank = 1
+	var include_starters := not options.garage_enabled
 	for i in player_names.size():
 		var p := PlayerState.new()
 		p.id = i
@@ -47,13 +68,19 @@ func setup(player_names: Array[String], p_track: HeatTrack, seed: int = 1) -> vo
 		p.gear = 1
 		p.progress = 0
 		p.spot = i % track.spot_count(0)
-		p.draw_pile.add_many(DeckFactory.build_starter_draw(i, track.start_stress))
+		p.draw_pile.add_many(
+			DeckFactory.build_starter_draw(i, track.start_stress, include_starters)
+		)
 		p.draw_pile.shuffle(rng)
 		p.engine.add_many(DeckFactory.build_engine_heat(i, track.start_heat))
-		_draw_up_to(p, 7)
 		players.append(p)
 	_assign_unique_start_spots()
 	_snapshot_round_order()
+	if options.garage_enabled:
+		_begin_garage()
+		return
+	for p in players:
+		_draw_up_to(p, 7)
 	phase = Phase.SHIFT_GEARS
 	_log("Race setup on %s (%d laps), seed=%d" % [track.display_name(), track.laps, seed])
 
@@ -68,6 +95,10 @@ func active_player() -> PlayerState:
 func pending_actor_ids() -> Array[int]:
 	var ids: Array[int] = []
 	match phase:
+		Phase.GARAGE_DRAFT:
+			var picker := garage_picker_id()
+			if picker >= 0:
+				ids.append(picker)
 		Phase.SHIFT_GEARS:
 			for p in players:
 				if not p.finished and not p.gear_locked:
@@ -90,6 +121,146 @@ func pending_actor_ids() -> Array[int]:
 
 func is_slipstream_available() -> bool:
 	return phase == Phase.PLAYER_TURN and turn_step == TurnStep.SLIPSTREAM
+
+
+func garage_pick_order() -> Array[int]:
+	var order: Array[int] = grid_order.duplicate()
+	if garage_draft_round != 2:
+		order.reverse()
+	return order
+
+
+func garage_picker_id() -> int:
+	if phase != Phase.GARAGE_DRAFT:
+		return -1
+	var order := garage_pick_order()
+	if garage_pick_index < 0 or garage_pick_index >= order.size():
+		return -1
+	return order[garage_pick_index]
+
+
+func _begin_garage() -> void:
+	var pool := GarageDeckFactory.build_pool(
+		options.garage_include_basic, options.garage_include_advanced
+	)
+	for card in pool:
+		garage_deck.add(card)
+	garage_deck.shuffle(rng)
+	_log(
+		"Race setup on %s (%d laps), seed=%d — garage" % [track.display_name(), track.laps, rng.seed]
+	)
+	if options.garage_quick_start:
+		_garage_quick_start()
+		return
+	garage_draft_round = 1
+	garage_pick_index = 0
+	_deal_garage_market()
+	phase = Phase.GARAGE_DRAFT
+	_log("Garage draft round 1")
+
+
+func _garage_quick_start() -> void:
+	var remaining: Array[HeatCard] = garage_deck.cards.duplicate()
+	garage_deck.clear()
+	for p in players:
+		var dealt := GarageDeckFactory.deal_random(remaining, rng, 3)
+		for card in dealt:
+			remaining.erase(card)
+			p.garage_upgrades.add(card)
+			p.draw_pile.add(card)
+		p.draw_pile.shuffle(rng)
+		_draw_up_to(p, 7)
+		_log("%s quick-start upgrades" % p.display_name)
+	phase = Phase.SHIFT_GEARS
+
+
+func _deal_garage_market() -> void:
+	garage_market.clear()
+	var need := players.size() + 3
+	for _i in need:
+		var card := garage_deck.draw_top()
+		if card == null:
+			break
+		garage_market.add(card)
+
+
+func pick_garage_card(player_id: int, card_id: String) -> ActionResult:
+	if phase != Phase.GARAGE_DRAFT:
+		return ActionResult.fail("Not in garage draft")
+	if player_id != garage_picker_id():
+		return ActionResult.fail("Not this player's pick")
+	var card := garage_market.remove_id(card_id)
+	if card == null:
+		return ActionResult.fail("Card not in market")
+	var p := _player(player_id)
+	if p == null:
+		return ActionResult.fail("Invalid player")
+	p.garage_upgrades.add(card)
+	_log("%s drafts %s" % [p.display_name, card.def_id])
+	garage_pick_index += 1
+	if garage_pick_index >= players.size():
+		_advance_garage_round()
+	return ActionResult.success()
+
+
+func _advance_garage_round() -> void:
+	for leftover in garage_market.cards:
+		garage_discard.add(leftover)
+	garage_market.clear()
+	if garage_draft_round >= 3:
+		_finish_garage_draft()
+		return
+	garage_draft_round += 1
+	garage_pick_index = 0
+	_deal_garage_market()
+	_log("Garage draft round %d" % garage_draft_round)
+
+
+func _finish_garage_draft() -> void:
+	for p in players:
+		for card in p.garage_upgrades.cards:
+			p.draw_pile.add(card)
+		p.draw_pile.shuffle(rng)
+		_draw_up_to(p, 7)
+	phase = Phase.SHIFT_GEARS
+	_log("Garage draft complete — shift gears")
+
+
+func use_upgrade_symbol(player_id: int, uid: String, payload: Dictionary = {}) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	return UpgradeEffects.use_symbol(self, p, uid, payload)
+
+
+func use_direct_play(player_id: int, card_id: String, speed_choice: int = -1) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	var card := p.hand.get_by_id(card_id)
+	if card == null:
+		return ActionResult.fail("Card not in hand")
+	var def := CardCatalog.get_def(card.def_id)
+	if not def.has_symbol(CardSymbol.Kind.DIRECT_PLAY):
+		return ActionResult.fail("Not a Direct Play card")
+	if speed_choice >= 0:
+		card.chosen_speed = speed_choice
+	p.hand.remove_id(card_id)
+	# Remove the queued DIRECT_PLAY pending entry if present.
+	var left: Array[Dictionary] = []
+	for entry in p.pending_symbols:
+		if str(entry.get("card_id", "")) == card_id and int(entry.get("kind", -1)) == int(
+			CardSymbol.Kind.DIRECT_PLAY
+		):
+			continue
+		left.append(entry)
+	p.pending_symbols = left
+	UpgradeEffects.apply_direct_play(self, p, card)
+	return ActionResult.success()
 
 
 
@@ -130,7 +301,9 @@ func shift_gear(player_id: int, target_gear: int) -> ActionResult:
 	return ActionResult.success()
 
 
-func play_cards(player_id: int, card_ids: Array[String]) -> ActionResult:
+func play_cards(
+	player_id: int, card_ids: Array[String], speed_choices: Dictionary = {}
+) -> ActionResult:
 	if phase != Phase.PLAY_CARDS:
 		return ActionResult.fail("Not in PLAY_CARDS phase")
 	var p := _player(player_id)
@@ -176,6 +349,8 @@ func play_cards(player_id: int, card_ids: Array[String]) -> ActionResult:
 
 	for cid in card_ids:
 		var card := p.hand.remove_id(cid)
+		if speed_choices.has(cid):
+			card.chosen_speed = int(speed_choices[cid])
 		p.play_area.add(card)
 
 	p.cards_locked = true
@@ -201,6 +376,7 @@ func use_boost(player_id: int) -> ActionResult:
 	p.play_area.add(speed_card)
 	p.round_speed += speed_card.speed_value
 	p.boost_used = true
+	p.plus_symbols_used += 1
 	_move_player(p, speed_card.speed_value, false)
 	_log("%s boosts for +%d" % [p.display_name, speed_card.speed_value])
 	_check_finish(p)
@@ -270,8 +446,8 @@ func slipstream(player_id: int, use: bool) -> ActionResult:
 	if use:
 		if not _slipstream_eligible(p):
 			return ActionResult.fail("Slipstream not eligible")
-		_move_player(p, 2, true)
-		_log("%s slipstreams +2" % p.display_name)
+		_move_player(p, 2 + p.slipstream_bonus, true)
+		_log("%s slipstreams +%d" % [p.display_name, 2 + p.slipstream_bonus])
 		_check_finish(p)
 	return _after_slipstream(p)
 
@@ -319,6 +495,8 @@ func _assign_unique_start_spots() -> void:
 		var tmp := grid[i]
 		grid[i] = grid[j]
 		grid[j] = tmp
+
+	grid_order = grid.duplicate()
 
 	if track.start_behind_finish_line:
 		# Behind the start/finish line: last spaces of the final sector.
@@ -467,14 +645,8 @@ func _resolve_reveal_and_move(p: PlayerState) -> void:
 		_replenish_and_advance(p)
 		return
 
-	# Resolve each Stress by flipping until a Speed card (p. 5).
-	for card in p.play_area.cards.duplicate():
-		if card.kind != HeatCard.Kind.STRESS:
-			continue
-		var speed_card := _flip_until_speed(p)
-		if speed_card:
-			p.play_area.add(speed_card)
-			_log("%s resolves Stress -> Speed %d" % [p.display_name, speed_card.speed_value])
+	UpgradeEffects.apply_reveal(self, p)
+	UpgradeEffects.queue_direct_play_from_hand(p)
 
 	p.round_speed = 0
 	for card in p.play_area.cards:
@@ -620,7 +792,7 @@ func _resolve_corners(p: PlayerState) -> void:
 		var corner := _corner_by_id(corner_id)
 		if corner == null:
 			continue
-		var excess := p.round_speed - corner.speed_limit
+		var excess := p.round_speed - (corner.speed_limit + p.speed_limit_adjust)
 		if excess <= 0:
 			_log("%s clears corner %s (speed %d <= %d)" % [p.display_name, corner_id, p.round_speed, corner.speed_limit])
 			continue
@@ -660,8 +832,14 @@ func _spin_out(p: PlayerState, corner: HeatCorner) -> void:
 
 func _replenish_and_advance(p: PlayerState) -> ActionResult:
 	turn_step = TurnStep.REPLENISH
+	var refresh: Dictionary = {}
+	for cid in p.refresh_card_ids:
+		refresh[cid] = true
 	for card in p.play_area.cards:
-		p.discard.add(card)
+		if refresh.has(card.id):
+			p.draw_pile.cards.insert(0, card)
+		else:
+			p.discard.add(card)
 	p.play_area.clear()
 	_draw_up_to(p, 7)
 	p.turn_complete = true

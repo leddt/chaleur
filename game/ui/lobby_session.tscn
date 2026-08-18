@@ -72,6 +72,27 @@ max_value = 5.0
 value = 1.0
 rounded = true
 
+[node name="GarageCheck" type="CheckBox" parent="RacePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Module garage"
+
+[node name="GarageBasicCheck" type="CheckBox" parent="RacePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Cartes régulières"
+
+[node name="GarageAdvancedCheck" type="CheckBox" parent="RacePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cartes avancées"
+
+[node name="GarageQuickCheck" type="CheckBox" parent="RacePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Quick start"
+
 [node name="RaceSummary" type="Label" parent="RacePanel" unique_id=1160342581]
 unique_name_in_owner = true
 visible = false

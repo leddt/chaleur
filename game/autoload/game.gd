@@ -23,6 +23,7 @@ func start_local_race(
 	laps: int = 1,
 	race_seed: int = 0,
 	track_id: String = "",
+	options: RaceOptions = null,
 ) -> bool:
 	mode = Mode.LOCAL
 	if player_names.is_empty():
@@ -37,9 +38,15 @@ func start_local_race(
 		return false
 	engine = HeatGameEngine.new()
 	var seed := race_seed if race_seed != 0 else int(Time.get_unix_time_from_system())
-	engine.setup(player_names, track, seed)
+	engine.setup(player_names, track, seed, options)
 	local_player_id = 0
 	return true
+
+
+func race_scene_path() -> String:
+	if engine != null and engine.phase == HeatGameEngine.Phase.GARAGE_DRAFT:
+		return "res://ui/garage_draft.tscn"
+	return "res://view/board.tscn"
 
 
 func clear_race() -> void:

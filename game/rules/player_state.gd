@@ -28,7 +28,15 @@ var has_adrenaline: bool = false
 var boost_used: bool = false
 var adrenaline_speed_used: bool = false
 var cooldown_used: int = 0
+var cooldown_bonus: int = 0
 var turn_complete: bool = false
+var speed_limit_adjust: int = 0
+var slipstream_bonus: int = 0
+var plus_symbols_used: int = 0
+var refresh_card_ids: Array[String] = []
+var accelerate_used: bool = false
+var pending_symbols: Array[Dictionary] = []
+var garage_upgrades: CardPile = CardPile.new()
 
 
 func reset_round_flags() -> void:
@@ -42,7 +50,14 @@ func reset_round_flags() -> void:
 	boost_used = false
 	adrenaline_speed_used = false
 	cooldown_used = 0
+	cooldown_bonus = 0
 	turn_complete = false
+	speed_limit_adjust = 0
+	slipstream_bonus = 0
+	plus_symbols_used = 0
+	refresh_card_ids.clear()
+	accelerate_used = false
+	pending_symbols.clear()
 
 
 func engine_heat() -> int:
@@ -68,7 +83,7 @@ func cooldown_from_gear() -> int:
 
 
 func max_cooldown() -> int:
-	var n := cooldown_from_gear()
+	var n := cooldown_from_gear() + cooldown_bonus
 	if has_adrenaline:
 		n += 1
 	return n
@@ -91,4 +106,6 @@ func can_use_cooldown() -> bool:
 
 
 func has_pending_react_options() -> bool:
-	return can_use_boost() or can_use_adrenaline() or can_use_cooldown()
+	if can_use_boost() or can_use_adrenaline() or can_use_cooldown():
+		return true
+	return not pending_symbols.is_empty()

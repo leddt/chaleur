@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3]
+
+[ext_resource type="Script" uid="uid://ws8nb5bj284y" path="res://data/card_definition.gd" id="1"]
+[ext_resource type="Script" uid="uid://csymheat01abc" path="res://data/card_symbol.gd" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "upg_09_brakes"
+kind = 3
+speed_value = 0
+contributes_speed = true
+discardable = true
+title = "FREINS"
+category = "Brakes"
+speed_options = PackedInt32Array(2, 4)
+symbols = Array[CardSymbol]([])

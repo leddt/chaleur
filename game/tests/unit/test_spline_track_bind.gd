@@ -26,6 +26,8 @@ func _sample_document() -> Dictionary:
 			"target_space_len": 40.0,
 		},
 		"start_space": 3,
+		"start_heat": 5,
+		"start_stress": 1,
 		"corners": [
 			{"space": 5, "speed_limit": 4, "outside": true, "offset": [0.0, 0.0]},
 			{"space": 10, "speed_limit": 3, "outside": false, "offset": [0.0, 0.0]},
@@ -48,6 +50,8 @@ func test_bind_to_heat_track_reindexes_from_start() -> void:
 	assert_eq(track.laps, 2)
 	assert_eq(track.space_count, bind.space_count())
 	assert_eq(track.spot_count(0), 2)
+	assert_eq(track.start_heat, 5)
+	assert_eq(track.start_stress, 1)
 	assert_true(track.start_behind_finish_line)
 	assert_ne(track.spline_bind, null)
 	# Geometric corner 5 → playable from_space = posmod(5 - 3, n)

@@ -35,7 +35,7 @@ func _ensure_hosts() -> void:
 		return
 	_body_host = Control.new()
 	_body_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_body_host.clip_contents = true
+	_body_host.clip_contents = false
 	_body_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_body_host)
 	_col = VBoxContainer.new()
@@ -51,7 +51,7 @@ func _slot() -> VBoxContainer:
 
 func _reserve_finish_row(on: bool) -> void:
 	_ensure_hosts()
-	_body_host.offset_bottom = -46.0 if on else 0.0
+	_body_host.offset_bottom = -44.0 if on else 0.0
 
 
 func setup(hand: CardHandView, sidebar: PlayerSidebar) -> void:
@@ -328,7 +328,7 @@ func _make_body() -> VBoxContainer:
 	var body := VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.clip_contents = true
+	body.clip_contents = false
 	body.add_theme_constant_override("separation", 4)
 	_slot().add_child(body)
 	return body
@@ -343,7 +343,7 @@ func _add_finish_button(p: PlayerState, action: String) -> void:
 	finish.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	finish.offset_left = 0.0
 	finish.offset_right = 0.0
-	finish.offset_top = -42.0
+	finish.offset_top = -40.0
 	finish.offset_bottom = -4.0
 	if action == "react":
 		finish.pressed.connect(_on_finish_react_pressed.bind(p.id))

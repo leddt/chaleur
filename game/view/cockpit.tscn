@@ -21,14 +21,14 @@ slant = 12.0
 
 [node name="CockpitRow" type="BoxContainer" parent="."]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 148)
+custom_minimum_size = Vector2(0, 176)
 layout_mode = 2
 size_flags_vertical = 1
 theme_override_constants/separation = 16
 
 [node name="CardHand" type="Control" parent="CockpitRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 148)
+custom_minimum_size = Vector2(160, 176)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -37,7 +37,7 @@ script = ExtResource("2_hand")
 [node name="PlayArea" type="Control" parent="CockpitRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(0, 148)
+custom_minimum_size = Vector2(0, 176)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 3

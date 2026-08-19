@@ -77,9 +77,9 @@ func _refresh() -> void:
 func _show_draft() -> void:
 	_title.text = "Construis ta voiture"
 	_round_label.text = "Ronde %d / 3" % _engine.garage_draft_round
-	_picks_title.text = "CHOIX"
+	_picks_title.visible = false
 	_market_scroll.visible = true
-	_picks_scroll.size_flags_vertical = 0
+	_picks_scroll.visible = false
 	var revealing := _engine.is_garage_round_complete()
 	var picker_id := _engine.garage_picker_id()
 	if revealing:
@@ -90,7 +90,6 @@ func _show_draft() -> void:
 			picker_name = _engine.players[picker_id].display_name
 		_status.text = "Choix de %s — %d cartes sur le marché" % [picker_name, _engine.garage_market.size()]
 	_rebuild_market(picker_id, revealing)
-	_rebuild_picks_list()
 	if revealing or (not _selected_id.is_empty() and _engine.garage_claim_player_id(_selected_id) >= 0):
 		_selected_id = ""
 	var my_id := Game.local_player_id if Game.is_online() else picker_id
@@ -102,8 +101,10 @@ func _show_draft() -> void:
 func _show_summary() -> void:
 	_title.text = "Les voitures"
 	_round_label.text = "Draft terminé"
+	_picks_title.visible = true
 	_picks_title.text = "ÉQUIPAGES"
 	_market_scroll.visible = false
+	_picks_scroll.visible = true
 	_picks_scroll.clip_contents = true
 	_picks_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	_picks_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -180,20 +181,6 @@ func _sync_market_selection() -> void:
 			if child is Card:
 				var cid := str(child.get_meta("card_id", ""))
 				child.selected = cid == _selected_id and _engine.garage_claim_player_id(cid) < 0
-
-
-func _rebuild_picks_list() -> void:
-	for child in _picks.get_children():
-		child.queue_free()
-	for p in _engine.players:
-		var row := Label.new()
-		var names: PackedStringArray = PackedStringArray()
-		for card in p.garage_upgrades.cards:
-			var def := CardCatalog.get_def(card.def_id)
-			names.append(def.title if not def.title.is_empty() else card.def_id)
-		row.text = "%s — %s" % [p.display_name, ", ".join(names) if not names.is_empty() else "…"]
-		row.theme_type_variation = "Caption"
-		_picks.add_child(row)
 
 
 func _rebuild_summary() -> void:

@@ -803,6 +803,10 @@ func _apply_action(player_id: int, action: String, payload: Dictionary) -> Actio
 			return Game.engine.pay_heat_debt(player_id, str(payload.get("uid", "")))
 		"settle_heat":
 			return Game.engine.finish_settle_heat(player_id)
+		"choose_speed":
+			return Game.engine.choose_speed(
+				player_id, str(payload.get("card_id", "")), int(payload.get("speed", 0))
+			)
 		"react":
 			return Game.engine.finish_react(player_id)
 		"slipstream":

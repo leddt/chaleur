@@ -8,7 +8,7 @@ func test_mandatory_heat_deferred_until_settle() -> void:
 	p.hand.clear()
 	p.hand.add(HeatTestHelpers.card("brakes", "upg_07_brakes"))
 	assert_true(HeatTestHelpers.shift_all(engine, 1))
-	assert_true(engine.play_cards(0, ["brakes"], {"brakes": 2}).ok)
+	assert_true(engine.play_cards(0, ["brakes"]).ok)
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.SETTLE_HEAT)
 	assert_eq(p.engine_heat(), 6)
 	assert_eq(p.round_speed, 0)
@@ -17,6 +17,9 @@ func test_mandatory_heat_deferred_until_settle() -> void:
 	assert_true(engine.finish_settle_heat(0).ok)
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.REACT)
 	assert_eq(p.engine_heat(), 5)
+	assert_eq(p.round_speed, 0)
+	assert_false(engine.finish_react(0).ok)
+	assert_true(engine.choose_speed(0, "brakes", 2).ok)
 	assert_eq(p.round_speed, 2)
 
 
@@ -29,7 +32,7 @@ func test_heat_fallback_does_not_count_for_accelerate() -> void:
 	p.draw_pile.clear()
 	p.draw_pile.add(HeatTestHelpers.card("spd", "speed_4"))
 	assert_true(HeatTestHelpers.shift_all(engine, 1))
-	assert_true(engine.play_cards(0, ["brakes"], {"brakes": 3}).ok)
+	assert_true(engine.play_cards(0, ["brakes"]).ok)
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.SETTLE_HEAT)
 	assert_true(engine.finish_settle_heat(0).ok)
 	assert_eq(p.plus_symbols_used, 0)
@@ -49,12 +52,13 @@ func test_cooldown_before_mandatory_heat_pay() -> void:
 	p.hand.add(HeatTestHelpers.card("brakes", "upg_07_brakes"))
 	p.hand.add(HeatTestHelpers.card("h1", "heat"))
 	assert_true(HeatTestHelpers.shift_all(engine, 1))
-	assert_true(engine.play_cards(0, ["brakes"], {"brakes": 2}).ok)
+	assert_true(engine.play_cards(0, ["brakes"]).ok)
 	assert_eq(engine.turn_step, HeatGameEngine.TurnStep.SETTLE_HEAT)
 	assert_true(engine.use_cooldown(0).ok)
 	assert_eq(p.engine_heat(), 1)
 	assert_true(engine.pay_heat_debt(0, "brakes_heat").ok)
 	assert_true(engine.finish_settle_heat(0).ok)
+	assert_true(engine.choose_speed(0, "brakes", 2).ok)
 	assert_eq(p.round_speed, 2)
 
 
@@ -65,10 +69,28 @@ func test_must_pay_heat_when_affordable() -> void:
 	p.hand.clear()
 	p.hand.add(HeatTestHelpers.card("brakes", "upg_07_brakes"))
 	assert_true(HeatTestHelpers.shift_all(engine, 1))
-	assert_true(engine.play_cards(0, ["brakes"], {"brakes": 2}).ok)
+	assert_true(engine.play_cards(0, ["brakes"]).ok)
 	assert_false(engine.finish_settle_heat(0).ok)
 	assert_true(engine.pay_heat_debt(0, "brakes_heat").ok)
 	assert_true(engine.finish_settle_heat(0).ok)
+
+
+func test_multi_speed_chosen_during_react() -> void:
+	var engine := HeatTestHelpers.make_engine(1, 3)
+	var p := engine.players[0]
+	HeatTestHelpers.ensure_engine_heat(p, 6)
+	p.hand.clear()
+	p.hand.add(HeatTestHelpers.card("spd", "speed_2"))
+	p.hand.add(HeatTestHelpers.card("rpm", "upg_31_rpm"))
+	while p.hand.size() < 7:
+		p.hand.add(HeatTestHelpers.card("pad_%d" % p.hand.size(), "speed_1"))
+	assert_true(HeatTestHelpers.shift_all(engine, 2))
+	assert_true(engine.play_cards(0, ["spd", "rpm"]).ok)
+	assert_true(HeatTestHelpers.finish_settle_heat(engine, 0))
+	assert_eq(p.round_speed, 2)
+	assert_false(engine.finish_react(0).ok)
+	assert_true(engine.choose_speed(0, "rpm", 1).ok)
+	assert_eq(p.round_speed, 3)
 
 
 func test_adjust_speed_limit_applied_at_reveal() -> void:
@@ -95,20 +117,15 @@ func test_accelerate_all_or_nothing_plus_only() -> void:
 	assert_true(HeatTestHelpers.shift_all(engine, 1))
 	assert_true(engine.play_cards(0, ["four"]).ok)
 	assert_true(HeatTestHelpers.finish_settle_heat(engine, 0))
-	assert_eq(p.round_speed, 0)
-	assert_eq(p.plus_symbols_used, 0)
-	var plus_uid := ""
+	assert_eq(p.round_speed, 3)
+	assert_eq(p.plus_symbols_used, 1)
+	assert_true("four" in p.plus_resolved_card_ids)
 	var accel_uid := ""
 	for entry in p.pending_symbols:
-		if int(entry.get("kind", -1)) == int(CardSymbol.Kind.PLUS):
-			plus_uid = str(entry.get("uid", ""))
+		assert_ne(int(entry.get("kind", -1)), int(CardSymbol.Kind.PLUS))
 		if int(entry.get("kind", -1)) == int(CardSymbol.Kind.ACCELERATE):
 			accel_uid = str(entry.get("uid", ""))
-	assert_ne(plus_uid, "")
 	assert_ne(accel_uid, "")
-	assert_true(engine.use_upgrade_symbol(0, plus_uid).ok)
-	assert_eq(p.plus_symbols_used, 1)
-	assert_eq(p.round_speed, 3)
 	assert_true(engine.use_upgrade_symbol(0, accel_uid).ok)
 	assert_true(p.accelerate_used)
 	assert_eq(p.round_speed, 4)
@@ -245,3 +262,34 @@ func test_upgrade_cooldown_adds_to_react_quota() -> void:
 	assert_false(engine.use_cooldown(0).ok)
 	for entry in p.pending_symbols:
 		assert_ne(int(entry.get("kind", -1)), int(CardSymbol.Kind.COOLDOWN))
+
+
+func test_plus_flips_at_reveal() -> void:
+	var engine := HeatTestHelpers.make_engine(1, 9)
+	var p := engine.players[0]
+	p.hand.clear()
+	p.hand.add(HeatTestHelpers.card("four", "upg_01_4wd"))
+	p.draw_pile.clear()
+	p.draw_pile.add(HeatTestHelpers.card("s2", "speed_2"))
+	assert_true(HeatTestHelpers.shift_all(engine, 1))
+	assert_true(engine.play_cards(0, ["four"]).ok)
+	assert_true(HeatTestHelpers.finish_settle_heat(engine, 0))
+	assert_eq(p.plus_symbols_used, 1)
+	assert_eq(p.round_speed, 6)
+	assert_eq(p.play_area.get_by_id("s2") != null, true)
+
+
+func test_plus_count_flips_each_at_reveal() -> void:
+	var engine := HeatTestHelpers.make_engine(1, 9)
+	var p := engine.players[0]
+	p.hand.clear()
+	p.hand.add(HeatTestHelpers.card("four", "upg_02_4wd"))
+	p.draw_pile.clear()
+	p.draw_pile.add(HeatTestHelpers.card("s1", "speed_1"))
+	p.draw_pile.add(HeatTestHelpers.card("s2", "speed_2"))
+	p.draw_pile.add(HeatTestHelpers.card("s3", "speed_3"))
+	assert_true(HeatTestHelpers.shift_all(engine, 1))
+	assert_true(engine.play_cards(0, ["four"]).ok)
+	assert_true(HeatTestHelpers.finish_settle_heat(engine, 0))
+	assert_eq(p.plus_symbols_used, 3)
+	assert_eq(p.round_speed, 6)

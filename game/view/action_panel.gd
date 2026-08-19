@@ -1,7 +1,10 @@
 class_name ActionPanel
-extends VBoxContainer
+extends Control
 
 ## Builds phase-specific action controls; board / Net handle dispatch.
+##
+## Root is a Control, not a VBox: child minimum sizes must not inflate the
+## cockpit (and then the whole board) past the viewport.
 
 signal action_requested(action: String, payload: Dictionary, player_id: int)
 
@@ -16,6 +19,39 @@ var _play_actor_id: int = -1
 var _discard_confirm: Button = null
 var _react_player_id: int = -1
 var _finish_confirm: ConfirmationDialog = null
+var _armed_direct_play_id: String = ""
+var _col: VBoxContainer
+var _body_host: Control
+var _finish_btn: Button
+
+
+func _ready() -> void:
+	clip_contents = false
+	_ensure_hosts()
+
+
+func _ensure_hosts() -> void:
+	if _body_host != null:
+		return
+	_body_host = Control.new()
+	_body_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_body_host.clip_contents = true
+	_body_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_body_host)
+	_col = VBoxContainer.new()
+	_col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_col.add_theme_constant_override("separation", 4)
+	_body_host.add_child(_col)
+
+
+func _slot() -> VBoxContainer:
+	_ensure_hosts()
+	return _col
+
+
+func _reserve_finish_row(on: bool) -> void:
+	_ensure_hosts()
+	_body_host.offset_bottom = -46.0 if on else 0.0
 
 
 func setup(hand: CardHandView, sidebar: PlayerSidebar) -> void:
@@ -24,7 +60,7 @@ func setup(hand: CardHandView, sidebar: PlayerSidebar) -> void:
 
 
 func is_showing() -> bool:
-	return get_child_count() > 0
+	return _slot().get_child_count() > 0
 
 
 func reset_drafts() -> void:
@@ -39,13 +75,19 @@ func clear() -> void:
 	_discard_confirm = null
 	_hand.set_selection_limit(-1)
 	_speed_choices.clear()
-	for child in get_children():
+	_reserve_finish_row(false)
+	if _finish_btn != null:
+		_finish_btn.queue_free()
+		_finish_btn = null
+	for child in _slot().get_children():
 		child.queue_free()
 	_sidebar.set_gear_editable(false)
 
 
 func build_for(engine: HeatGameEngine, actor_id: int) -> void:
 	_engine = engine
+	if engine.turn_step != HeatGameEngine.TurnStep.REACT:
+		_armed_direct_play_id = ""
 	clear()
 	var p := engine.players[actor_id]
 	match engine.phase:
@@ -70,29 +112,28 @@ func on_hand_selection_changed() -> void:
 
 
 var _speed_choices: Dictionary = {}
-var _salvage_ids: Dictionary = {}
 
 
 func _build_garage_ui() -> void:
-	add_child(_make_eyebrow("GARAGE"))
+	_slot().add_child(_make_eyebrow("GARAGE"))
 	var picker := _engine.garage_picker_id()
 	var name := "?"
 	if picker >= 0 and picker < _engine.players.size():
 		name = _engine.players[picker].display_name
-	add_child(_make_label("Ronde %d — à %s de choisir" % [_engine.garage_draft_round, name]))
-	add_child(_make_label("Ouvre l'écran de draft si tu ne vois pas le marché."))
+	_slot().add_child(_make_label("Ronde %d — à %s de choisir" % [_engine.garage_draft_round, name]))
+	_slot().add_child(_make_label("Ouvre l'écran de draft si tu ne vois pas le marché."))
 
 
 func _build_shift_ui(p: PlayerState) -> void:
 	_sidebar.ensure_chosen_gear(p)
 	_sidebar.set_gear_editable(true, p)
-	add_child(_make_eyebrow("ÉTAPE 1 — RAPPORT"))
-	add_child(_make_label("En %d · deux crans = 1 Heat" % p.gear))
+	_slot().add_child(_make_eyebrow("ÉTAPE 1 — RAPPORT"))
+	_slot().add_child(_make_label("En %d · deux crans = 1 Heat" % p.gear))
 	var confirm := _make_button("Engager", true)
 	confirm.pressed.connect(func() -> void:
 		action_requested.emit("shift_gear", {"gear": _sidebar.chosen_gear}, p.id)
 	)
-	add_child(confirm)
+	_slot().add_child(confirm)
 
 
 func _build_play_ui(p: PlayerState) -> void:
@@ -109,20 +150,18 @@ func _build_play_ui(p: PlayerState) -> void:
 		hint_text = "Joue 1 carte"
 	else:
 		hint_text = "Joue %d cartes" % required
-	add_child(_make_eyebrow("ÉTAPE 2 — CARTES"))
-	add_child(_make_label(hint_text))
+	_slot().add_child(_make_eyebrow("ÉTAPE 2 — CARTES"))
+	_slot().add_child(_make_label(hint_text))
 	_play_confirm = _make_button("Jouer", true)
 	_play_confirm.disabled = true
 	_play_confirm.pressed.connect(func() -> void:
 		action_requested.emit(
 			"play_cards",
-			{"card_ids": _hand.selected_ids(), "speed_choices": _speed_choices.duplicate()},
+			{"card_ids": _hand.selected_ids()},
 			p.id
 		)
 	)
-	add_child(_play_confirm)
-	_speed_choices.clear()
-	_add_speed_choice_ui(p)
+	_slot().add_child(_play_confirm)
 	_update_play_confirm()
 
 
@@ -163,29 +202,6 @@ func _update_play_confirm() -> void:
 	_play_confirm.disabled = not _play_selection_valid()
 
 
-func _add_speed_choice_ui(p: PlayerState) -> void:
-	for card in p.hand.cards:
-		var def := CardCatalog.get_def(card.def_id)
-		if def.has_symbol(CardSymbol.Kind.DIRECT_PLAY):
-			continue
-		var opts := def.resolved_speed_options()
-		if opts.size() <= 1:
-			continue
-		_speed_choices[card.id] = opts[0]
-		var row := HBoxContainer.new()
-		var lab := _make_label("%s :" % (def.title if not def.title.is_empty() else card.def_id))
-		row.add_child(lab)
-		for v in opts:
-			var btn := _make_button(str(v), false, true)
-			var cid := card.id
-			var speed := v
-			btn.pressed.connect(func() -> void:
-				_speed_choices[cid] = speed
-			)
-			row.add_child(btn)
-		add_child(row)
-
-
 func _build_turn_ui(p: PlayerState) -> void:
 	match _engine.turn_step:
 		HeatGameEngine.TurnStep.SETTLE_HEAT:
@@ -193,8 +209,8 @@ func _build_turn_ui(p: PlayerState) -> void:
 		HeatGameEngine.TurnStep.REACT:
 			_build_react_ui(p)
 		HeatGameEngine.TurnStep.SLIPSTREAM:
-			add_child(_make_eyebrow("ASPIRATION"))
-			add_child(_make_label(
+			_slot().add_child(_make_eyebrow("ASPIRATION"))
+			_slot().add_child(_make_label(
 				"Slipstream disponible (+2 cases, n'augmente pas la Speed virage)"
 			))
 			var yes := _make_button("Slipstream", true)
@@ -205,21 +221,21 @@ func _build_turn_ui(p: PlayerState) -> void:
 			no.pressed.connect(func() -> void:
 				action_requested.emit("slipstream", {"use": false}, p.id)
 			)
-			add_child(yes)
-			add_child(no)
+			_slot().add_child(yes)
+			_slot().add_child(no)
 		HeatGameEngine.TurnStep.DISCARD:
-			add_child(_make_eyebrow("FIN DE TOUR"))
-			add_child(_make_label(
+			_slot().add_child(_make_eyebrow("FIN DE TOUR"))
+			_slot().add_child(_make_label(
 				"Défausse optionnelle (pas Heat/Stress), puis pioche jusqu'à 7"
 			))
 			_discard_confirm = _make_button("Passer la défausse", true)
 			_discard_confirm.pressed.connect(func() -> void:
 				action_requested.emit("discard", {"card_ids": _hand.selected_ids()}, p.id)
 			)
-			add_child(_discard_confirm)
+			_slot().add_child(_discard_confirm)
 			_update_discard_confirm()
 		_:
-			add_child(_make_label("La course avance…"))
+			_slot().add_child(_make_label("La course avance…"))
 
 
 func _discard_button_label(count: int) -> String:
@@ -237,214 +253,184 @@ func _update_discard_confirm() -> void:
 
 
 func _build_settle_heat_ui(p: PlayerState) -> void:
-	add_child(_make_eyebrow("RÈGLEMENT HEAT"))
-	add_child(_make_label(
-		"Refroidis si besoin, puis paie le Heat obligatoire avant de te déplacer."
-	))
-
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-
-	var remaining := p.cooldown_remaining()
-	var cd_btn := _make_button("Cooldown (%d) · Remet un heat" % remaining, false, true)
-	cd_btn.disabled = not p.can_use_cooldown()
-	cd_btn.pressed.connect(func() -> void:
-		action_requested.emit("cooldown", {}, p.id)
-	)
-	grid.add_child(cd_btn)
-
-	for debt in p.pending_heat_debts:
-		var uid := str(debt.get("uid", ""))
-		var card_id := str(debt.get("card_id", ""))
-		var count := int(debt.get("count", 0))
-		var card := p.play_area.get_by_id(card_id)
-		var def := CardCatalog.get_def(card.def_id) if card != null else null
-		var title := def.title if def != null and not def.title.is_empty() else card_id
-		var pay_btn := _make_button("Payer %d Heat · %s" % [count, title], false, true)
-		pay_btn.disabled = p.engine_heat() < count
-		pay_btn.pressed.connect(func() -> void:
-			action_requested.emit("pay_heat_debt", {"uid": uid}, p.id)
-		)
-		grid.add_child(pay_btn)
-
-	var finish := _make_button("Terminer", true)
-	finish.pressed.connect(func() -> void:
-		action_requested.emit("settle_heat", {}, p.id)
-	)
-	grid.add_child(finish)
-	add_child(grid)
+	var body := _make_body()
+	body.add_child(_make_eyebrow("RÈGLEMENT HEAT"))
+	body.add_child(_make_label("Paie le Heat sur la carte, ou refroidis d'abord."))
+	var grid := _make_action_grid()
+	_add_cooldown_button(grid, p)
+	body.add_child(grid)
+	_add_finish_button(p, "settle_heat")
 
 
 func _build_react_ui(p: PlayerState) -> void:
 	_react_player_id = p.id
-	add_child(_make_eyebrow("RÉACTION"))
-	add_child(_make_label(
-		"Ta vitesse est %d%s" % [p.round_speed, " — ADRÉNALINE" if p.has_adrenaline else ""]
-	))
+	var body := _make_body()
+	body.add_child(_make_eyebrow("RÉACTION"))
+	var speed_line := "Ta vitesse est %d" % p.round_speed
+	if p.has_adrenaline:
+		speed_line += " · Adrénaline"
+	body.add_child(_make_label(speed_line))
 
+	var grid := _make_action_grid()
+
+	var ad_btn := _make_icon_action_button(
+		[{"kind": CardSymbol.Kind.ACCELERATE, "count": 1}],
+		"Adrénaline",
+		"Avancez de 1 case. Disponible si vous êtes dernier ce tour "
+		+ "(ou avant-dernier à 5 joueurs ou plus).",
+		func() -> void:
+			action_requested.emit("adrenaline", {}, p.id)
+	)
+	ad_btn.disabled = not p.can_use_adrenaline()
+	_dim_if_disabled(ad_btn)
+	grid.add_child(ad_btn)
+
+	var boost_btn := _make_icon_action_button(
+		[
+			{"kind": CardSymbol.Kind.PLUS, "count": 1},
+			{"kind": CardSymbol.Kind.HEAT, "count": 1},
+		],
+		"Boost",
+		"Payez 1 Heat du moteur et retournez des cartes jusqu'à obtenir une carte "
+		+ "Vitesse 1–4. Cette carte s'ajoute à votre vitesse et compte comme un symbole +.",
+		func() -> void:
+			action_requested.emit("boost", {}, p.id)
+	)
+	boost_btn.disabled = not p.can_use_boost()
+	_dim_if_disabled(boost_btn)
+	grid.add_child(boost_btn)
+
+	_add_cooldown_button(grid, p)
+	_add_grid_spacer(grid)
+	body.add_child(grid)
+
+	if not _armed_direct_play_id.is_empty():
+		_add_armed_direct_play_speeds(body, p)
+
+	_add_finish_button(p, "react")
+
+
+func _add_cooldown_button(grid: GridContainer, p: PlayerState) -> void:
+	var remaining := p.cooldown_remaining()
+	var cd_btn := _make_icon_action_button(
+		[{"kind": CardSymbol.Kind.COOLDOWN, "count": maxi(1, remaining)}],
+		"Cooldown",
+		"Remettez 1 Heat de votre main dans le moteur. Quota restant ce tour : %d." % remaining,
+		func() -> void:
+			action_requested.emit("cooldown", {}, p.id)
+	)
+	cd_btn.disabled = not p.can_use_cooldown()
+	_dim_if_disabled(cd_btn)
+	grid.add_child(cd_btn)
+
+
+func _make_body() -> VBoxContainer:
+	var body := VBoxContainer.new()
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.clip_contents = true
+	body.add_theme_constant_override("separation", 4)
+	_slot().add_child(body)
+	return body
+
+
+func _add_finish_button(p: PlayerState, action: String) -> void:
+	_reserve_finish_row(true)
+	var finish := _make_button("Terminer", true)
+	finish.theme_type_variation = &"PrimaryStrip"
+	finish.autowrap_mode = TextServer.AUTOWRAP_OFF
+	finish.clip_text = false
+	finish.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	finish.offset_left = 0.0
+	finish.offset_right = 0.0
+	finish.offset_top = -42.0
+	finish.offset_bottom = -4.0
+	if action == "react":
+		finish.pressed.connect(_on_finish_react_pressed.bind(p.id))
+	else:
+		finish.pressed.connect(func() -> void:
+			action_requested.emit(action, {}, p.id)
+		)
+	add_child(finish)
+	_finish_btn = finish
+
+
+func _make_action_grid() -> GridContainer:
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
+	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 4)
+	grid.add_theme_constant_override("v_separation", 4)
+	return grid
 
-	var ad_btn := _make_button("Adrénaline · +1 vitesse", false, true)
-	ad_btn.disabled = not p.can_use_adrenaline()
-	ad_btn.pressed.connect(func() -> void:
-		action_requested.emit("adrenaline", {}, p.id)
-	)
-	grid.add_child(ad_btn)
 
-	var boost_btn := _make_button("Boost · +1 carte", false, true)
-	boost_btn.disabled = not p.can_use_boost()
-	boost_btn.pressed.connect(func() -> void:
-		action_requested.emit("boost", {}, p.id)
-	)
-	grid.add_child(boost_btn)
+func _add_grid_spacer(grid: GridContainer) -> void:
+	var spacer := Control.new()
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	grid.add_child(spacer)
 
-	var remaining := p.cooldown_remaining()
-	var cd_btn := _make_button("Cooldown (%d) · Remet un heat" % remaining, false, true)
-	cd_btn.disabled = not p.can_use_cooldown()
-	cd_btn.pressed.connect(func() -> void:
-		action_requested.emit("cooldown", {}, p.id)
-	)
-	grid.add_child(cd_btn)
 
-	for debt in p.pending_heat_debts:
-		var uid := str(debt.get("uid", ""))
-		var card_id := str(debt.get("card_id", ""))
-		var count := int(debt.get("count", 0))
-		var card := p.play_area.get_by_id(card_id)
-		var def := CardCatalog.get_def(card.def_id) if card != null else null
-		var title := def.title if def != null and not def.title.is_empty() else card_id
-		var pay_btn := _make_button("Payer %d Heat · %s" % [count, title], false, true)
-		pay_btn.disabled = p.engine_heat() < count
-		pay_btn.pressed.connect(func() -> void:
-			action_requested.emit("pay_heat_debt", {"uid": uid}, p.id)
+func on_direct_play_card(card_id: String) -> void:
+	if _engine == null:
+		return
+	var p := _engine.active_player()
+	if p == null:
+		return
+	var card := p.hand.get_by_id(card_id)
+	if card == null:
+		return
+	var def := CardCatalog.get_def(card.def_id)
+	if not def.has_symbol(CardSymbol.Kind.DIRECT_PLAY):
+		return
+	var opts := def.resolved_speed_options()
+	if opts.size() <= 1:
+		var choice := opts[0] if not opts.is_empty() else -1
+		action_requested.emit(
+			"direct_play", {"card_id": card_id, "speed_choice": choice}, p.id
 		)
-		grid.add_child(pay_btn)
+		return
+	_armed_direct_play_id = card_id
+	build_for(_engine, p.id)
 
-	for entry in p.pending_symbols:
-		var uid := str(entry.get("uid", ""))
-		var kind := int(entry.get("kind", 0))
-		var count := int(entry.get("count", 1))
-		var card_id := str(entry.get("card_id", ""))
-		if kind == int(CardSymbol.Kind.DIRECT_PLAY):
-			_add_direct_play_ui(grid, p, card_id)
-			continue
-		if kind == int(CardSymbol.Kind.SALVAGE):
-			_add_salvage_ui(grid, p, uid, count)
-			continue
-		var sym := CardSymbol.make(kind as CardSymbol.Kind, count)
-		var extra: Dictionary = {}
-		if kind == int(CardSymbol.Kind.ACCELERATE):
-			extra["plus_used"] = p.plus_symbols_used
-		var is_stress := kind == int(CardSymbol.Kind.REDUCE_STRESS)
-		var payload := {"uid": uid, "card_ids": []}
-		var label := sym.display_name()
-		if kind == int(CardSymbol.Kind.ACCELERATE) and p.plus_symbols_used > 0:
-			label += " (+%d)" % p.plus_symbols_used
-		var btn := _make_symbol_button(
-			kind as CardSymbol.Kind, count, label, extra,
+
+func _add_armed_direct_play_speeds(parent: Control, p: PlayerState) -> void:
+	var card := p.hand.get_by_id(_armed_direct_play_id)
+	if card == null:
+		_armed_direct_play_id = ""
+		return
+	var def := CardCatalog.get_def(card.def_id)
+	var opts := def.resolved_speed_options()
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 6)
+	for v in opts:
+		var speed := v
+		var cid := _armed_direct_play_id
+		var btn := _make_icon_action_button(
+			[{"kind": CardSymbol.Kind.DIRECT_PLAY, "count": 1}],
+			"Direct Play",
+			"Jouez cette carte depuis la main pour une vitesse de %d." % speed,
 			func() -> void:
-				if is_stress:
-					payload["card_ids"] = _selected_stress_ids(p)
-				action_requested.emit("upgrade_symbol", payload, p.id)
+				_armed_direct_play_id = ""
+				action_requested.emit(
+					"direct_play", {"card_id": cid, "speed_choice": speed}, p.id
+				),
+			str(speed)
 		)
-		grid.add_child(btn)
-
-	var finish := _make_button("Terminer", true)
-	finish.pressed.connect(_on_finish_react_pressed.bind(p.id))
-	grid.add_child(finish)
-	add_child(grid)
+		row.add_child(btn)
+	parent.add_child(row)
 
 
-func _selected_stress_ids(p: PlayerState) -> Array:
+func selected_stress_ids(p: PlayerState) -> Array:
 	var ids: Array = []
 	for cid in _hand.selected_ids():
 		var card := p.hand.get_by_id(cid)
 		if card != null and card.kind == HeatCard.Kind.STRESS:
 			ids.append(cid)
 	return ids
-
-
-func _add_direct_play_ui(grid: GridContainer, p: PlayerState, card_id: String) -> void:
-	var card := p.hand.get_by_id(card_id)
-	var def := CardCatalog.get_def(card.def_id) if card != null else null
-	var label := "Direct Play"
-	if def != null and not def.title.is_empty():
-		label = "Direct Play · %s" % def.title
-	var opts := def.resolved_speed_options() if def != null else PackedInt32Array()
-	if not _speed_choices.has(card_id) and not opts.is_empty():
-		_speed_choices[card_id] = opts[0]
-	if opts.size() > 1:
-		for v in opts:
-			var speed := v
-			var spd := _make_symbol_button(
-				CardSymbol.Kind.DIRECT_PLAY,
-				1,
-				"%s %d" % [label, speed],
-				{},
-				func() -> void:
-					_speed_choices[card_id] = speed
-					action_requested.emit(
-						"direct_play",
-						{"card_id": card_id, "speed_choice": speed},
-						p.id
-					)
-			)
-			grid.add_child(spd)
-		return
-	var dp := _make_symbol_button(
-		CardSymbol.Kind.DIRECT_PLAY,
-		1,
-		label,
-		{},
-		func() -> void:
-			var choice := int(_speed_choices.get(card_id, -1))
-			action_requested.emit(
-				"direct_play", {"card_id": card_id, "speed_choice": choice}, p.id
-			)
-	)
-	grid.add_child(dp)
-
-
-func _add_salvage_ui(grid: GridContainer, p: PlayerState, uid: String, count: int) -> void:
-	if not _salvage_ids.has(uid):
-		_salvage_ids[uid] = []
-	var btn := _make_symbol_button(
-		CardSymbol.Kind.SALVAGE,
-		count,
-		"Salvage %d" % count,
-		{},
-		func() -> void:
-			action_requested.emit(
-				"upgrade_symbol", {"uid": uid, "card_ids": _salvage_ids.get(uid, [])}, p.id
-			)
-	)
-	grid.add_child(btn)
-	for card in p.discard.cards:
-		var cid := card.id
-		var def := CardCatalog.get_def(card.def_id)
-		var title := def.title if not def.title.is_empty() else card.def_id
-		var pick := _make_button(title, false, true)
-		pick.toggle_mode = true
-		pick.button_pressed = cid in _salvage_ids[uid]
-		pick.toggled.connect(func(on: bool) -> void:
-			var chosen: Array = _salvage_ids.get(uid, [])
-			if on:
-				if cid not in chosen:
-					chosen.append(cid)
-				while chosen.size() > count:
-					chosen.remove_at(0)
-			else:
-				chosen.erase(cid)
-			_salvage_ids[uid] = chosen
-		)
-		grid.add_child(pick)
 
 
 func _on_finish_react_pressed(player_id: int) -> void:
@@ -482,8 +468,11 @@ func _on_finish_react_confirmed() -> void:
 func _make_label(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.max_lines_visible = 1
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	label.theme_type_variation = "Caption"
 	return label
 
@@ -494,6 +483,7 @@ func _make_eyebrow(text: String) -> Label:
 	label.text = text
 	label.theme_type_variation = "Eyebrow"
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	return label
 
 
@@ -510,40 +500,57 @@ func _make_button(text: String, primary: bool = false, compact: bool = false) ->
 	return btn
 
 
-func _make_symbol_button(
-	kind: CardSymbol.Kind,
-	count: int,
-	label_text: String,
-	extra: Dictionary,
-	on_press: Callable
+func _make_icon_action_button(
+	icons: Array,
+	title: String,
+	body: String,
+	on_press: Callable,
+	caption: String = ""
 ) -> RichTooltipButton:
 	var btn := RichTooltipButton.new()
+	btn.text = ""
+	btn.clip_text = false
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.theme_type_variation = &"Compact"
-	btn.tooltip_bbcode = CardSymbol.make(kind, count).tooltip_bbcode(extra)
+	btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(0, 32)
+	btn.theme_type_variation = &"SymbolAction"
+	btn.tooltip_bbcode = "[b]%s[/b]\n%s" % [title, body]
 	btn.tooltip_text = " "
 
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	var row := HBoxContainer.new()
-	row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	row.offset_left = 8
-	row.offset_right = -8
-	row.offset_top = 4
-	row.offset_bottom = -4
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 8)
 
-	var icon := CardSymbolIcon.new()
-	icon.setup(kind, count, extra)
-	row.add_child(icon)
+	for entry in icons:
+		var kind: CardSymbol.Kind = entry["kind"]
+		var count := int(entry.get("count", 1))
+		var icon := CardSymbolIcon.new()
+		icon.setup(kind, count)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.set_icon_size(18.0)
+		row.add_child(icon)
 
-	if not label_text.is_empty():
+	if not caption.is_empty():
 		var lab := Label.new()
-		lab.text = label_text
+		lab.text = caption
 		lab.theme_type_variation = &"Caption"
+		lab.add_theme_color_override(&"font_color", Palette.INK)
 		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(lab)
 
-	btn.add_child(row)
+	center.add_child(row)
+	btn.add_child(center)
 	btn.pressed.connect(on_press)
 	return btn
+
+
+func _dim_if_disabled(btn: Button) -> void:
+	if not btn.disabled:
+		return
+	for child in btn.get_children():
+		child.modulate = Color(1, 1, 1, 0.45)

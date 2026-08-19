@@ -11,6 +11,9 @@ const SVG_NATIVE := 256.0
 ## Extra pixels for viewport stretch / HiDPI. 2× then LINEAR looks cleaner than 1×.
 const RASTER_PAD := 2.0
 
+const CHECK_PATH := "res://ui/kit/icons/ph-check-fat-fill.svg"
+const CHECK_GREEN := Color(0.22, 0.64, 0.34)
+
 const PATHS := {
 	CardSymbol.Kind.HEAT: "res://ui/kit/icons/ph-fire-duotone.svg",
 	CardSymbol.Kind.SCRAP: "res://ui/kit/icons/ph-trash-simple-duotone.svg",
@@ -30,17 +33,25 @@ static var _tex_cache: Dictionary = {}
 
 
 static func texture(kind: CardSymbol.Kind, display_px: float = 24.0) -> Texture2D:
+	var path: String = PATHS.get(kind, PATHS[CardSymbol.Kind.HEAT])
+	return _texture_at(path, display_px)
+
+
+static func check_texture(display_px: float = 24.0) -> Texture2D:
+	return _texture_at(CHECK_PATH, display_px)
+
+
+static func _texture_at(path: String, display_px: float) -> Texture2D:
 	var px := maxi(16, int(round(display_px * RASTER_PAD)))
-	var key := "%d_%d" % [int(kind), px]
+	var key := "%s_%d" % [path, px]
 	if _tex_cache.has(key):
 		return _tex_cache[key]
-	var tex := _rasterize(kind, px)
+	var tex := _rasterize_path(path, px)
 	_tex_cache[key] = tex
 	return tex
 
 
-static func _rasterize(kind: CardSymbol.Kind, px: int) -> Texture2D:
-	var path: String = PATHS.get(kind, PATHS[CardSymbol.Kind.HEAT])
+static func _rasterize_path(path: String, px: int) -> Texture2D:
 	if not _svg_text.has(path):
 		_svg_text[path] = FileAccess.get_file_as_string(path)
 	var svg: String = _svg_text[path]

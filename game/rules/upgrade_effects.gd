@@ -10,6 +10,7 @@ static func apply_reveal(engine: HeatGameEngine, p: PlayerState) -> void:
 	p.refresh_card_ids.clear()
 	p.accelerate_used = false
 	p.plus_symbols_used = 0
+	p.plus_resolved_card_ids.clear()
 	p.speed_limit_adjust = 0
 	p.slipstream_bonus = 0
 	p.cooldown_bonus = 0
@@ -32,6 +33,7 @@ static func apply_reveal(engine: HeatGameEngine, p: PlayerState) -> void:
 		_queue_optionals(p, card)
 	p.play_area.clear()
 	p.play_area.add_many(surviving)
+	resolve_kept_plus(engine, p, false)
 
 
 static func apply_direct_play(engine: HeatGameEngine, p: PlayerState, card: HeatCard) -> bool:
@@ -45,7 +47,50 @@ static func apply_direct_play(engine: HeatGameEngine, p: PlayerState, card: Heat
 		engine._log("%s Direct Play %s +%d" % [p.display_name, card.def_id, card.speed_value])
 	else:
 		engine._log("%s Direct Play %s" % [p.display_name, card.def_id])
+	if not _has_heat_debt(p, card.id):
+		_resolve_plus_for_card(engine, p, card, true)
 	return true
+
+
+static func resolve_kept_plus(engine: HeatGameEngine, p: PlayerState, apply_move: bool) -> void:
+	for card in p.play_area.cards.duplicate():
+		if _has_heat_debt(p, card.id):
+			continue
+		_resolve_plus_for_card(engine, p, card, apply_move)
+
+
+static func _has_heat_debt(p: PlayerState, card_id: String) -> bool:
+	for debt in p.pending_heat_debts:
+		if str(debt.get("card_id", "")) == card_id:
+			return true
+	return false
+
+
+static func _resolve_plus_for_card(
+	engine: HeatGameEngine, p: PlayerState, card: HeatCard, apply_move: bool
+) -> void:
+	if card.id in p.plus_resolved_card_ids:
+		return
+	var def := CardCatalog.get_def(card.def_id)
+	var n := def.symbol_count(CardSymbol.Kind.PLUS)
+	if n <= 0:
+		return
+	if _has_heat_debt(p, card.id):
+		return
+	p.plus_resolved_card_ids.append(card.id)
+	var extra := 0
+	for _i in n:
+		var flipped := engine._flip_until_speed(p)
+		if flipped == null:
+			break
+		p.play_area.add(flipped)
+		p.plus_symbols_used += 1
+		extra += flipped.speed_value
+		engine._log("%s + -> Speed %d" % [p.display_name, flipped.speed_value])
+	if apply_move and extra > 0:
+		p.round_speed += extra
+		engine._move_player(p, extra, false)
+		engine._check_finish(p)
 
 
 static func _apply_mandatory(engine: HeatGameEngine, p: PlayerState, card: HeatCard) -> void:
@@ -77,6 +122,10 @@ static func pay_heat_debt(engine: HeatGameEngine, p: PlayerState, uid: String) -
 		var card_id := str(debt.get("card_id", ""))
 		p.pending_heat_debts.remove_at(idx)
 		engine._log("%s pays %d Heat for %s" % [p.display_name, count, card_id])
+		var card := p.play_area.get_by_id(card_id)
+		if card != null:
+			var move_now := engine.turn_step == HeatGameEngine.TurnStep.REACT
+			_resolve_plus_for_card(engine, p, card, move_now)
 		return ActionResult.success()
 	return ActionResult.fail("Not enough Heat in engine")
 
@@ -151,12 +200,6 @@ static func _queue_optionals(p: PlayerState, card: HeatCard) -> void:
 		if s.kind == CardSymbol.Kind.COOLDOWN:
 			p.cooldown_bonus += maxi(1, s.count)
 			continue
-		if s.kind == CardSymbol.Kind.PLUS:
-			for i in maxi(1, s.count):
-				p.pending_symbols.append(
-					{"card_id": card.id, "kind": int(s.kind), "count": 1, "uid": "%s_plus_%d" % [card.id, i]}
-				)
-			continue
 		p.pending_symbols.append(
 			{"card_id": card.id, "kind": int(s.kind), "count": s.count, "uid": "%s_%d" % [card.id, int(s.kind)]}
 		)
@@ -186,16 +229,6 @@ static func use_symbol(
 	var count := int(entry.get("count", 1))
 	var card_id := str(entry.get("card_id", ""))
 	match kind:
-		CardSymbol.Kind.PLUS:
-			var flipped := engine._flip_until_speed(p)
-			if flipped == null:
-				return ActionResult.fail("No speed card to flip")
-			p.play_area.add(flipped)
-			p.round_speed += flipped.speed_value
-			p.plus_symbols_used += 1
-			engine._move_player(p, flipped.speed_value, false)
-			engine._check_finish(p)
-			engine._log("%s + -> Speed %d" % [p.display_name, flipped.speed_value])
 		CardSymbol.Kind.SLIPSTREAM_BOOST:
 			p.slipstream_bonus += count
 			engine._log("%s slipstream boost +%d" % [p.display_name, count])

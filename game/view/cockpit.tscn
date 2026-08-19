@@ -1,11 +1,13 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://ui/kit/kerb.gd" id="1_kerb"]
 [ext_resource type="Script" path="res://view/card_hand.gd" id="2_hand"]
 [ext_resource type="Script" path="res://view/action_panel.gd" id="3_actions"]
+[ext_resource type="Script" path="res://view/play_area.gd" id="4_play"]
 
 [node name="Cockpit" type="VBoxContainer"]
 size_flags_vertical = 8
+clip_contents = false
 theme_override_constants/separation = 8
 
 [node name="CockpitKerb" type="Control" parent="."]
@@ -19,33 +21,36 @@ slant = 12.0
 
 [node name="CockpitRow" type="BoxContainer" parent="."]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 148)
 layout_mode = 2
-theme_override_constants/separation = 20
+size_flags_vertical = 1
+theme_override_constants/separation = 16
 
 [node name="CardHand" type="Control" parent="CockpitRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 160)
+custom_minimum_size = Vector2(160, 148)
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 4
+size_flags_vertical = 3
 script = ExtResource("2_hand")
 
-[node name="ActionScroll" type="ScrollContainer" parent="CockpitRow"]
+[node name="PlayArea" type="Control" parent="CockpitRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 160)
-custom_maximum_size = Vector2(16384, 168)
+visible = false
+custom_minimum_size = Vector2(0, 148)
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 3
-horizontal_scroll_mode = 0
-vertical_scroll_mode = 1
+mouse_filter = 0
+script = ExtResource("4_play")
 
-[node name="ActionBox" type="VBoxContainer" parent="CockpitRow/ActionScroll"]
+[node name="ActionBox" type="Control" parent="CockpitRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(220, 0)
+custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 6
+size_flags_horizontal = 0
+size_flags_vertical = 3
+clip_contents = false
 script = ExtResource("3_actions")
 
 [node name="FinishReactDialog" type="ConfirmationDialog" parent="."]

@@ -33,6 +33,8 @@ var turn_complete: bool = false
 var speed_limit_adjust: int = 0
 var slipstream_bonus: int = 0
 var plus_symbols_used: int = 0
+## Cards whose mandatory Plus has already been flipped (idempotent).
+var plus_resolved_card_ids: Array[String] = []
 var refresh_card_ids: Array[String] = []
 var accelerate_used: bool = false
 var pending_symbols: Array[Dictionary] = []
@@ -57,6 +59,7 @@ func reset_round_flags() -> void:
 	speed_limit_adjust = 0
 	slipstream_bonus = 0
 	plus_symbols_used = 0
+	plus_resolved_card_ids.clear()
 	refresh_card_ids.clear()
 	accelerate_used = false
 	pending_symbols.clear()
@@ -76,6 +79,10 @@ func playable_in_hand() -> Array[HeatCard]:
 
 
 func cooldown_from_gear() -> int:
+	return cooldown_for_gear(gear)
+
+
+static func cooldown_for_gear(gear: int) -> int:
 	match gear:
 		1:
 			return 3
@@ -120,8 +127,17 @@ func can_pay_any_heat_debt() -> bool:
 
 
 func has_pending_react_options() -> bool:
+	if has_unresolved_speeds():
+		return true
 	if has_pending_heat_debts() and can_pay_any_heat_debt():
 		return true
 	if can_use_boost() or can_use_adrenaline() or can_use_cooldown():
 		return true
 	return not pending_symbols.is_empty()
+
+
+func has_unresolved_speeds() -> bool:
+	for card in play_area.cards:
+		if card.needs_speed_choice():
+			return true
+	return false

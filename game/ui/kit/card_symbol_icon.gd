@@ -3,7 +3,12 @@ extends Control
 
 ## One card symbol: tinted SVG icon, optional count, rich tooltip on hover.
 
+signal activated(kind: CardSymbol.Kind)
+
 const DEFAULT_ICON_SIZE := 22.0
+const STATE_INERT := "inert"
+const STATE_CLICKABLE := "clickable"
+const STATE_RESOLVED := "resolved"
 
 var _kind: CardSymbol.Kind = CardSymbol.Kind.HEAT
 var _count: int = 1
@@ -11,13 +16,18 @@ var _extra: Dictionary = {}
 var _tooltip_bbcode: String = ""
 var _icon_px: float = DEFAULT_ICON_SIZE
 var force_hide_count := false
+var _state: String = STATE_INERT
 
 var _icon: TextureRect
 var _count_label: Label
+var _check: TextureRect
+
+
+func kind() -> CardSymbol.Kind:
+	return _kind
 
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_STOP
 	tooltip_text = " "
 	if _icon == null:
 		_build()
@@ -31,8 +41,11 @@ func _notification(what: int) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	# Clic sur l'icône = clic sur la carte (sélection, etc.).
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if _state == STATE_CLICKABLE:
+			activated.emit(_kind)
+			accept_event()
+			return
 		var card := _owning_card()
 		if card != null:
 			card._gui_input(event)
@@ -66,6 +79,20 @@ func set_icon_size(pixels: float) -> void:
 		_apply_visual()
 
 
+func set_count_color(color: Color) -> void:
+	if _count_label != null:
+		_count_label.add_theme_color_override(&"font_color", color)
+
+
+func set_interaction_state(state: String) -> void:
+	_state = state
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	mouse_default_cursor_shape = (
+		Control.CURSOR_POINTING_HAND if state == STATE_CLICKABLE else Control.CURSOR_ARROW
+	)
+	_apply_visual()
+
+
 func _build() -> void:
 	_icon = TextureRect.new()
 	_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -81,6 +108,14 @@ func _build() -> void:
 	_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_count_label)
 
+	_check = TextureRect.new()
+	_check.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_check.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_check.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_check.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_check.visible = false
+	add_child(_check)
+
 	_apply_visual()
 
 
@@ -89,7 +124,11 @@ func _apply_visual() -> void:
 		return
 	_icon.texture = CardSymbolVisual.texture(_kind, _icon_px)
 	_icon.material = null
-	_icon.modulate = CardSymbolVisual.tint(_kind)
+	var tint := CardSymbolVisual.tint(_kind)
+	if _state == STATE_RESOLVED:
+		_icon.modulate = Color(tint.r, tint.g, tint.b, 0.35)
+	else:
+		_icon.modulate = tint
 	var show_n := CardSymbol.shows_count(_kind) and not force_hide_count
 	_count_label.visible = show_n
 	if show_n:
@@ -97,7 +136,23 @@ func _apply_visual() -> void:
 			_count_label.text = "+%d" % _count
 		else:
 			_count_label.text = str(_count)
+		_count_label.modulate.a = 0.35 if _state == STATE_RESOLVED else 1.0
 	_apply_layout(_icon_px)
+	_apply_check()
+
+
+func _apply_check() -> void:
+	if _check == null:
+		return
+	var show := _state == STATE_RESOLVED
+	_check.visible = show
+	if not show:
+		return
+	var check_px := maxf(10.0, _icon_px * 0.72)
+	_check.texture = CardSymbolVisual.check_texture(check_px)
+	_check.modulate = CardSymbolVisual.CHECK_GREEN
+	_check.size = Vector2(check_px, check_px)
+	_check.position = Vector2((_icon_px - check_px) * 0.5, (_icon_px - check_px) * 0.5)
 
 
 func _apply_layout(icon_px: float) -> void:
@@ -111,6 +166,7 @@ func _apply_layout(icon_px: float) -> void:
 		_count_label.size = Vector2(count_w, icon_px)
 	custom_minimum_size = Vector2(icon_px + count_w, icon_px)
 	size = custom_minimum_size
+	_apply_check()
 
 
 func _make_custom_tooltip(_tooltip: String) -> Object:

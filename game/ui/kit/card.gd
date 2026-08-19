@@ -11,6 +11,8 @@ extends Control
 ##  - le survol, la selection et le retournement sont des animations, pas des sprites
 
 signal clicked(card: Card)
+signal symbol_activated(kind: CardSymbol.Kind)
+signal speed_picked(speed: int)
 
 const SIZE_DEFAULT := Vector2(150, 220)
 
@@ -46,14 +48,20 @@ const SIZE_DEFAULT := Vector2(150, 220)
 
 var _hovered := false
 var _big: Label
-var _center_icon: TextureRect
+var _speed_pick: GridContainer
 var _title: Label
+var _center_icon: TextureRect
 var _effect: Label
 var _kerb: Kerb
 var _symbols_host: CenterContainer
 var _symbols_stack: VBoxContainer
 var _mandatory_row: HBoxContainer
 var _optional_row: HBoxContainer
+## kind int -> "inert" | "clickable" | "resolved"
+var _symbol_states: Dictionary = {}
+var _speed_override := -1
+var _speed_pick_options: PackedInt32Array = PackedInt32Array()
+var _speed_pick_enabled := false
 
 
 func _ready() -> void:
@@ -86,6 +94,7 @@ func _apply_size() -> void:
 	_big.offset_right = -pad
 	_big.offset_bottom = -(kerb_h + effect_h + roundf(6.0 * s))
 	_fit_big_font(s, pad)
+	_layout_speed_pick(s, pad, kerb_h, effect_h)
 	_layout_center_icon(s, pad, kerb_h, effect_h)
 
 	_effect.offset_left = pad
@@ -107,15 +116,20 @@ func _apply_size() -> void:
 	if _symbols_stack != null:
 		_symbols_stack.add_theme_constant_override("separation", maxi(2, int(round(4.0 * s))))
 	var title_h := roundf(24.0 * s)
-	var big_bottom := card_size.y - kerb_h - effect_h - roundf(6.0 * s)
-	var big_center_y := (title_h + big_bottom) * 0.5
 	var row_h := icon_px + roundf(4.0 * s)
 	var row_count := _symbol_row_count()
 	var stack_h := row_h * float(row_count)
 	if row_count > 1:
 		stack_h += roundf(4.0 * s)
-	_symbols_host.offset_top = big_center_y + roundf(18.0 * s)
-	_symbols_host.offset_bottom = _symbols_host.offset_top + stack_h
+	if _speed_pick_active():
+		# Symbols sit on the kerb, below the speed grid.
+		_symbols_host.offset_top = card_size.y - kerb_h - effect_h - stack_h - roundf(2.0 * s)
+		_symbols_host.offset_bottom = _symbols_host.offset_top + stack_h
+	else:
+		var big_bottom := card_size.y - kerb_h - effect_h - roundf(6.0 * s)
+		var big_center_y := (title_h + big_bottom) * 0.5
+		_symbols_host.offset_top = big_center_y + roundf(18.0 * s)
+		_symbols_host.offset_bottom = _symbols_host.offset_top + stack_h
 	queue_redraw()
 
 
@@ -177,6 +191,15 @@ func _build() -> void:
 	_big.anchor_bottom = 1.0
 	add_child(_big)
 
+	_speed_pick = GridContainer.new()
+	_speed_pick.columns = 2
+	_speed_pick.visible = false
+	_speed_pick.anchor_right = 1.0
+	_speed_pick.anchor_bottom = 1.0
+	_speed_pick.mouse_filter = Control.MOUSE_FILTER_STOP
+	_speed_pick.z_index = 3
+	add_child(_speed_pick)
+
 	_center_icon = TextureRect.new()
 	_center_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_center_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -234,13 +257,16 @@ func _refresh() -> void:
 
 	var visible_face := face_up
 	_title.visible = visible_face
-	_big.visible = visible_face and data != null and not data.shows_heat_center()
+	var show_pick := _speed_pick_active()
+	_big.visible = visible_face and data != null and not data.shows_heat_center() and not show_pick
+	if _speed_pick != null:
+		_speed_pick.visible = show_pick
 	_effect.visible = visible_face
 	_kerb.visible = visible_face
 
 	if visible_face:
 		_title.text = data.title
-		_big.text = data.big_text()
+		_big.text = str(_speed_override) if _speed_override >= 0 else data.big_text()
 		_effect.text = data.effect
 		var ink := data.ink()
 		_title.add_theme_color_override("font_color", ink * Color(1, 1, 1, 0.6))
@@ -253,6 +279,104 @@ func _refresh() -> void:
 	# La presence d'un texte d'effet change la hauteur reservee au gros chiffre.
 	_apply_size()
 	queue_redraw()
+
+
+func set_symbol_states(states: Dictionary) -> void:
+	_symbol_states = states
+	_apply_symbol_states()
+
+
+func set_resolved_speed(speed: int) -> void:
+	_speed_override = speed
+	_speed_pick_enabled = false
+	_refresh()
+
+
+func set_speed_pick(options: PackedInt32Array, enabled: bool) -> void:
+	_speed_pick_options = options
+	_speed_pick_enabled = enabled and options.size() > 1
+	_rebuild_speed_pick()
+	_refresh()
+
+
+func _speed_pick_active() -> bool:
+	return face_up and _speed_pick_enabled and _speed_pick_options.size() > 1
+
+
+func _rebuild_speed_pick() -> void:
+	if _speed_pick == null:
+		return
+	for child in _speed_pick.get_children():
+		child.queue_free()
+	if not _speed_pick_enabled:
+		return
+	for v in _speed_pick_options:
+		var btn := Button.new()
+		btn.text = str(v)
+		btn.clip_text = false
+		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		btn.add_theme_font_override("font", ThemeBuilder.display_font())
+		btn.add_theme_color_override("font_color", Palette.INK)
+		btn.add_theme_color_override("font_hover_color", Palette.INK)
+		btn.add_theme_color_override("font_pressed_color", Palette.INK)
+		btn.add_theme_color_override("font_focus_color", Palette.INK)
+		btn.add_theme_stylebox_override("normal", _speed_pick_box(Palette.CARDBOARD_DARK, Palette.INK))
+		btn.add_theme_stylebox_override("hover", _speed_pick_box(Palette.CARDBOARD, Palette.MUSTARD))
+		btn.add_theme_stylebox_override("pressed", _speed_pick_box(Palette.MUSTARD, Palette.INK))
+		btn.add_theme_stylebox_override("focus", _speed_pick_box(Palette.CARDBOARD_DARK, Palette.INK))
+		var speed := v
+		btn.pressed.connect(func() -> void:
+			speed_picked.emit(speed)
+		)
+		_speed_pick.add_child(btn)
+
+
+func _layout_speed_pick(s: float, pad: float, kerb_h: float, effect_h: float) -> void:
+	if _speed_pick == null:
+		return
+	if not _speed_pick_active():
+		return
+	var n := _speed_pick_options.size()
+	var rows := maxi(1, int(ceili(float(n) / 2.0)))
+	var gap := maxf(4.0, roundf(6.0 * s))
+	_speed_pick.add_theme_constant_override("h_separation", int(gap))
+	_speed_pick.add_theme_constant_override("v_separation", int(gap))
+	var title_h := roundf(24.0 * s)
+	var symbol_reserve := 0.0
+	if _symbol_row_count() > 0:
+		symbol_reserve = maxf(16.0, roundf(24.0 * s)) + roundf(6.0 * s)
+	var bottom := kerb_h + (effect_h if _effect.visible else 0.0) + symbol_reserve + roundf(4.0 * s)
+	var avail_w := card_size.x - pad * 2.0
+	var avail_h := card_size.y - title_h - bottom
+	var side := minf((avail_w - gap) * 0.5, (avail_h - gap * float(rows - 1)) / float(rows))
+	side = maxf(22.0, floorf(side))
+	var font_px := maxi(12, int(round(side * 0.48)))
+	for child in _speed_pick.get_children():
+		if child is Button:
+			var btn := child as Button
+			btn.custom_minimum_size = Vector2(side, side)
+			btn.size = Vector2(side, side)
+			btn.add_theme_font_size_override("font_size", font_px)
+	var grid_w := side * 2.0 + gap
+	var grid_h := side * float(rows) + gap * float(rows - 1)
+	var left := (card_size.x - grid_w) * 0.5
+	_speed_pick.offset_left = left
+	_speed_pick.offset_right = -(card_size.x - left - grid_w)
+	_speed_pick.offset_top = title_h + maxf(0.0, (avail_h - grid_h) * 0.5)
+	_speed_pick.offset_bottom = -(card_size.y - _speed_pick.offset_top - grid_h)
+
+
+func _speed_pick_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.border_color = border
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(4)
+	box.content_margin_left = 2
+	box.content_margin_right = 2
+	box.content_margin_top = 2
+	box.content_margin_bottom = 2
+	return box
 
 
 func _rebuild_symbols() -> void:
@@ -283,8 +407,24 @@ func _populate_symbol_row(row: HBoxContainer, entries: Array[CardSymbol], icon_p
 	for entry in entries:
 		var icon := CardSymbolIcon.new()
 		icon.setup(entry.kind, entry.count)
+		icon.activated.connect(_on_symbol_activated)
 		row.add_child(icon)
 		icon.set_icon_size(icon_px)
+	_apply_symbol_states()
+
+
+func _on_symbol_activated(kind: CardSymbol.Kind) -> void:
+	symbol_activated.emit(kind)
+
+
+func _apply_symbol_states() -> void:
+	for row in [_mandatory_row, _optional_row]:
+		if row == null:
+			continue
+		for child in row.get_children():
+			if child is CardSymbolIcon:
+				var st := str(_symbol_states.get(int(child.kind()), CardSymbolIcon.STATE_INERT))
+				child.set_interaction_state(st)
 
 
 func _mandatory_symbol_entries() -> Array[CardSymbol]:

@@ -14,7 +14,7 @@ enum Kind {
 	REFRESH,
 	DIRECT_PLAY,
 	ACCELERATE,
-	PLUS, ## Optional extra flip-until-speed (also used by Boost / Stress counting).
+	PLUS, ## Mandatory: flip until Speed when the card is revealed.
 }
 
 @export var kind: Kind = Kind.HEAT
@@ -27,6 +27,7 @@ static func is_mandatory(p_kind: Kind) -> bool:
 		p_kind == Kind.HEAT
 		or p_kind == Kind.SCRAP
 		or p_kind == Kind.ADJUST_SPEED_LIMIT
+		or p_kind == Kind.PLUS
 	)
 
 
@@ -147,5 +148,5 @@ func _tooltip_body(extra: Dictionary = {}) -> String:
 				return "Avancez de 1 case (symboles + utilisés ce tour-ci)."
 			return "Avancez de %d cases (symboles + utilisés ce tour-ci)." % bonus
 		Kind.PLUS:
-			return "Retournez des cartes jusqu'à obtenir une carte Vitesse."
+			return "Retournez des cartes jusqu'à obtenir une carte Vitesse 1–4."
 	return ""

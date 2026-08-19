@@ -30,13 +30,24 @@ var speed_value: int:
 			return chosen_speed
 		var def := _def()
 		var opts := def.resolved_speed_options()
-		if not opts.is_empty():
+		if opts.size() == 1:
 			return opts[0]
+		if opts.size() > 1:
+			return 0
 		return def.speed_value
 
 
 func is_speed_card() -> bool:
-	return contributes_speed_when_played()
+	# Plus / Boost / Stress / heat-fallback keep only base Speed 1–4.
+	# Starter 0/5, upgrades, Heat and Stress are discarded.
+	if kind != Kind.SPEED:
+		return false
+	var v := _def().speed_value
+	return v >= 1 and v <= 4
+
+
+func needs_speed_choice() -> bool:
+	return contributes_speed_when_played() and _def().resolved_speed_options().size() > 1 and chosen_speed < 0
 
 
 func is_playable() -> bool:

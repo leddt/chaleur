@@ -5,10 +5,12 @@ extends Control
 @onready var _phase: Label = %PhaseLabel
 @onready var _log: EventJournal = %EventLog
 @onready var _hand: CardHandView = %Cockpit/%CardHand
+@onready var _play_area: PlayAreaView = %Cockpit/%PlayArea
 @onready var _actions: ActionPanel = %Cockpit/%ActionBox
 @onready var _sidebar: PlayerSidebar = %Binnacle/%Sidebar
 @onready var _hud: PlayersHud = %PlayersHud
 @onready var _pass_overlay: ColorRect = %PassOverlay
+@onready var _salvage_overlay: SalvageOverlay = %SalvageOverlay
 @onready var _pass_label: Label = %PassOverlay/%PassLabel
 @onready var _finish_overlay: ColorRect = %FinishOverlay
 @onready var _finish_label: Label = %FinishOverlay/%FinishLabel
@@ -24,6 +26,7 @@ var _ui_context_key: String = ""
 var _reveal_tween: Tween
 var _last_hand_key: String = ""
 var _kerb_scrolling: bool = false
+var _salvage_uid: String = ""
 const NARROW_WIDTH := 1000.0
 const DESIGN_HEIGHT := 720.0
 
@@ -38,6 +41,11 @@ func _ready() -> void:
 	if _engine != null:
 		_track.set_engine(_engine, true)
 	_hand.selection_changed.connect(_on_hand_selection_changed)
+	_hand.card_activated.connect(_on_hand_card_activated)
+	_play_area.symbol_activated.connect(_on_play_symbol_activated)
+	_play_area.speed_picked.connect(_on_play_speed_picked)
+	_salvage_overlay.confirmed.connect(_on_salvage_confirmed)
+	_salvage_overlay.cancelled.connect(func() -> void: _salvage_uid = "")
 	%PassOverlay/%PassContinueButton.pressed.connect(_on_pass_continue)
 	%MenuButton.pressed.connect(_on_menu)
 	%FinishOverlay/%FinishMenuButton.pressed.connect(_on_menu)
@@ -145,6 +153,7 @@ func _refresh_online() -> void:
 	_ui_context_key = ""
 	_actions.reset_drafts()
 	_actions.clear()
+	_play_area.clear_area()
 	_set_hand(_visible_hand(me), false)
 	_phase.text = _phase_text()
 	if pending.is_empty():
@@ -160,7 +169,7 @@ func _action_context_key(player_id: int) -> String:
 	if player_id < 0 or player_id >= _engine.players.size():
 		return "%s|%s|%d" % [str(_engine.phase), str(_engine.turn_step), player_id]
 	var p := _engine.players[player_id]
-	return "%s|%s|%d|b%d|a%d|c%d|s%d|eh%d|hh%d|hd%d" % [
+	return "%s|%s|%d|b%d|a%d|c%d|s%d|eh%d|hh%d|hd%d|ps%d|us%d" % [
 		str(_engine.phase),
 		str(_engine.turn_step),
 		player_id,
@@ -171,6 +180,8 @@ func _action_context_key(player_id: int) -> String:
 		p.engine_heat(),
 		p.hand.count_kind(HeatCard.Kind.HEAT),
 		p.pending_heat_debts.size(),
+		p.pending_symbols.size(),
+		int(p.has_unresolved_speeds()),
 	]
 
 
@@ -187,6 +198,7 @@ func _refresh_hotseat() -> void:
 	if pending.is_empty():
 		_pass_overlay.visible = false
 		_actions.clear()
+		_play_area.clear_area()
 		_set_hand([] as Array[HeatCard], false)
 		_status.text = "En attente de résolution… (personne à jouer — possible softlock)"
 		return
@@ -203,6 +215,7 @@ func _show_pass(actor_id: int) -> void:
 	var p := _engine.players[actor_id]
 	_pass_label.text = "Passez l'appareil à %s\n(ne regardez pas la main des autres)" % p.display_name
 	_actions.clear()
+	_play_area.clear_area()
 	_set_hand([] as Array[HeatCard], false)
 	_phase.text = _phase_text()
 	_status.text = "En attente de %s" % p.display_name
@@ -217,6 +230,7 @@ func _on_pass_continue() -> void:
 
 func _build_actions_for(actor_id: int) -> void:
 	_update_actor_status(actor_id)
+	_set_play_area(actor_id)
 	match _engine.phase:
 		HeatGameEngine.Phase.SHIFT_GEARS:
 			_set_hand(_visible_hand(actor_id), false)
@@ -238,6 +252,17 @@ func _build_actions_for(actor_id: int) -> void:
 					true,
 					func(card: HeatCard) -> bool: return card.can_discard()
 				)
+			elif _engine.turn_step == HeatGameEngine.TurnStep.REACT:
+				var actor := _engine.players[actor_id]
+				_set_hand(
+					_visible_hand(actor_id),
+					true,
+					true,
+					func(card: HeatCard) -> bool:
+						return card.kind == HeatCard.Kind.STRESS and _has_pending_reduce_stress(actor),
+					func(card: HeatCard) -> bool:
+						return CardCatalog.get_def(card.def_id).has_symbol(CardSymbol.Kind.DIRECT_PLAY)
+				)
 			else:
 				_set_hand(_visible_hand(actor_id), false)
 		_:
@@ -245,18 +270,37 @@ func _build_actions_for(actor_id: int) -> void:
 	_actions.build_for(_engine, actor_id)
 
 
+func _set_play_area(actor_id: int) -> void:
+	if (
+		_engine.phase != HeatGameEngine.Phase.PLAYER_TURN
+		or actor_id < 0
+		or actor_id >= _engine.players.size()
+	):
+		_play_area.clear_area()
+		return
+	_play_area.set_from_player(_engine.players[actor_id], _engine.turn_step)
+
+
+func _has_pending_reduce_stress(p: PlayerState) -> bool:
+	for entry in p.pending_symbols:
+		if int(entry.get("kind", -1)) == int(CardSymbol.Kind.REDUCE_STRESS):
+			return true
+	return false
+
+
 func _set_hand(
 	cards: Array[HeatCard],
 	enabled: bool,
 	multi_select: bool = true,
-	can_select: Callable = Callable()
+	can_select: Callable = Callable(),
+	can_activate: Callable = Callable()
 ) -> void:
 	var key := "%s|%s|%d" % [str(_engine.phase), str(_engine.turn_step), cards.size()]
 	for c in cards:
 		key += "|" + c.id
 	var animate := key != _last_hand_key and not cards.is_empty()
 	_last_hand_key = key
-	_hand.set_cards(cards, enabled, multi_select, animate, can_select)
+	_hand.set_cards(cards, enabled, multi_select, animate, can_select, can_activate)
 
 
 func _visible_hand(player_id: int) -> Array[HeatCard]:
@@ -293,6 +337,10 @@ func _dispatch(action: String, payload: Dictionary, player_id: int) -> void:
 			result = _engine.pay_heat_debt(player_id, str(payload.get("uid", "")))
 		"settle_heat":
 			result = _engine.finish_settle_heat(player_id)
+		"choose_speed":
+			result = _engine.choose_speed(
+				player_id, str(payload.get("card_id", "")), int(payload.get("speed", 0))
+			)
 		"react":
 			result = _engine.finish_react(player_id)
 		"slipstream":
@@ -457,6 +505,7 @@ func _show_finish() -> void:
 	_phase.text = "Course terminée"
 	_status.text = "Bravo !"
 	_actions.clear()
+	_play_area.clear_area()
 	_set_hand([] as Array[HeatCard], false)
 	%FinishOverlay/%FinishLobbyButton.visible = Game.is_online()
 	if Game.is_online() and not Net.is_server():
@@ -469,6 +518,51 @@ func _show_finish() -> void:
 
 func _on_hand_selection_changed(_ids: Array[String]) -> void:
 	_actions.on_hand_selection_changed()
+
+
+func _on_hand_card_activated(card_id: String) -> void:
+	_actions.on_direct_play_card(card_id)
+
+
+func _on_play_symbol_activated(card_id: String, kind: CardSymbol.Kind) -> void:
+	var p := _engine.active_player()
+	if p == null:
+		return
+	var uid := PlayAreaView.pending_uid(p, card_id, kind)
+	if uid.is_empty():
+		return
+	if kind == CardSymbol.Kind.HEAT:
+		_dispatch("pay_heat_debt", {"uid": uid}, p.id)
+		return
+	if kind == CardSymbol.Kind.SALVAGE:
+		_salvage_uid = uid
+		var count := 1
+		for entry in p.pending_symbols:
+			if str(entry.get("uid", "")) == uid:
+				count = int(entry.get("count", 1))
+				break
+		_salvage_overlay.open(p.discard.cards, count)
+		return
+	var payload := {"uid": uid, "card_ids": []}
+	if kind == CardSymbol.Kind.REDUCE_STRESS:
+		payload["card_ids"] = _actions.selected_stress_ids(p)
+	_dispatch("upgrade_symbol", payload, p.id)
+
+
+func _on_play_speed_picked(card_id: String, speed: int) -> void:
+	var p := _engine.active_player()
+	if p == null:
+		return
+	_dispatch("choose_speed", {"card_id": card_id, "speed": speed}, p.id)
+
+
+func _on_salvage_confirmed(card_ids: Array) -> void:
+	var p := _engine.active_player()
+	if p == null or _salvage_uid.is_empty():
+		return
+	var uid := _salvage_uid
+	_salvage_uid = ""
+	_dispatch("upgrade_symbol", {"uid": uid, "card_ids": card_ids}, p.id)
 
 
 func _on_menu() -> void:
@@ -531,8 +625,13 @@ func _adapt_layout() -> void:
 	var cockpit_row := %Cockpit.get_node_or_null("%CockpitRow") as BoxContainer
 	if cockpit_row != null:
 		cockpit_row.vertical = stack
-	var action_scroll := %Cockpit.get_node_or_null("%ActionScroll") as Control
-	if action_scroll != null:
-		action_scroll.size_flags_horizontal = (
+	var action_box := %Cockpit.get_node_or_null("%ActionBox") as Control
+	if action_box != null:
+		action_box.size_flags_horizontal = (
 			Control.SIZE_EXPAND_FILL if stack else Control.SIZE_SHRINK_END
+		)
+	var play_area := %Cockpit.get_node_or_null("%PlayArea") as Control
+	if play_area != null:
+		play_area.size_flags_horizontal = (
+			Control.SIZE_EXPAND_FILL if stack else Control.SIZE_SHRINK_CENTER
 		)

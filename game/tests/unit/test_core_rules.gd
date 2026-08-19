@@ -98,6 +98,32 @@ func test_boost_increases_corner_speed_slipstream_does_not() -> void:
 	assert_eq(p.engine_heat(), 4)
 
 
+func test_flip_until_speed_discards_upgrades() -> void:
+	var engine := HeatTestHelpers.make_engine(1, 3)
+	var p := engine.players[0]
+	HeatTestHelpers.ensure_engine_heat(p, 6)
+	p.hand.clear()
+	p.hand.add(HeatTestHelpers.card("spd", "speed_2"))
+	assert_true(HeatTestHelpers.shift_all(engine, 1))
+	assert_true(engine.play_cards(0, ["spd"]).ok)
+	assert_true(HeatTestHelpers.finish_settle_heat(engine, 0))
+	p.draw_pile.clear()
+	p.discard.clear()
+	p.draw_pile.add(HeatTestHelpers.card("upg", "upg_12_cooling"))
+	p.draw_pile.add(HeatTestHelpers.card("five", "starter_speed_5"))
+	p.draw_pile.add(HeatTestHelpers.card("zero", "starter_speed_0"))
+	p.draw_pile.add(HeatTestHelpers.card("heat_c", "heat"))
+	p.draw_pile.add(HeatTestHelpers.card("real", "speed_4"))
+	assert_true(engine.use_boost(0).ok)
+	assert_true(p.play_area.has_id("real"))
+	assert_false(p.play_area.has_id("upg"))
+	assert_false(p.play_area.has_id("five"))
+	assert_false(p.play_area.has_id("zero"))
+	assert_eq(p.discard.get_by_id("five") != null, true)
+	assert_eq(p.discard.get_by_id("zero") != null, true)
+	assert_eq(p.round_speed, 6)
+
+
 func test_corner_excess_causes_spin_out() -> void:
 	var engine := HeatTestHelpers.make_engine(1, 3)
 	var p := engine.players[0]

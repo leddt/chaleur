@@ -9,6 +9,9 @@ extends Control
 ##   2 notches -> costs one Heat, so the notch is marked with a flame
 ##   3 notches -> refused, so the notch is struck out
 ##
+## Gears 1 and 2 also show their cooldown quota (3 and 1), the same symbols as
+## on the cards.
+##
 ## A linear slot is used rather than a classic H-pattern gate on purpose: in an H,
 ## 1 -> 3 is a short move but a paid one, so the geometry would contradict the cost.
 
@@ -31,7 +34,7 @@ const HEAT_SHIFT_TOOLTIP := (
 	set(v):
 		current_gear = clampi(v, GEAR_MIN, GEAR_MAX)
 		queue_redraw()
-		_refresh_heat_tips()
+		_refresh_marks()
 
 @export var chosen_gear: int = 1:
 	set(v):
@@ -50,7 +53,7 @@ const HEAT_SHIFT_TOOLTIP := (
 			if has_focus():
 				release_focus()
 		queue_redraw()
-		_refresh_heat_tips()
+		_refresh_marks()
 
 var _hover_gear: int = -1
 
@@ -58,12 +61,12 @@ var _hover_gear: int = -1
 func _ready() -> void:
 	# Fallback only: a scene that sets its own size keeps it.
 	if custom_minimum_size == Vector2.ZERO:
-		custom_minimum_size = Vector2(96, 176)
+		custom_minimum_size = Vector2(118, 176)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL if editable else Control.FOCUS_NONE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	resized.connect(_refresh_heat_tips)
-	_refresh_heat_tips()
+	resized.connect(_refresh_marks)
+	_refresh_marks()
 
 
 ## Notches this many steps away cost a Heat; further away is refused.
@@ -217,29 +220,66 @@ func _draw_number(center: Vector2, gear: int, col: Color) -> void:
 
 
 func _heat_icon_center(gear: int) -> Vector2:
-	return _notch_center(gear) + Vector2(SLOT_WIDTH * 0.5 + 11.0, 0.0)
+	var extra := 0.0
+	if PlayerState.cooldown_for_gear(gear) > 0:
+		extra = 26.0
+	return _notch_center(gear) + Vector2(SLOT_WIDTH * 0.5 + 11.0 + extra, 0.0)
 
 
-func _refresh_heat_tips() -> void:
+func _cooldown_mark_center(gear: int, mark_size: Vector2) -> Vector2:
+	return _notch_center(gear) + Vector2(SLOT_WIDTH * 0.5 + 6.0 + mark_size.x * 0.5, 0.0)
+
+
+func _cooldown_tooltip(gear: int, quota: int) -> String:
+	if quota == 1:
+		return (
+			"[b]Cooldown 1[/b]\nEn rapport %d, vous pouvez remettre 1 Heat de votre main "
+			+ "dans le moteur ce tour-ci."
+		) % gear
+	return (
+		"[b]Cooldown %d[/b]\nEn rapport %d, vous pouvez remettre jusqu'à %d Heat de votre "
+		+ "main dans le moteur ce tour-ci."
+	) % [quota, gear, quota]
+
+
+func _refresh_marks() -> void:
 	for child in get_children():
-		if child is HeatTip:
+		if child is AccessoryTip:
 			child.queue_free()
-	if not editable or size.x <= 0.0 or size.y <= 0.0:
+	if size.x <= 0.0 or size.y <= 0.0:
 		return
 	for gear in range(GEAR_MIN, GEAR_MAX + 1):
-		if not costs_heat(gear):
+		var quota := PlayerState.cooldown_for_gear(gear)
+		if quota > 0:
+			var tip := AccessoryTip.new()
+			tip.gear = gear
+			tip.bbcode = _cooldown_tooltip(gear, quota)
+			var icon := CardSymbolIcon.new()
+			icon.setup(CardSymbol.Kind.COOLDOWN, quota)
+			icon.set_icon_size(14.0)
+			icon.set_count_color(Palette.CARDBOARD)
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			tip.add_child(icon)
+			var ms := icon.custom_minimum_size
+			if ms.x < 1.0:
+				ms = Vector2(28, 14)
+			tip.size = ms
+			var center := _cooldown_mark_center(gear, ms)
+			tip.position = center - ms * 0.5
+			add_child(tip)
+		if not editable or not costs_heat(gear):
 			continue
-		var tip := HeatTip.new()
-		tip.gear = gear
-		tip.bbcode = HEAT_SHIFT_TOOLTIP
+		var heat := AccessoryTip.new()
+		heat.gear = gear
+		heat.bbcode = HEAT_SHIFT_TOOLTIP
 		var px := HEAT_ICON_PX
-		var center := _heat_icon_center(gear)
-		tip.position = center - Vector2(px, px) * 0.5
-		tip.size = Vector2(px, px)
-		add_child(tip)
+		var at := _heat_icon_center(gear)
+		heat.position = at - Vector2(px, px) * 0.5
+		heat.size = Vector2(px, px)
+		add_child(heat)
 
 
-class HeatTip extends Control:
+class AccessoryTip extends Control:
 	var gear: int = 0
 	var bbcode: String = ""
 

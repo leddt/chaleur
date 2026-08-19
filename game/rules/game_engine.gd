@@ -303,7 +303,7 @@ func shift_gear(player_id: int, target_gear: int) -> ActionResult:
 
 
 func play_cards(
-	player_id: int, card_ids: Array[String], speed_choices: Dictionary = {}
+	player_id: int, card_ids: Array[String], _speed_choices: Dictionary = {}
 ) -> ActionResult:
 	if phase != Phase.PLAY_CARDS:
 		return ActionResult.fail("Not in PLAY_CARDS phase")
@@ -350,8 +350,6 @@ func play_cards(
 
 	for cid in card_ids:
 		var card := p.hand.remove_id(cid)
-		if speed_choices.has(cid):
-			card.chosen_speed = int(speed_choices[cid])
 		p.play_area.add(card)
 
 	p.cards_locked = true
@@ -423,6 +421,30 @@ func use_cooldown(player_id: int) -> ActionResult:
 	return ActionResult.success()
 
 
+func choose_speed(player_id: int, card_id: String, speed: int) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
+		return ActionResult.fail("Not in REACT step")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	var card := p.play_area.get_by_id(card_id)
+	if card == null:
+		return ActionResult.fail("Card not in play")
+	if not card.needs_speed_choice():
+		return ActionResult.fail("Speed already chosen")
+	var opts := CardCatalog.get_def(card.def_id).resolved_speed_options()
+	if opts.find(speed) < 0:
+		return ActionResult.fail("Invalid speed option")
+	if _card_has_pending_heat_debt(p, card_id):
+		return ActionResult.fail("Pay Heat before choosing speed")
+	card.chosen_speed = speed
+	p.round_speed += speed
+	_move_player(p, speed, false)
+	_log("%s chooses speed %d on %s" % [p.display_name, speed, card.def_id])
+	_check_finish(p)
+	return ActionResult.success()
+
+
 func pay_heat_debt(player_id: int, uid: String) -> ActionResult:
 	if phase != Phase.PLAYER_TURN:
 		return ActionResult.fail("Not in player turn")
@@ -455,6 +477,8 @@ func finish_react(player_id: int) -> ActionResult:
 	var p := active_player()
 	if p == null or p.id != player_id:
 		return ActionResult.fail("Not this player's turn")
+	if p.has_unresolved_speeds():
+		return ActionResult.fail("Must choose speed on multi-option cards")
 	if p.can_pay_any_heat_debt():
 		return ActionResult.fail("Must pay Heat you can afford")
 	UpgradeEffects.auto_fallback_unpayable_debts(self, p)
@@ -687,6 +711,7 @@ func _resolve_reveal_and_move(p: PlayerState) -> void:
 
 
 func _complete_move_after_settle(p: PlayerState) -> void:
+	UpgradeEffects.resolve_kept_plus(self, p, false)
 	p.round_speed = 0
 	for card in p.play_area.cards:
 		if card.contributes_speed_when_played() and not _card_has_pending_heat_debt(p, card.id):

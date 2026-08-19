@@ -153,6 +153,7 @@ static func _encode_player(p: PlayerState, viewer_player_id: int) -> Dictionary:
 		"speed_limit_adjust": p.speed_limit_adjust,
 		"slipstream_bonus": p.slipstream_bonus,
 		"plus_symbols_used": p.plus_symbols_used,
+		"plus_resolved_card_ids": p.plus_resolved_card_ids.duplicate(),
 		"refresh_card_ids": p.refresh_card_ids.duplicate(),
 		"accelerate_used": p.accelerate_used,
 		"pending_symbols": p.pending_symbols.duplicate(true),
@@ -196,6 +197,9 @@ static func _decode_player(data: Dictionary) -> PlayerState:
 	p.speed_limit_adjust = int(data.get("speed_limit_adjust", 0))
 	p.slipstream_bonus = int(data.get("slipstream_bonus", 0))
 	p.plus_symbols_used = int(data.get("plus_symbols_used", 0))
+	p.plus_resolved_card_ids.clear()
+	for cid in data.get("plus_resolved_card_ids", []):
+		p.plus_resolved_card_ids.append(str(cid))
 	p.refresh_card_ids.clear()
 	for cid in data.get("refresh_card_ids", []):
 		p.refresh_card_ids.append(str(cid))

@@ -93,7 +93,9 @@ static func _setup_buttons(t: Theme, body: Font) -> void:
 
 	_setup_card_button(t, body)
 	_setup_primary_button(t, body)
+	_setup_primary_strip_button(t, body)
 	_setup_compact_button(t, body)
+	_setup_symbol_action_button(t, body)
 	_setup_color_picker_button(t)
 
 
@@ -142,6 +144,45 @@ static func _compact_button_box(fill: Color, border: Color) -> StyleBoxFlat:
 	return sb
 
 
+static func _primary_strip_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var sb := _button_box(fill, border)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	return sb
+
+
+## Icônes de réaction / règlement : fond carton pour que les SVG restent lisibles.
+static func _setup_symbol_action_button(t: Theme, body: Font) -> void:
+	t.add_type("SymbolAction")
+	t.set_type_variation("SymbolAction", "Button")
+	t.set_font("font", "SymbolAction", body)
+	t.set_font_size("font_size", "SymbolAction", SIZE_S)
+	t.set_color("font_color", "SymbolAction", Palette.INK)
+	t.set_color("font_hover_color", "SymbolAction", Palette.INK)
+	t.set_color("font_pressed_color", "SymbolAction", Palette.INK)
+	t.set_color("font_disabled_color", "SymbolAction", Palette.SMOKE)
+	t.set_stylebox("normal", "SymbolAction", _symbol_action_box(Palette.CARDBOARD, Palette.INK))
+	t.set_stylebox(
+		"hover", "SymbolAction", _symbol_action_box(Palette.CARDBOARD, Palette.MUSTARD)
+	)
+	t.set_stylebox("pressed", "SymbolAction", _symbol_action_box(Palette.MUSTARD, Palette.INK))
+	t.set_stylebox(
+		"disabled", "SymbolAction", _symbol_action_box(Palette.CARDBOARD_DARK, Palette.SMOKE)
+	)
+	t.set_stylebox("focus", "SymbolAction", _symbol_action_box(Palette.CARDBOARD, Palette.CARDBOARD))
+
+
+static func _symbol_action_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var sb := _button_box(fill, border)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	return sb
+
+
 ## L'action principale d'une phase. Un bouton plein au milieu de boutons en
 ## contour : la hierarchie se lit sans avoir a lire les libelles.
 static func _setup_primary_button(t: Theme, body: Font) -> void:
@@ -161,6 +202,27 @@ static func _setup_primary_button(t: Theme, body: Font) -> void:
 	t.set_stylebox("pressed", "Primary", _button_box(Palette.RACE_RED, Palette.RACE_RED))
 	t.set_stylebox("disabled", "Primary", _button_box(Palette.INK, Palette.SMOKE))
 	t.set_stylebox("focus", "Primary", _button_box(Color(0, 0, 0, 0), Palette.CARDBOARD))
+
+
+## Primary plus bas, pour le bandeau cockpit (Terminer sous la grille 2×2).
+static func _setup_primary_strip_button(t: Theme, body: Font) -> void:
+	t.add_type("PrimaryStrip")
+	t.set_type_variation("PrimaryStrip", "Button")
+	t.set_font("font", "PrimaryStrip", body)
+	t.set_font_size("font_size", "PrimaryStrip", SIZE_M)
+	t.set_color("font_color", "PrimaryStrip", Palette.INK)
+	t.set_color("font_hover_color", "PrimaryStrip", Palette.INK)
+	t.set_color("font_pressed_color", "PrimaryStrip", Palette.CARDBOARD)
+	t.set_color("font_disabled_color", "PrimaryStrip", Palette.SMOKE)
+	t.set_stylebox("normal", "PrimaryStrip", _primary_strip_box(Palette.MUSTARD, Palette.MUSTARD))
+	t.set_stylebox(
+		"hover",
+		"PrimaryStrip",
+		_primary_strip_box(Palette.MUSTARD.lightened(0.12), Palette.CARDBOARD)
+	)
+	t.set_stylebox("pressed", "PrimaryStrip", _primary_strip_box(Palette.RACE_RED, Palette.RACE_RED))
+	t.set_stylebox("disabled", "PrimaryStrip", _primary_strip_box(Palette.INK, Palette.SMOKE))
+	t.set_stylebox("focus", "PrimaryStrip", _primary_strip_box(Color(0, 0, 0, 0), Palette.CARDBOARD))
 
 
 ## Les cartes de la main sont des boutons, mais elles portent leur propre taille :

@@ -14,9 +14,9 @@ func test_garage_pool_sizes() -> void:
 	var basic := GarageDeckFactory.build_pool(true, false)
 	var advanced := GarageDeckFactory.build_pool(false, true)
 	var both := GarageDeckFactory.build_pool(true, true)
-	assert_eq(basic.size(), 17)
-	assert_eq(advanced.size(), 31)
-	assert_eq(both.size(), 48)
+	assert_eq(basic.size(), 34)
+	assert_eq(advanced.size(), 62)
+	assert_eq(both.size(), 96)
 
 
 func test_garage_draft_market_size_and_order() -> void:

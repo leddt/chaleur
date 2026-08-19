@@ -91,13 +91,6 @@ func _apply_size() -> void:
 	_title.position = Vector2(pad, roundf(10.0 * s))
 	_title.add_theme_font_size_override("font_size", maxi(8, int(round(11.0 * s))))
 
-	_big.offset_left = pad
-	_big.offset_right = -pad
-	_big.offset_bottom = -(kerb_h + effect_h + roundf(6.0 * s))
-	_fit_big_font(s, pad)
-	_layout_speed_pick(s, pad, kerb_h, effect_h)
-	_layout_center_icon(s, pad, kerb_h, effect_h)
-
 	_effect.offset_left = pad
 	_effect.offset_right = -pad
 	_effect.offset_top = -(kerb_h + effect_h + roundf(4.0 * s))
@@ -111,6 +104,7 @@ func _apply_size() -> void:
 	_kerb.offset_bottom = -roundf(6.0 * s)
 	_kerb.stripe_width = maxf(4.0, roundf(9.0 * s))
 	_kerb.slant = maxf(2.0, roundf(6.0 * s))
+
 	var icon_px := maxf(16.0, roundf(24.0 * s))
 	var row_sep := maxi(2, int(round(4.0 * s)))
 	_layout_symbols(icon_px, row_sep)
@@ -122,35 +116,42 @@ func _apply_size() -> void:
 	var stack_h := row_h * float(row_count)
 	if row_count > 1:
 		stack_h += roundf(4.0 * s)
-	if _speed_pick_active():
-		# Symbols sit on the kerb, below the speed grid.
+	var reserved_bottom := kerb_h + effect_h + roundf(6.0 * s)
+	if row_count > 0:
+		reserved_bottom += stack_h + roundf(4.0 * s)
+
+	_big.offset_left = pad
+	_big.offset_right = -pad
+	_big.offset_top = title_h
+	_big.offset_bottom = -reserved_bottom
+	_fit_big_font(s, pad, card_size.y - title_h - reserved_bottom)
+	_layout_speed_pick(s, pad, kerb_h, effect_h)
+	_layout_center_icon(s, pad, reserved_bottom)
+
+	if row_count > 0:
 		_symbols_host.offset_top = card_size.y - kerb_h - effect_h - stack_h - roundf(2.0 * s)
-		_symbols_host.offset_bottom = _symbols_host.offset_top + stack_h
-	else:
-		var big_bottom := card_size.y - kerb_h - effect_h - roundf(6.0 * s)
-		var big_center_y := (title_h + big_bottom) * 0.5
-		_symbols_host.offset_top = big_center_y + roundf(18.0 * s)
 		_symbols_host.offset_bottom = _symbols_host.offset_top + stack_h
 	queue_redraw()
 
 
-func _fit_big_font(s: float, pad: float) -> void:
+func _fit_big_font(s: float, pad: float, avail_h: float = -1.0) -> void:
 	var max_size := maxi(18, int(round(76.0 * s)))
 	var min_size := maxi(10, int(round(16.0 * s)))
 	var font := _big.get_theme_font("font")
 	if font == null:
 		font = ThemeBuilder.display_font()
 	var max_w := maxf(8.0, card_size.x - pad * 2.0)
+	var max_h := avail_h if avail_h > 0.0 else 9999.0
 	var size := max_size
 	while size > min_size:
-		var w := font.get_string_size(_big.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-		if w <= max_w:
+		var metrics := font.get_string_size(_big.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size)
+		if metrics.x <= max_w and metrics.y <= max_h:
 			break
 		size -= 1
 	_big.add_theme_font_size_override("font_size", size)
 
 
-func _layout_center_icon(s: float, pad: float, kerb_h: float, effect_h: float) -> void:
+func _layout_center_icon(s: float, pad: float, reserved_bottom: float) -> void:
 	if _center_icon == null:
 		return
 	var heat := face_up and data != null and data.shows_heat_center()
@@ -170,12 +171,10 @@ func _layout_center_icon(s: float, pad: float, kerb_h: float, effect_h: float) -
 	else:
 		_center_icon.texture = CardSymbolVisual.texture(CardSymbol.Kind.PLUS, icon_px)
 	_center_icon.modulate = data.ink()
-	var top := roundf(28.0 * s)
-	var bottom := kerb_h + effect_h + roundf(6.0 * s)
 	_center_icon.offset_left = pad
 	_center_icon.offset_right = -pad
-	_center_icon.offset_top = top
-	_center_icon.offset_bottom = -bottom
+	_center_icon.offset_top = roundf(28.0 * s)
+	_center_icon.offset_bottom = -reserved_bottom
 
 
 func _layout_symbols(icon_px: float, separation: int) -> void:

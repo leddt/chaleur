@@ -40,6 +40,29 @@ func test_codec_hides_other_pending_gear_from_viewer() -> void:
 	assert_eq(int(full["players"][1]["pending_gear"]), 3)
 
 
+func test_codec_shows_other_play_area_and_pending_symbols() -> void:
+	var engine := HeatTestHelpers.make_engine(2, 7)
+	var p0 := engine.players[0]
+	var p1 := engine.players[1]
+	HeatTestHelpers.ensure_engine_heat(p0, 6)
+	p0.hand.clear()
+	p0.hand.add(HeatTestHelpers.card("brakes", "upg_07_brakes"))
+	p1.hand.clear()
+	p1.hand.add(HeatTestHelpers.card("spd", "speed_1"))
+	assert_true(HeatTestHelpers.shift_all(engine, 1))
+	assert_true(engine.play_cards(0, ["brakes"]).ok)
+	assert_true(engine.play_cards(1, ["spd"]).ok)
+	assert_eq(engine.phase, HeatGameEngine.Phase.PLAYER_TURN)
+	var actor := engine.active_player()
+	var viewer := 1 if actor.id == 0 else 0
+	var snap := StateCodec.encode(engine, viewer)
+	var actor_data: Dictionary = snap["players"][actor.id]
+	assert_true(actor_data["play_area"].size() > 0)
+	assert_eq(str(actor_data["display_name"]), actor.display_name)
+	if actor.id == 0:
+		assert_true(actor_data["pending_heat_debts"].size() > 0)
+
+
 func test_host_rejects_action_when_not_pending() -> void:
 	var engine := HeatTestHelpers.make_engine(2, 3)
 	Game.engine = engine

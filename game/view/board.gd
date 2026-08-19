@@ -153,8 +153,8 @@ func _refresh_online() -> void:
 	_ui_context_key = ""
 	_actions.reset_drafts()
 	_actions.clear()
-	_play_area.clear_area()
 	_set_hand(_visible_hand(me), false)
+	_set_spectator_play_area(pending)
 	_phase.text = _phase_text()
 	if pending.is_empty():
 		_status.text = "En attente de résolution…"
@@ -270,15 +270,22 @@ func _build_actions_for(actor_id: int) -> void:
 	_actions.build_for(_engine, actor_id)
 
 
-func _set_play_area(actor_id: int) -> void:
-	if (
-		_engine.phase != HeatGameEngine.Phase.PLAYER_TURN
-		or actor_id < 0
-		or actor_id >= _engine.players.size()
-	):
+func _set_play_area(actor_id: int, interactive: bool = true) -> void:
+	if actor_id < 0 or actor_id >= _engine.players.size():
 		_play_area.clear_area()
 		return
-	_play_area.set_from_player(_engine.players[actor_id], _engine.turn_step)
+	var p := _engine.players[actor_id]
+	if p.play_area.is_empty():
+		_play_area.clear_area()
+		return
+	_play_area.set_from_player(p, _engine.turn_step, interactive, p.display_name)
+
+
+func _set_spectator_play_area(pending: Array[int]) -> void:
+	if pending.is_empty():
+		_play_area.clear_area()
+		return
+	_set_play_area(pending[0], false)
 
 
 func _has_pending_reduce_stress(p: PlayerState) -> bool:

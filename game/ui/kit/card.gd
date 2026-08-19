@@ -59,6 +59,7 @@ var _mandatory_row: HBoxContainer
 var _optional_row: HBoxContainer
 ## kind int -> "inert" | "clickable" | "resolved"
 var _symbol_states: Dictionary = {}
+var _symbols_interactive := true
 var _speed_override := -1
 var _speed_pick_options: PackedInt32Array = PackedInt32Array()
 var _speed_pick_enabled := false
@@ -286,6 +287,11 @@ func set_symbol_states(states: Dictionary) -> void:
 	_apply_symbol_states()
 
 
+func set_symbols_interactive(enabled: bool) -> void:
+	_symbols_interactive = enabled
+	_apply_symbol_states()
+
+
 func set_resolved_speed(speed: int) -> void:
 	_speed_override = speed
 	_speed_pick_enabled = false
@@ -425,6 +431,9 @@ func _apply_symbol_states() -> void:
 			if child is CardSymbolIcon:
 				var st := str(_symbol_states.get(int(child.kind()), CardSymbolIcon.STATE_INERT))
 				child.set_interaction_state(st)
+				if not _symbols_interactive:
+					child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					child.mouse_default_cursor_shape = Control.CURSOR_ARROW
 
 
 func _mandatory_symbol_entries() -> Array[CardSymbol]:

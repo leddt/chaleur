@@ -7,8 +7,10 @@ signal symbol_activated(card_id: String, kind: CardSymbol.Kind)
 signal speed_picked(card_id: String, speed: int)
 
 const CARD_GAP := 10.0
+const CAPTION_H := 18.0
 
 var _cards: Array[Card] = []
+var _caption: Label
 
 
 func _ready() -> void:
@@ -23,30 +25,56 @@ func clear_area() -> void:
 	_cards.clear()
 	visible = false
 	custom_minimum_size.x = 0.0
+	if _caption != null:
+		_caption.visible = false
 
 
-func set_from_player(p: PlayerState, turn_step: HeatGameEngine.TurnStep) -> void:
+func _ensure_caption() -> void:
+	if _caption != null:
+		return
+	_caption = Label.new()
+	_caption.theme_type_variation = &"Eyebrow"
+	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(_caption)
+
+
+func set_from_player(
+	p: PlayerState,
+	turn_step: HeatGameEngine.TurnStep,
+	interactive: bool = true,
+	owner_name: String = ""
+) -> void:
 	clear_area()
 	if p == null or p.play_area.is_empty():
 		return
 	visible = true
+	_ensure_caption()
+	var name := owner_name if not owner_name.is_empty() else p.display_name
+	_caption.text = "Cartes en jeu - %s" % name
+	_caption.visible = true
 	for heat_card in p.play_area.cards:
 		var card := Card.new()
 		card.card_size = _card_size()
 		card.data = CardCatalog.to_card_data(heat_card.def_id)
 		card.set_meta("card_id", heat_card.id)
 		var cid := heat_card.id
-		card.symbol_activated.connect(func(kind: CardSymbol.Kind) -> void:
-			symbol_activated.emit(cid, kind)
-		)
-		card.speed_picked.connect(func(speed: int) -> void:
-			speed_picked.emit(cid, speed)
-		)
+		if interactive:
+			card.symbol_activated.connect(func(kind: CardSymbol.Kind) -> void:
+				symbol_activated.emit(cid, kind)
+			)
+			card.speed_picked.connect(func(speed: int) -> void:
+				speed_picked.emit(cid, speed)
+			)
+		else:
+			card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(card)
 		card.set_symbol_states(_states_for(p, heat_card, turn_step))
+		if not interactive:
+			card.set_symbols_interactive(false)
 		if heat_card.chosen_speed >= 0:
 			card.set_resolved_speed(heat_card.chosen_speed)
-		elif turn_step == HeatGameEngine.TurnStep.REACT and heat_card.needs_speed_choice():
+		elif interactive and turn_step == HeatGameEngine.TurnStep.REACT and heat_card.needs_speed_choice():
 			card.set_speed_pick(CardCatalog.get_def(heat_card.def_id).resolved_speed_options(), true)
 		_cards.append(card)
 	_layout_row()
@@ -55,7 +83,8 @@ func set_from_player(p: PlayerState, turn_step: HeatGameEngine.TurnStep) -> void
 
 func _card_size() -> Vector2:
 	var hover_room := 22.0
-	var max_h := maxf(72.0, size.y - hover_room)
+	var caption := CAPTION_H if _caption != null and _caption.visible else 0.0
+	var max_h := maxf(72.0, size.y - hover_room - caption)
 	var design := CardHandView.CARD_SIZE
 	if design.y <= max_h or size.y <= 1.0:
 		return design
@@ -76,9 +105,13 @@ func _layout_row() -> void:
 		step = maxf(cs.x * 0.45, (size.x - cs.x) / float(n - 1))
 		span = step * float(n - 1) + cs.x
 	var start_x := maxf(0.0, (size.x - span) * 0.5)
+	var caption_h := CAPTION_H if _caption != null and _caption.visible else 0.0
+	if _caption != null and _caption.visible:
+		_caption.position = Vector2(0.0, 0.0)
+		_caption.size = Vector2(size.x, caption_h)
 	var start_y := size.y - cs.y - 4.0
-	if start_y < 0.0:
-		start_y = 0.0
+	if start_y < caption_h:
+		start_y = caption_h
 	for i in n:
 		var card := _cards[i]
 		card.card_size = cs

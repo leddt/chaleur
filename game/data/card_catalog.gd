@@ -82,14 +82,36 @@ static func _ensure_loaded() -> void:
 	if not _by_id.is_empty():
 		return
 	_load_dir(CARDS_DIR)
-	var adv := load("res://data/garage_deck_advanced.tres") as GarageDeckManifest
-	if adv != null:
-		for entry in adv.entries:
-			if entry != null and not entry.def_id().is_empty():
-				_advanced_ids[entry.def_id()] = true
+	# Manifests are packed as dependencies; register them even if directory
+	# listing misses .tres files in an exported PCK.
+	_register_manifest(load(GarageDeckFactory.BASIC_PATH) as GarageDeckManifest, false)
+	_register_manifest(load(GarageDeckFactory.ADVANCED_PATH) as GarageDeckManifest, true)
+
+
+static func _register_manifest(manifest: GarageDeckManifest, advanced: bool) -> void:
+	if manifest == null:
+		return
+	for entry in manifest.entries:
+		if entry == null or entry.card == null or entry.card.id.is_empty():
+			continue
+		_by_id[entry.card.id] = entry.card
+		if advanced:
+			_advanced_ids[entry.card.id] = true
 
 
 static func _load_dir(path: String) -> void:
+	var listed := ResourceLoader.list_directory(path)
+	if not listed.is_empty():
+		for file_name in listed:
+			if file_name.ends_with("/"):
+				_load_dir("%s/%s" % [path, file_name.trim_suffix("/")])
+				continue
+			_try_load_def("%s/%s" % [path, file_name])
+		return
+	_load_dir_access(path)
+
+
+static func _load_dir_access(path: String) -> void:
 	var dir := DirAccess.open(path)
 	if dir == null:
 		push_error("CardCatalog: cannot open %s" % path)
@@ -97,14 +119,24 @@ static func _load_dir(path: String) -> void:
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
 	while file_name != "":
-		if dir.current_is_dir() and not file_name.begins_with("."):
-			_load_dir("%s/%s" % [path, file_name])
-		elif file_name.ends_with(".tres"):
-			var def := load("%s/%s" % [path, file_name]) as CardDefinition
-			if def != null and not def.id.is_empty():
-				_by_id[def.id] = def
+		var full := "%s/%s" % [path, file_name]
+		if file_name.begins_with("."):
+			file_name = dir.get_next()
+			continue
+		if dir.current_is_dir() or DirAccess.dir_exists_absolute(full):
+			_load_dir(full)
+		else:
+			_try_load_def("%s/%s" % [path, file_name.trim_suffix(".remap")])
 		file_name = dir.get_next()
 	dir.list_dir_end()
+
+
+static func _try_load_def(path: String) -> void:
+	if not (path.ends_with(".tres") or path.ends_with(".res")):
+		return
+	var def := load(path) as CardDefinition
+	if def != null and not def.id.is_empty():
+		_by_id[def.id] = def
 
 
 static func _dynamic_def(def_id: String) -> CardDefinition:

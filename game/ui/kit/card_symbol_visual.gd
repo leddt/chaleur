@@ -31,6 +31,23 @@ const PATHS := {
 static var _svg_text: Dictionary = {}
 static var _tex_cache: Dictionary = {}
 
+## `load()` so the exporter packs the imported textures. FileAccess on the .svg
+## source works in the editor; exported builds only have the .ctex.
+const _PACKED: Array[Texture2D] = [
+	preload("res://ui/kit/icons/ph-check-fat-fill.svg"),
+	preload("res://ui/kit/icons/ph-fire-duotone.svg"),
+	preload("res://ui/kit/icons/ph-trash-simple-duotone.svg"),
+	preload("res://ui/kit/icons/ph-speedometer-duotone.svg"),
+	preload("res://ui/kit/icons/ph-thermometer-simple-duotone.svg"),
+	preload("res://ui/kit/icons/ph-wind-duotone.svg"),
+	preload("res://ui/kit/icons/ph-caret-double-down-duotone.svg"),
+	preload("res://ui/kit/icons/ph-arrow-clockwise-duotone.svg"),
+	preload("res://ui/kit/icons/ph-wrench-duotone.svg"),
+	preload("res://ui/kit/icons/ph-hand-deposit-duotone.svg"),
+	preload("res://ui/kit/icons/ph-caret-circle-double-up-duotone.svg"),
+	preload("res://ui/kit/icons/ph-plus-square-duotone.svg"),
+]
+
 
 static func texture(kind: CardSymbol.Kind, display_px: float = 24.0) -> Texture2D:
 	var path: String = PATHS.get(kind, PATHS[CardSymbol.Kind.HEAT])
@@ -54,14 +71,18 @@ static func _texture_at(path: String, display_px: float) -> Texture2D:
 static func _rasterize_path(path: String, px: int) -> Texture2D:
 	if not _svg_text.has(path):
 		_svg_text[path] = FileAccess.get_file_as_string(path)
-	var svg: String = _svg_text[path]
-	var img := Image.new()
-	var err := img.load_svg_from_string(svg, float(px) / SVG_NATIVE)
-	if err != OK or img.is_empty():
-		push_warning("CardSymbolVisual: SVG raster failed for %s (%s)" % [path, error_string(err)])
-		return PlaceholderTexture2D.new()
-	img.generate_mipmaps()
-	return ImageTexture.create_from_image(img)
+	var svg: String = str(_svg_text[path])
+	if not svg.is_empty():
+		var img := Image.new()
+		var err := img.load_svg_from_string(svg, float(px) / SVG_NATIVE)
+		if err == OK and not img.is_empty():
+			img.generate_mipmaps()
+			return ImageTexture.create_from_image(img)
+	var imported := load(path) as Texture2D
+	if imported != null:
+		return imported
+	push_warning("CardSymbolVisual: SVG raster failed for %s" % path)
+	return PlaceholderTexture2D.new()
 
 
 static func tint(kind: CardSymbol.Kind) -> Color:

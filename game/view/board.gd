@@ -160,7 +160,7 @@ func _action_context_key(player_id: int) -> String:
 	if player_id < 0 or player_id >= _engine.players.size():
 		return "%s|%s|%d" % [str(_engine.phase), str(_engine.turn_step), player_id]
 	var p := _engine.players[player_id]
-	return "%s|%s|%d|b%d|a%d|c%d|s%d|eh%d|hh%d" % [
+	return "%s|%s|%d|b%d|a%d|c%d|s%d|eh%d|hh%d|hd%d" % [
 		str(_engine.phase),
 		str(_engine.turn_step),
 		player_id,
@@ -170,6 +170,7 @@ func _action_context_key(player_id: int) -> String:
 		p.round_speed,
 		p.engine_heat(),
 		p.hand.count_kind(HeatCard.Kind.HEAT),
+		p.pending_heat_debts.size(),
 	]
 
 
@@ -288,6 +289,10 @@ func _dispatch(action: String, payload: Dictionary, player_id: int) -> void:
 			result = _engine.use_adrenaline(player_id)
 		"cooldown":
 			result = _engine.use_cooldown(player_id)
+		"pay_heat_debt":
+			result = _engine.pay_heat_debt(player_id, str(payload.get("uid", "")))
+		"settle_heat":
+			result = _engine.finish_settle_heat(player_id)
 		"react":
 			result = _engine.finish_react(player_id)
 		"slipstream":
@@ -388,7 +393,9 @@ func _phase_text() -> String:
 func _turn_step_fr() -> String:
 	match _engine.turn_step:
 		HeatGameEngine.TurnStep.REVEAL_MOVE:
-			return "Révélation et déplacement"
+			return "Révélation"
+		HeatGameEngine.TurnStep.SETTLE_HEAT:
+			return "Règlement Heat"
 		HeatGameEngine.TurnStep.REACT:
 			return "Réaction"
 		HeatGameEngine.TurnStep.SLIPSTREAM:

@@ -799,6 +799,10 @@ func _apply_action(player_id: int, action: String, payload: Dictionary) -> Actio
 			return Game.engine.use_adrenaline(player_id)
 		"cooldown":
 			return Game.engine.use_cooldown(player_id)
+		"pay_heat_debt":
+			return Game.engine.pay_heat_debt(player_id, str(payload.get("uid", "")))
+		"settle_heat":
+			return Game.engine.finish_settle_heat(player_id)
 		"react":
 			return Game.engine.finish_react(player_id)
 		"slipstream":

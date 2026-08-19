@@ -43,6 +43,20 @@ static func shift_all(engine: HeatGameEngine, gear: int = 1) -> bool:
 	return true
 
 
+static func finish_settle_heat(engine: HeatGameEngine, player_id: int) -> bool:
+	var p := engine.players[player_id]
+	while engine.turn_step == HeatGameEngine.TurnStep.SETTLE_HEAT:
+		for debt in p.pending_heat_debts.duplicate():
+			var uid := str(debt.get("uid", ""))
+			var count := int(debt.get("count", 0))
+			if p.engine_heat() >= count:
+				if not engine.pay_heat_debt(player_id, uid).ok:
+					return false
+		if not engine.finish_settle_heat(player_id).ok:
+			return false
+	return true
+
+
 static func play_speeds(engine: HeatGameEngine, player_id: int, values: Array[int]) -> bool:
 	var p := engine.players[player_id]
 	var ids := put_speed_in_hand(p, values)

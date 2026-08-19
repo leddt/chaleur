@@ -36,6 +36,8 @@ var plus_symbols_used: int = 0
 var refresh_card_ids: Array[String] = []
 var accelerate_used: bool = false
 var pending_symbols: Array[Dictionary] = []
+## Mandatory Heat still owed for cards in play ({card_id, count, uid}).
+var pending_heat_debts: Array[Dictionary] = []
 var garage_upgrades: CardPile = CardPile.new()
 
 
@@ -58,6 +60,7 @@ func reset_round_flags() -> void:
 	refresh_card_ids.clear()
 	accelerate_used = false
 	pending_symbols.clear()
+	pending_heat_debts.clear()
 
 
 func engine_heat() -> int:
@@ -105,7 +108,20 @@ func can_use_cooldown() -> bool:
 	return cooldown_remaining() > 0 and hand.count_kind(HeatCard.Kind.HEAT) >= 1
 
 
+func has_pending_heat_debts() -> bool:
+	return not pending_heat_debts.is_empty()
+
+
+func can_pay_any_heat_debt() -> bool:
+	for debt in pending_heat_debts:
+		if engine_heat() >= int(debt.get("count", 0)):
+			return true
+	return false
+
+
 func has_pending_react_options() -> bool:
+	if has_pending_heat_debts() and can_pay_any_heat_debt():
+		return true
 	if can_use_boost() or can_use_adrenaline() or can_use_cooldown():
 		return true
 	return not pending_symbols.is_empty()

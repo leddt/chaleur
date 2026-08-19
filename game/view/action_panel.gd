@@ -188,6 +188,8 @@ func _add_speed_choice_ui(p: PlayerState) -> void:
 
 func _build_turn_ui(p: PlayerState) -> void:
 	match _engine.turn_step:
+		HeatGameEngine.TurnStep.SETTLE_HEAT:
+			_build_settle_heat_ui(p)
 		HeatGameEngine.TurnStep.REACT:
 			_build_react_ui(p)
 		HeatGameEngine.TurnStep.SLIPSTREAM:
@@ -234,6 +236,48 @@ func _update_discard_confirm() -> void:
 	_discard_confirm.text = _discard_button_label(_hand.selected_ids().size())
 
 
+func _build_settle_heat_ui(p: PlayerState) -> void:
+	add_child(_make_eyebrow("RÈGLEMENT HEAT"))
+	add_child(_make_label(
+		"Refroidis si besoin, puis paie le Heat obligatoire avant de te déplacer."
+	))
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+
+	var remaining := p.cooldown_remaining()
+	var cd_btn := _make_button("Cooldown (%d) · Remet un heat" % remaining, false, true)
+	cd_btn.disabled = not p.can_use_cooldown()
+	cd_btn.pressed.connect(func() -> void:
+		action_requested.emit("cooldown", {}, p.id)
+	)
+	grid.add_child(cd_btn)
+
+	for debt in p.pending_heat_debts:
+		var uid := str(debt.get("uid", ""))
+		var card_id := str(debt.get("card_id", ""))
+		var count := int(debt.get("count", 0))
+		var card := p.play_area.get_by_id(card_id)
+		var def := CardCatalog.get_def(card.def_id) if card != null else null
+		var title := def.title if def != null and not def.title.is_empty() else card_id
+		var pay_btn := _make_button("Payer %d Heat · %s" % [count, title], false, true)
+		pay_btn.disabled = p.engine_heat() < count
+		pay_btn.pressed.connect(func() -> void:
+			action_requested.emit("pay_heat_debt", {"uid": uid}, p.id)
+		)
+		grid.add_child(pay_btn)
+
+	var finish := _make_button("Terminer", true)
+	finish.pressed.connect(func() -> void:
+		action_requested.emit("settle_heat", {}, p.id)
+	)
+	grid.add_child(finish)
+	add_child(grid)
+
+
 func _build_react_ui(p: PlayerState) -> void:
 	_react_player_id = p.id
 	add_child(_make_eyebrow("RÉACTION"))
@@ -268,6 +312,20 @@ func _build_react_ui(p: PlayerState) -> void:
 		action_requested.emit("cooldown", {}, p.id)
 	)
 	grid.add_child(cd_btn)
+
+	for debt in p.pending_heat_debts:
+		var uid := str(debt.get("uid", ""))
+		var card_id := str(debt.get("card_id", ""))
+		var count := int(debt.get("count", 0))
+		var card := p.play_area.get_by_id(card_id)
+		var def := CardCatalog.get_def(card.def_id) if card != null else null
+		var title := def.title if def != null and not def.title.is_empty() else card_id
+		var pay_btn := _make_button("Payer %d Heat · %s" % [count, title], false, true)
+		pay_btn.disabled = p.engine_heat() < count
+		pay_btn.pressed.connect(func() -> void:
+			action_requested.emit("pay_heat_debt", {"uid": uid}, p.id)
+		)
+		grid.add_child(pay_btn)
 
 	for entry in p.pending_symbols:
 		var uid := str(entry.get("uid", ""))

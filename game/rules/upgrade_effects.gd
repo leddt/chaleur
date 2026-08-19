@@ -6,6 +6,7 @@ extends RefCounted
 
 static func apply_reveal(engine: HeatGameEngine, p: PlayerState) -> void:
 	p.pending_symbols.clear()
+	p.pending_heat_debts.clear()
 	p.refresh_card_ids.clear()
 	p.accelerate_used = false
 	p.plus_symbols_used = 0
@@ -26,15 +27,7 @@ static func apply_reveal(engine: HeatGameEngine, p: PlayerState) -> void:
 		if card.kind == HeatCard.Kind.STRESS:
 			surviving.append(card)
 			continue
-		var kept := _apply_mandatory(engine, p, card)
-		if kept == null:
-			var fallback := engine._flip_until_speed(p)
-			if fallback:
-				surviving.append(fallback)
-				engine._log(
-					"%s heat-fallback -> Speed %d" % [p.display_name, fallback.speed_value]
-				)
-			continue
+		_apply_mandatory(engine, p, card)
 		surviving.append(card)
 		_queue_optionals(p, card)
 	p.play_area.clear()
@@ -42,18 +35,7 @@ static func apply_reveal(engine: HeatGameEngine, p: PlayerState) -> void:
 
 
 static func apply_direct_play(engine: HeatGameEngine, p: PlayerState, card: HeatCard) -> bool:
-	var kept := _apply_mandatory(engine, p, card)
-	if kept == null:
-		var fallback := engine._flip_until_speed(p)
-		if fallback:
-			p.play_area.add(fallback)
-			p.round_speed += fallback.speed_value
-			engine._move_player(p, fallback.speed_value, false)
-			engine._check_finish(p)
-			engine._log(
-				"%s Direct Play heat-fallback -> Speed %d" % [p.display_name, fallback.speed_value]
-			)
-		return false
+	_apply_mandatory(engine, p, card)
 	p.play_area.add(card)
 	_queue_optionals(p, card)
 	if card.contributes_speed_when_played():
@@ -66,27 +48,99 @@ static func apply_direct_play(engine: HeatGameEngine, p: PlayerState, card: Heat
 	return true
 
 
-static func _apply_mandatory(engine: HeatGameEngine, p: PlayerState, card: HeatCard) -> HeatCard:
+static func _apply_mandatory(engine: HeatGameEngine, p: PlayerState, card: HeatCard) -> void:
 	var def := CardCatalog.get_def(card.def_id)
 	for s in def.symbols:
 		if not CardSymbol.is_mandatory(s.kind):
 			continue
 		match s.kind:
 			CardSymbol.Kind.HEAT:
-				if not engine._pay_heat(p, s.count):
-					engine._log(
-						"%s cannot pay Heat for %s — discard and flip" % [p.display_name, card.def_id]
-					)
-					p.discard.add(card)
-					return null
-				engine._log("%s pays %d Heat for %s" % [p.display_name, s.count, card.def_id])
+				_queue_heat_debt(p, card, s.count)
+				engine._log(
+					"%s owes %d Heat for %s" % [p.display_name, s.count, card.def_id]
+				)
 			CardSymbol.Kind.SCRAP:
 				_scrap(engine, p, s.count)
 				engine._log("%s scraps %d" % [p.display_name, s.count])
 			CardSymbol.Kind.ADJUST_SPEED_LIMIT:
 				p.speed_limit_adjust += s.count
 				engine._log("%s adjust speed limit %+d" % [p.display_name, s.count])
-	return card
+
+
+static func pay_heat_debt(engine: HeatGameEngine, p: PlayerState, uid: String) -> ActionResult:
+	var idx := _index_of_debt(p, uid)
+	if idx < 0:
+		return ActionResult.fail("Unknown Heat debt")
+	var debt: Dictionary = p.pending_heat_debts[idx]
+	var count := int(debt.get("count", 0))
+	if engine._pay_heat(p, count):
+		var card_id := str(debt.get("card_id", ""))
+		p.pending_heat_debts.remove_at(idx)
+		engine._log("%s pays %d Heat for %s" % [p.display_name, count, card_id])
+		return ActionResult.success()
+	return ActionResult.fail("Not enough Heat in engine")
+
+
+static func auto_fallback_unpayable_debts(engine: HeatGameEngine, p: PlayerState) -> void:
+	while not p.pending_heat_debts.is_empty():
+		var debt: Dictionary = p.pending_heat_debts[0]
+		if p.engine_heat() >= int(debt.get("count", 0)):
+			break
+		_fallback_heat_debt(engine, p, str(debt.get("uid", "")))
+
+
+static func _fallback_heat_debt(engine: HeatGameEngine, p: PlayerState, uid: String) -> void:
+	var idx := _index_of_debt(p, uid)
+	if idx < 0:
+		return
+	var debt: Dictionary = p.pending_heat_debts[idx]
+	var card_id := str(debt.get("card_id", ""))
+	p.pending_heat_debts.remove_at(idx)
+	var card := p.play_area.remove_id(card_id)
+	if card != null:
+		_revoke_card_bonuses(p, card)
+		p.discard.add(card)
+		engine._log(
+			"%s cannot pay Heat for %s — discard and flip" % [p.display_name, card.def_id]
+		)
+	var fallback := engine._flip_until_speed(p)
+	if fallback:
+		p.play_area.add(fallback)
+		engine._log(
+			"%s heat-fallback -> Speed %d" % [p.display_name, fallback.speed_value]
+		)
+
+
+static func _queue_heat_debt(p: PlayerState, card: HeatCard, count: int) -> void:
+	p.pending_heat_debts.append(
+		{"card_id": card.id, "count": count, "uid": "%s_heat" % card.id}
+	)
+
+
+static func _cooldown_bonus_for_card(card: HeatCard) -> int:
+	var def := CardCatalog.get_def(card.def_id)
+	var total := 0
+	for s in def.symbols:
+		if s.kind == CardSymbol.Kind.COOLDOWN:
+			total += maxi(1, s.count)
+	return total
+
+
+static func _revoke_card_bonuses(p: PlayerState, card: HeatCard) -> void:
+	p.cooldown_bonus = maxi(0, p.cooldown_bonus - _cooldown_bonus_for_card(card))
+	var left: Array[Dictionary] = []
+	for entry in p.pending_symbols:
+		if str(entry.get("card_id", "")) == card.id:
+			continue
+		left.append(entry)
+	p.pending_symbols = left
+
+
+static func _index_of_debt(p: PlayerState, uid: String) -> int:
+	for i in p.pending_heat_debts.size():
+		if str(p.pending_heat_debts[i].get("uid", "")) == uid:
+			return i
+	return -1
 
 
 static func _queue_optionals(p: PlayerState, card: HeatCard) -> void:

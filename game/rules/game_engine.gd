@@ -17,6 +17,7 @@ enum TurnStep {
 	CHECK_CORNER,
 	DISCARD,
 	REPLENISH,
+	SETTLE_HEAT,
 }
 
 var track: HeatTrack
@@ -402,8 +403,10 @@ func use_adrenaline(player_id: int) -> ActionResult:
 
 
 func use_cooldown(player_id: int) -> ActionResult:
-	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
-		return ActionResult.fail("Not in REACT step")
+	if phase != Phase.PLAYER_TURN:
+		return ActionResult.fail("Not in player turn")
+	if turn_step != TurnStep.REACT and turn_step != TurnStep.SETTLE_HEAT:
+		return ActionResult.fail("Cooldown not available now")
 	var p := active_player()
 	if p == null or p.id != player_id:
 		return ActionResult.fail("Not this player's turn")
@@ -420,12 +423,43 @@ func use_cooldown(player_id: int) -> ActionResult:
 	return ActionResult.success()
 
 
+func pay_heat_debt(player_id: int, uid: String) -> ActionResult:
+	if phase != Phase.PLAYER_TURN:
+		return ActionResult.fail("Not in player turn")
+	if turn_step != TurnStep.SETTLE_HEAT and turn_step != TurnStep.REACT:
+		return ActionResult.fail("Cannot pay Heat now")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	return UpgradeEffects.pay_heat_debt(self, p, uid)
+
+
+func finish_settle_heat(player_id: int) -> ActionResult:
+	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.SETTLE_HEAT:
+		return ActionResult.fail("Not in Heat settlement")
+	var p := active_player()
+	if p == null or p.id != player_id:
+		return ActionResult.fail("Not this player's turn")
+	if p.can_pay_any_heat_debt():
+		return ActionResult.fail("Must pay Heat you can afford")
+	UpgradeEffects.auto_fallback_unpayable_debts(self, p)
+	if p.has_pending_heat_debts():
+		return ActionResult.fail("Unresolved Heat debts")
+	_complete_move_after_settle(p)
+	return ActionResult.success()
+
+
 func finish_react(player_id: int) -> ActionResult:
 	if phase != Phase.PLAYER_TURN or turn_step != TurnStep.REACT:
 		return ActionResult.fail("Not in REACT step")
 	var p := active_player()
 	if p == null or p.id != player_id:
 		return ActionResult.fail("Not this player's turn")
+	if p.can_pay_any_heat_debt():
+		return ActionResult.fail("Must pay Heat you can afford")
+	UpgradeEffects.auto_fallback_unpayable_debts(self, p)
+	if p.has_pending_heat_debts():
+		return ActionResult.fail("Unresolved Heat debts")
 	turn_step = TurnStep.SLIPSTREAM
 	if not _slipstream_eligible(p):
 		return _auto_skip_slipstream(p)
@@ -646,11 +680,16 @@ func _resolve_reveal_and_move(p: PlayerState) -> void:
 		return
 
 	UpgradeEffects.apply_reveal(self, p)
-	UpgradeEffects.queue_direct_play_from_hand(p)
+	if p.pending_heat_debts.is_empty():
+		_complete_move_after_settle(p)
+	else:
+		turn_step = TurnStep.SETTLE_HEAT
 
+
+func _complete_move_after_settle(p: PlayerState) -> void:
 	p.round_speed = 0
 	for card in p.play_area.cards:
-		if card.contributes_speed_when_played():
+		if card.contributes_speed_when_played() and not _card_has_pending_heat_debt(p, card.id):
 			p.round_speed += card.speed_value
 
 	_move_player(p, p.round_speed, false)
@@ -658,6 +697,14 @@ func _resolve_reveal_and_move(p: PlayerState) -> void:
 	_check_finish(p)
 
 	turn_step = TurnStep.REACT
+	UpgradeEffects.queue_direct_play_from_hand(p)
+
+
+func _card_has_pending_heat_debt(p: PlayerState, card_id: String) -> bool:
+	for debt in p.pending_heat_debts:
+		if str(debt.get("card_id", "")) == card_id:
+			return true
+	return false
 
 
 func _flip_until_speed(p: PlayerState) -> HeatCard:

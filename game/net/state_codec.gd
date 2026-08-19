@@ -156,6 +156,7 @@ static func _encode_player(p: PlayerState, viewer_player_id: int) -> Dictionary:
 		"refresh_card_ids": p.refresh_card_ids.duplicate(),
 		"accelerate_used": p.accelerate_used,
 		"pending_symbols": p.pending_symbols.duplicate(true),
+		"pending_heat_debts": p.pending_heat_debts.duplicate(true),
 		"garage_upgrades": _encode_pile(p.garage_upgrades),
 	}
 
@@ -203,6 +204,10 @@ static func _decode_player(data: Dictionary) -> PlayerState:
 	for entry in data.get("pending_symbols", []):
 		if entry is Dictionary:
 			p.pending_symbols.append(entry)
+	p.pending_heat_debts.clear()
+	for entry in data.get("pending_heat_debts", []):
+		if entry is Dictionary:
+			p.pending_heat_debts.append(entry)
 	p.garage_upgrades = _decode_pile(data.get("garage_upgrades", []))
 	return p
 

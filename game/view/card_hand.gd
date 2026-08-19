@@ -77,7 +77,6 @@ func set_cards(
 		# turned the cockpit into grey mush.
 		card.dimmed = enabled and not selectable
 		card.set_meta("card_id", heat_card.id)
-		card.tooltip_text = heat_card.id if selectable else "%s (non jouable)" % heat_card.id
 		if selectable:
 			card.clicked.connect(_on_card_clicked)
 		_cards.append(card)

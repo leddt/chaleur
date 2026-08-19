@@ -281,16 +281,20 @@ func _build_react_ui(p: PlayerState) -> void:
 			_add_salvage_ui(grid, p, uid, count)
 			continue
 		var sym := CardSymbol.make(kind as CardSymbol.Kind, count)
-		var extra := ""
+		var extra: Dictionary = {}
 		if kind == int(CardSymbol.Kind.ACCELERATE):
-			extra = " (+%d)" % p.plus_symbols_used
+			extra["plus_used"] = p.plus_symbols_used
 		var is_stress := kind == int(CardSymbol.Kind.REDUCE_STRESS)
 		var payload := {"uid": uid, "card_ids": []}
-		var btn := _make_button(sym.label() + extra, false, true)
-		btn.pressed.connect(func() -> void:
-			if is_stress:
-				payload["card_ids"] = _selected_stress_ids(p)
-			action_requested.emit("upgrade_symbol", payload, p.id)
+		var label := sym.display_name()
+		if kind == int(CardSymbol.Kind.ACCELERATE) and p.plus_symbols_used > 0:
+			label += " (+%d)" % p.plus_symbols_used
+		var btn := _make_symbol_button(
+			kind as CardSymbol.Kind, count, label, extra,
+			func() -> void:
+				if is_stress:
+					payload["card_ids"] = _selected_stress_ids(p)
+				action_requested.emit("upgrade_symbol", payload, p.id)
 		)
 		grid.add_child(btn)
 
@@ -321,23 +325,31 @@ func _add_direct_play_ui(grid: GridContainer, p: PlayerState, card_id: String) -
 	if opts.size() > 1:
 		for v in opts:
 			var speed := v
-			var spd := _make_button("%s %d" % [label, speed], false, true)
-			spd.pressed.connect(func() -> void:
-				_speed_choices[card_id] = speed
-				action_requested.emit(
-					"direct_play",
-					{"card_id": card_id, "speed_choice": speed},
-					p.id
-				)
+			var spd := _make_symbol_button(
+				CardSymbol.Kind.DIRECT_PLAY,
+				1,
+				"%s %d" % [label, speed],
+				{},
+				func() -> void:
+					_speed_choices[card_id] = speed
+					action_requested.emit(
+						"direct_play",
+						{"card_id": card_id, "speed_choice": speed},
+						p.id
+					)
 			)
 			grid.add_child(spd)
 		return
-	var dp := _make_button(label, false, true)
-	dp.pressed.connect(func() -> void:
-		var choice := int(_speed_choices.get(card_id, -1))
-		action_requested.emit(
-			"direct_play", {"card_id": card_id, "speed_choice": choice}, p.id
-		)
+	var dp := _make_symbol_button(
+		CardSymbol.Kind.DIRECT_PLAY,
+		1,
+		label,
+		{},
+		func() -> void:
+			var choice := int(_speed_choices.get(card_id, -1))
+			action_requested.emit(
+				"direct_play", {"card_id": card_id, "speed_choice": choice}, p.id
+			)
 	)
 	grid.add_child(dp)
 
@@ -345,11 +357,15 @@ func _add_direct_play_ui(grid: GridContainer, p: PlayerState, card_id: String) -
 func _add_salvage_ui(grid: GridContainer, p: PlayerState, uid: String, count: int) -> void:
 	if not _salvage_ids.has(uid):
 		_salvage_ids[uid] = []
-	var btn := _make_button("Salvage %d" % count, false, true)
-	btn.pressed.connect(func() -> void:
-		action_requested.emit(
-			"upgrade_symbol", {"uid": uid, "card_ids": _salvage_ids.get(uid, [])}, p.id
-		)
+	var btn := _make_symbol_button(
+		CardSymbol.Kind.SALVAGE,
+		count,
+		"Salvage %d" % count,
+		{},
+		func() -> void:
+			action_requested.emit(
+				"upgrade_symbol", {"uid": uid, "card_ids": _salvage_ids.get(uid, [])}, p.id
+			)
 	)
 	grid.add_child(btn)
 	for card in p.discard.cards:
@@ -433,4 +449,43 @@ func _make_button(text: String, primary: bool = false, compact: bool = false) ->
 		btn.theme_type_variation = "Primary"
 	elif compact:
 		btn.theme_type_variation = "Compact"
+	return btn
+
+
+func _make_symbol_button(
+	kind: CardSymbol.Kind,
+	count: int,
+	label_text: String,
+	extra: Dictionary,
+	on_press: Callable
+) -> RichTooltipButton:
+	var btn := RichTooltipButton.new()
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.theme_type_variation = &"Compact"
+	btn.tooltip_bbcode = CardSymbol.make(kind, count).tooltip_bbcode(extra)
+	btn.tooltip_text = " "
+
+	var row := HBoxContainer.new()
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 8
+	row.offset_right = -8
+	row.offset_top = 4
+	row.offset_bottom = -4
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 8)
+
+	var icon := CardSymbolIcon.new()
+	icon.setup(kind, count, extra)
+	row.add_child(icon)
+
+	if not label_text.is_empty():
+		var lab := Label.new()
+		lab.text = label_text
+		lab.theme_type_variation = &"Caption"
+		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(lab)
+
+	btn.add_child(row)
+	btn.pressed.connect(on_press)
 	return btn

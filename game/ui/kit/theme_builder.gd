@@ -45,6 +45,7 @@ static func build() -> Theme:
 	_setup_item_lists(t, body)
 	_setup_scroll(t)
 	_setup_rich_text(t, body)
+	_setup_tooltips(t, body)
 	_setup_separators(t)
 	_setup_dialogs(t, body)
 	_setup_panels(t)
@@ -444,6 +445,21 @@ static func _setup_rich_text(t: Theme, body: Font) -> void:
 	t.set_color("default_color", "RichTextLabel", Palette.CARDBOARD)
 	t.set_stylebox("normal", "RichTextLabel", StyleBoxEmpty.new())
 	t.set_stylebox("focus", "RichTextLabel", StyleBoxEmpty.new())
+
+
+static func _setup_tooltips(t: Theme, body: Font) -> void:
+	var panel := StyleBoxFlat.new()
+	panel.bg_color = Palette.INK
+	panel.border_color = Palette.SMOKE
+	panel.set_border_width_all(1)
+	panel.set_corner_radius_all(3)
+	panel.set_content_margin_all(10)
+	panel.shadow_color = Color(0, 0, 0, 0.35)
+	panel.shadow_size = 6
+	t.set_stylebox("panel", "TooltipPanel", panel)
+	t.set_font("font", "TooltipLabel", body)
+	t.set_font_size("font_size", "TooltipLabel", SIZE_S)
+	t.set_color("font_color", "TooltipLabel", Palette.CARDBOARD)
 
 
 static func _setup_separators(t: Theme) -> void:

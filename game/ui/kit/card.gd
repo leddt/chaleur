@@ -3,7 +3,7 @@ class_name Card
 extends Control
 
 ## Une carte de jeu, construite a partir d'un CardData. Aucune image :
-## StyleBoxFlat pour le carton, Label pour les chiffres, _draw pour les symboles.
+## StyleBoxFlat pour le carton, Label pour les chiffres, CardSymbolIcon pour les symboles.
 ##
 ## Consequences pratiques :
 ##  - le texte reste net a toutes les resolutions
@@ -46,9 +46,14 @@ const SIZE_DEFAULT := Vector2(150, 220)
 
 var _hovered := false
 var _big: Label
+var _center_icon: TextureRect
 var _title: Label
 var _effect: Label
 var _kerb: Kerb
+var _symbols_host: CenterContainer
+var _symbols_stack: VBoxContainer
+var _mandatory_row: HBoxContainer
+var _optional_row: HBoxContainer
 
 
 func _ready() -> void:
@@ -77,8 +82,11 @@ func _apply_size() -> void:
 	_title.position = Vector2(pad, roundf(10.0 * s))
 	_title.add_theme_font_size_override("font_size", maxi(8, int(round(11.0 * s))))
 
+	_big.offset_left = pad
+	_big.offset_right = -pad
 	_big.offset_bottom = -(kerb_h + effect_h + roundf(6.0 * s))
-	_big.add_theme_font_size_override("font_size", maxi(18, int(round(76.0 * s))))
+	_fit_big_font(s, pad)
+	_layout_center_icon(s, pad, kerb_h, effect_h)
 
 	_effect.offset_left = pad
 	_effect.offset_right = -pad
@@ -93,7 +101,66 @@ func _apply_size() -> void:
 	_kerb.offset_bottom = -roundf(6.0 * s)
 	_kerb.stripe_width = maxf(4.0, roundf(9.0 * s))
 	_kerb.slant = maxf(2.0, roundf(6.0 * s))
+	var icon_px := maxf(16.0, roundf(24.0 * s))
+	var row_sep := maxi(2, int(round(4.0 * s)))
+	_layout_symbols(icon_px, row_sep)
+	if _symbols_stack != null:
+		_symbols_stack.add_theme_constant_override("separation", maxi(2, int(round(4.0 * s))))
+	var title_h := roundf(24.0 * s)
+	var big_bottom := card_size.y - kerb_h - effect_h - roundf(6.0 * s)
+	var big_center_y := (title_h + big_bottom) * 0.5
+	var row_h := icon_px + roundf(4.0 * s)
+	var row_count := _symbol_row_count()
+	var stack_h := row_h * float(row_count)
+	if row_count > 1:
+		stack_h += roundf(4.0 * s)
+	_symbols_host.offset_top = big_center_y + roundf(18.0 * s)
+	_symbols_host.offset_bottom = _symbols_host.offset_top + stack_h
 	queue_redraw()
+
+
+func _fit_big_font(s: float, pad: float) -> void:
+	var max_size := maxi(18, int(round(76.0 * s)))
+	var min_size := maxi(10, int(round(16.0 * s)))
+	var font := _big.get_theme_font("font")
+	if font == null:
+		font = ThemeBuilder.display_font()
+	var max_w := maxf(8.0, card_size.x - pad * 2.0)
+	var size := max_size
+	while size > min_size:
+		var w := font.get_string_size(_big.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		if w <= max_w:
+			break
+		size -= 1
+	_big.add_theme_font_size_override("font_size", size)
+
+
+func _layout_center_icon(s: float, pad: float, kerb_h: float, effect_h: float) -> void:
+	if _center_icon == null:
+		return
+	var show := face_up and data != null and data.shows_heat_center()
+	_center_icon.visible = show
+	if not show:
+		return
+	var icon_px := maxf(36.0, roundf(72.0 * s))
+	_center_icon.texture = CardSymbolVisual.texture(CardSymbol.Kind.HEAT, icon_px)
+	_center_icon.modulate = data.ink()
+	var top := roundf(28.0 * s)
+	var bottom := kerb_h + effect_h + roundf(6.0 * s)
+	_center_icon.offset_left = pad
+	_center_icon.offset_right = -pad
+	_center_icon.offset_top = top
+	_center_icon.offset_bottom = -bottom
+
+
+func _layout_symbols(icon_px: float, separation: int) -> void:
+	if _mandatory_row == null:
+		return
+	for row in [_mandatory_row, _optional_row]:
+		row.add_theme_constant_override("separation", separation)
+		for child in row.get_children():
+			if child is CardSymbolIcon:
+				child.set_icon_size(icon_px)
 
 
 func _build() -> void:
@@ -105,9 +172,42 @@ func _build() -> void:
 	_big.theme_type_variation = "BigNumber"
 	_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_big.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_big.clip_text = true
 	_big.anchor_right = 1.0
 	_big.anchor_bottom = 1.0
 	add_child(_big)
+
+	_center_icon = TextureRect.new()
+	_center_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_center_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_center_icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_center_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_center_icon.anchor_right = 1.0
+	_center_icon.anchor_bottom = 1.0
+	_center_icon.visible = false
+	add_child(_center_icon)
+
+	_symbols_host = CenterContainer.new()
+	_symbols_host.anchor_left = 0.0
+	_symbols_host.anchor_right = 1.0
+	_symbols_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_symbols_host)
+
+	_symbols_stack = VBoxContainer.new()
+	_symbols_stack.alignment = BoxContainer.ALIGNMENT_CENTER
+	_symbols_stack.add_theme_constant_override("separation", 4)
+	_symbols_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_symbols_host.add_child(_symbols_stack)
+
+	_mandatory_row = HBoxContainer.new()
+	_mandatory_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_mandatory_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_symbols_stack.add_child(_mandatory_row)
+
+	_optional_row = HBoxContainer.new()
+	_optional_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_optional_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_symbols_stack.add_child(_optional_row)
 
 	_effect = Label.new()
 	_effect.theme_type_variation = "Caption"
@@ -134,7 +234,7 @@ func _refresh() -> void:
 
 	var visible_face := face_up
 	_title.visible = visible_face
-	_big.visible = visible_face
+	_big.visible = visible_face and data != null and not data.shows_heat_center()
 	_effect.visible = visible_face
 	_kerb.visible = visible_face
 
@@ -149,9 +249,78 @@ func _refresh() -> void:
 		_kerb.color_a = data.accent()
 		_kerb.color_b = data.face()
 
+	_rebuild_symbols()
 	# La presence d'un texte d'effet change la hauteur reservee au gros chiffre.
 	_apply_size()
 	queue_redraw()
+
+
+func _rebuild_symbols() -> void:
+	if _mandatory_row == null:
+		return
+	for child in _mandatory_row.get_children():
+		child.queue_free()
+	for child in _optional_row.get_children():
+		child.queue_free()
+	if data == null or not face_up:
+		_symbols_host.visible = false
+		return
+	var split_m := _mandatory_symbol_entries()
+	var split_o := _optional_symbol_entries()
+	var has_any: bool = not split_m.is_empty() or not split_o.is_empty()
+	_symbols_host.visible = has_any
+	if not has_any:
+		return
+	var s := card_size.y / SIZE_DEFAULT.y
+	var icon_px := maxf(16.0, roundf(24.0 * s))
+	_populate_symbol_row(_mandatory_row, split_m, icon_px)
+	_populate_symbol_row(_optional_row, split_o, icon_px)
+	_mandatory_row.visible = not split_m.is_empty()
+	_optional_row.visible = not split_o.is_empty()
+
+
+func _populate_symbol_row(row: HBoxContainer, entries: Array[CardSymbol], icon_px: float) -> void:
+	for entry in entries:
+		var icon := CardSymbolIcon.new()
+		icon.setup(entry.kind, entry.count)
+		row.add_child(icon)
+		icon.set_icon_size(icon_px)
+
+
+func _mandatory_symbol_entries() -> Array[CardSymbol]:
+	var out: Array[CardSymbol] = []
+	for entry in _all_symbol_entries():
+		if CardSymbol.is_mandatory(entry.kind):
+			out.append(entry)
+	return out
+
+
+func _optional_symbol_entries() -> Array[CardSymbol]:
+	var out: Array[CardSymbol] = []
+	for entry in _all_symbol_entries():
+		if not CardSymbol.is_mandatory(entry.kind):
+			out.append(entry)
+	return out
+
+
+func _symbol_row_count() -> int:
+	if data == null or not face_up:
+		return 0
+	var n := 0
+	if not _mandatory_symbol_entries().is_empty():
+		n += 1
+	if not _optional_symbol_entries().is_empty():
+		n += 1
+	return n
+
+
+func _all_symbol_entries() -> Array[CardSymbol]:
+	var out: Array[CardSymbol] = []
+	if data.shows_heat_center():
+		return out
+	for entry in data.symbol_entries:
+		out.append(entry)
+	return out
 
 
 func _draw() -> void:
@@ -162,7 +331,6 @@ func _draw() -> void:
 	if face_up:
 		var box := ThemeBuilder.card_box(data.face(), data.accent(), _hovered or selected)
 		box.draw(get_canvas_item(), r)
-		_draw_symbols(data.accent())
 	else:
 		# Le verso : carton fonce + un seul chevron. Rien de plus.
 		var box := ThemeBuilder.card_box(Palette.CARDBOARD_DARK, Palette.INK, _hovered)
@@ -178,71 +346,6 @@ func _draw() -> void:
 		draw_rect(r, Palette.ASPHALT * Color(1, 1, 1, 0.55))
 
 
-func _draw_symbols(col: Color) -> void:
-	var icons: PackedStringArray = PackedStringArray()
-	if data != null and not data.symbols.is_empty():
-		icons = data.symbols
-	elif data != null and data.symbol != "":
-		icons = PackedStringArray([data.symbol])
-	if icons.is_empty():
-		return
-	var n := mini(icons.size(), 4)
-	for i in n:
-		var center := Vector2(size.x - 22.0 - float(i) * 18.0, 28.0)
-		_draw_one_symbol(icons[i], center, 9.0, col)
-
-
-func _draw_one_symbol(symbol: String, center: Vector2, s: float, col: Color) -> void:
-	match symbol:
-		"flame":
-			_draw_flame(center, s)
-		"chevron":
-			_draw_chevron(center, s, col)
-		"gear":
-			_draw_gear(center, s, col)
-		"plus":
-			draw_line(center + Vector2(-s, 0), center + Vector2(s, 0), col, 2.0)
-			draw_line(center + Vector2(0, -s), center + Vector2(0, s), col, 2.0)
-		"snow":
-			draw_circle(center, s * 0.55, col)
-		"refresh":
-			draw_arc(center, s * 0.8, 0.4, TAU - 0.6, 12, col, 2.0)
-		"play":
-			var pts := PackedVector2Array([
-				center + Vector2(-s * 0.5, -s),
-				center + Vector2(s, 0),
-				center + Vector2(-s * 0.5, s),
-			])
-			draw_colored_polygon(pts, col)
-		"accel":
-			_draw_chevron(center + Vector2(0, -3), s * 0.7, col)
-			_draw_chevron(center + Vector2(0, 4), s * 0.7, col)
-		"scrap":
-			draw_line(center + Vector2(-s, -s), center + Vector2(s, s), col, 2.0)
-			draw_line(center + Vector2(s, -s), center + Vector2(-s, s), col, 2.0)
-		"corner":
-			draw_polyline(
-				PackedVector2Array([
-					center + Vector2(-s, s),
-					center + Vector2(-s, -s),
-					center + Vector2(s, -s),
-				]),
-				col,
-				2.0,
-				true
-			)
-		"salvage":
-			draw_rect(Rect2(center + Vector2(-s * 0.7, -s * 0.4), Vector2(s * 1.1, s * 1.0)), col, false, 2.0)
-			draw_line(center + Vector2(s * 0.1, 0), center + Vector2(s, 0), col, 2.0)
-			draw_line(center + Vector2(s * 0.45, -s * 0.4), center + Vector2(s, 0), col, 2.0)
-			draw_line(center + Vector2(s * 0.45, s * 0.4), center + Vector2(s, 0), col, 2.0)
-		"stress":
-			draw_line(center + Vector2(-s * 0.7, 0), center + Vector2(s * 0.7, 0), col, 2.0)
-			_draw_chevron(center + Vector2(0, s * 0.15), s * 0.55, col)
-		_:
-			_draw_gear(center, s, col)
-
-
 func _draw_chevron(center: Vector2, s: float, col: Color) -> void:
 	var pts := PackedVector2Array([
 		center + Vector2(-s, s * 0.5),
@@ -250,33 +353,6 @@ func _draw_chevron(center: Vector2, s: float, col: Color) -> void:
 		center + Vector2(s, s * 0.5),
 	])
 	draw_polyline(pts, col, maxf(2.0, s * 0.22), true)
-
-
-func _draw_flame(center: Vector2, s: float, col: Color = Color()) -> void:
-	if col.a <= 0.0:
-		col = data.accent() if data else Palette.RACE_RED
-	var pts := PackedVector2Array([
-		center + Vector2(0, -s),
-		center + Vector2(s * 0.45, -s * 0.2),
-		center + Vector2(s * 0.55, s * 0.35),
-		center + Vector2(s * 0.2, s),
-		center + Vector2(-s * 0.2, s),
-		center + Vector2(-s * 0.55, s * 0.35),
-		center + Vector2(-s * 0.35, -s * 0.15),
-		center + Vector2(-s * 0.1, -s * 0.5),
-	])
-	draw_colored_polygon(pts, col)
-
-
-func _draw_gear(center: Vector2, s: float, col: Color) -> void:
-	var teeth := 8
-	var pts := PackedVector2Array()
-	for i in teeth * 2:
-		var a := TAU * float(i) / float(teeth * 2)
-		var rad := s if i % 2 == 0 else s * 0.68
-		pts.append(center + Vector2(cos(a), sin(a)) * rad)
-	draw_colored_polygon(pts, col)
-	draw_circle(center, s * 0.3, data.face() if data else Palette.CARDBOARD)
 
 
 # --- Interaction ---
@@ -291,27 +367,84 @@ func _gui_input(event: InputEvent) -> void:
 func _notification(what: int) -> void:
 	if dimmed:
 		return
-	if what == NOTIFICATION_MOUSE_ENTER:
-		_hovered = true
-		_lift(true)
-	elif what == NOTIFICATION_MOUSE_EXIT:
-		_hovered = false
-		_lift(false)
+	if what == NOTIFICATION_MOUSE_ENTER or what == NOTIFICATION_MOUSE_EXIT:
+		sync_pointer_hover()
+
+
+## Appelé aussi par les icônes : un enfant STOP vole le hover du parent.
+func sync_pointer_hover() -> void:
+	if _hover_sync_queued:
+		return
+	_hover_sync_queued = true
+	call_deferred("_apply_pointer_hover")
+
+
+func _apply_pointer_hover() -> void:
+	_hover_sync_queued = false
+	if not is_inside_tree() or dimmed:
+		return
+	var over := _pointer_is_on_self()
+	if not over and _hovered and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		over = true
+	if _hovered == over:
+		return
+	_hovered = over
+	z_index = 10 if over else 0
+	_lift(over)
+
+
+func _pointer_is_on_self() -> bool:
+	var hovered := get_viewport().gui_get_hovered_control()
+	if _is_self_or_descendant(hovered):
+		return true
+	var other := _card_ancestor(hovered)
+	if other != null and other != self:
+		return false
+	# Tooltip / popup : garder le hover si le curseur est encore sur la carte.
+	return _hovered and _contains_pointer()
+
+
+func _contains_pointer() -> bool:
+	var local := get_global_transform().affine_inverse() * get_global_mouse_position()
+	return Rect2(Vector2.ZERO, size).has_point(local)
+
+
+func _is_self_or_descendant(node: Node) -> bool:
+	while node != null:
+		if node == self:
+			return true
+		node = node.get_parent()
+	return false
+
+
+func _card_ancestor(node: Node) -> Card:
+	while node != null:
+		if node is Card:
+			return node
+		node = node.get_parent()
+	return null
 
 
 var _rest_offset := 0.0
+var _lift_tween: Tween
+var _hover_sync_queued := false
 
 func _lift(up: bool) -> void:
 	queue_redraw()
+	if _lift_tween != null and _lift_tween.is_valid():
+		_lift_tween.kill()
 	var target := _rest_offset - (18.0 if up else 0.0)
-	var tween := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(self, "position:y", target, 0.14)
+	_lift_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_lift_tween.tween_property(self, "position:y", target, 0.14)
 
 
 ## Enregistre la position de repos (a appeler apres avoir place la carte).
 func set_rest_y(y: float) -> void:
 	_rest_offset = y
-	position.y = y
+	if _hovered:
+		position.y = y - 18.0
+	else:
+		position.y = y
 
 
 ## Retourne la carte avec un scale sur X. Aucune texture de verso necessaire.

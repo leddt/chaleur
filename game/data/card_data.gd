@@ -19,17 +19,15 @@ enum Kind {
 ## When set, overrides big_text() (e.g. upgrade Heat shows "H").
 @export var center_text: String = ""
 @export_multiline var effect: String = ""
-## Symbole optionnel : "flame", "gear", "chevron", "" (aucun)
-@export var symbol: String = ""
-@export var symbols: PackedStringArray = PackedStringArray()
+@export var symbol_entries: Array[CardSymbol] = []
 @export var speed_options: PackedInt32Array = PackedInt32Array()
 @export var is_advanced: bool = false
 
 
 func accent() -> Color:
+	if shows_heat_center():
+		return Palette.RACE_RED
 	match kind:
-		Kind.HEAT:
-			return Palette.RACE_RED
 		Kind.STRESS:
 			return Palette.MUSTARD
 		Kind.UPGRADE:
@@ -41,11 +39,16 @@ func accent() -> Color:
 
 
 func face() -> Color:
-	return Palette.RACE_RED if kind == Kind.HEAT else Palette.CARDBOARD
+	return Palette.RACE_RED if shows_heat_center() else Palette.CARDBOARD
 
 
 func ink() -> Color:
-	return Palette.CARDBOARD if kind == Kind.HEAT else Palette.INK
+	return Palette.CARDBOARD if shows_heat_center() else Palette.INK
+
+
+## Gros pictogramme feu à la place du « H ».
+func shows_heat_center() -> bool:
+	return kind == Kind.HEAT or center_text == "H"
 
 
 ## Ce qui s'affiche en gros au centre.
@@ -62,7 +65,7 @@ func big_text() -> String:
 				var parts: PackedStringArray = PackedStringArray()
 				for v in speed_options:
 					parts.append(str(v))
-				return "/".join(parts)
+				return "|".join(parts)
 			return str(value)
 		_:
 			return ""
@@ -82,7 +85,6 @@ static func heat() -> CardData:
 	c.value = 0
 	c.title = "CHALEUR"
 	c.effect = "Se defausse en refroidissant."
-	c.symbol = "flame"
 	return c
 
 
@@ -91,7 +93,6 @@ static func upgrade(v: int) -> CardData:
 	c.kind = Kind.UPGRADE
 	c.value = v
 	c.title = "AMÉLIORATION"
-	c.symbol = "gear"
 	return c
 
 
@@ -100,46 +101,14 @@ static func upgrade_from_def(def: CardDefinition, advanced: bool) -> CardData:
 	c.kind = Kind.UPGRADE
 	c.value = def.speed_value
 	c.title = def.title if not def.title.is_empty() else "AMÉLIORATION"
-	c.symbol = "gear"
 	c.speed_options = def.resolved_speed_options()
 	c.is_advanced = advanced
-	var bits: PackedStringArray = PackedStringArray()
 	for s in def.symbols:
-		bits.append(s.label())
-	c.effect = " · ".join(bits)
-	var icons: PackedStringArray = PackedStringArray()
-	for s in def.symbols:
-		icons.append(_symbol_icon(s.kind))
-	c.symbols = icons
+		var copy := CardSymbol.new()
+		copy.kind = s.kind
+		copy.count = s.count
+		c.symbol_entries.append(copy)
 	return c
-
-
-static func _symbol_icon(kind: CardSymbol.Kind) -> String:
-	match kind:
-		CardSymbol.Kind.HEAT:
-			return "flame"
-		CardSymbol.Kind.PLUS:
-			return "plus"
-		CardSymbol.Kind.COOLDOWN:
-			return "snow"
-		CardSymbol.Kind.SLIPSTREAM_BOOST:
-			return "chevron"
-		CardSymbol.Kind.REFRESH:
-			return "refresh"
-		CardSymbol.Kind.DIRECT_PLAY:
-			return "play"
-		CardSymbol.Kind.ACCELERATE:
-			return "accel"
-		CardSymbol.Kind.SCRAP:
-			return "scrap"
-		CardSymbol.Kind.ADJUST_SPEED_LIMIT:
-			return "corner"
-		CardSymbol.Kind.SALVAGE:
-			return "salvage"
-		CardSymbol.Kind.REDUCE_STRESS:
-			return "stress"
-		_:
-			return "gear"
 
 
 static func upgrade_heat() -> CardData:
@@ -152,8 +121,6 @@ static func upgrade_heat_named(title: String) -> CardData:
 	c.value = 0
 	c.center_text = "H"
 	c.title = title if not title.is_empty() else "AMÉLIORATION"
-	c.symbol = "flame"
-	c.effect = "Heat dans le deck."
 	return c
 
 

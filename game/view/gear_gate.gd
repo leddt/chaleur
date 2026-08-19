@@ -22,11 +22,16 @@ const PAID_TRAVEL := 2
 
 const SLOT_WIDTH := 34.0
 const NOTCH_RADIUS := 15.0
+const HEAT_ICON_PX := 16.0
+const HEAT_SHIFT_TOOLTIP := (
+	"[b]Heat 1[/b]\nUn changement de deux crans coûte 1 Heat du moteur."
+)
 
 @export var current_gear: int = 1:
 	set(v):
 		current_gear = clampi(v, GEAR_MIN, GEAR_MAX)
 		queue_redraw()
+		_refresh_heat_tips()
 
 @export var chosen_gear: int = 1:
 	set(v):
@@ -45,6 +50,7 @@ const NOTCH_RADIUS := 15.0
 			if has_focus():
 				release_focus()
 		queue_redraw()
+		_refresh_heat_tips()
 
 var _hover_gear: int = -1
 
@@ -55,6 +61,9 @@ func _ready() -> void:
 		custom_minimum_size = Vector2(96, 176)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL if editable else Control.FOCUS_NONE
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	resized.connect(_refresh_heat_tips)
+	_refresh_heat_tips()
 
 
 ## Notches this many steps away cost a Heat; further away is refused.
@@ -152,7 +161,7 @@ func _draw_notch(gear: int) -> void:
 		)
 
 	if editable and costs_heat(gear):
-		_draw_flame(center + Vector2(half + 11.0, 0.0), 7.0, Palette.RACE_RED)
+		_draw_heat_icon(_heat_icon_center(gear), HEAT_ICON_PX)
 	elif editable and not reachable:
 		_draw_strike(center + Vector2(half + 11.0, 0.0), 5.0, Palette.SMOKE)
 
@@ -207,15 +216,52 @@ func _draw_number(center: Vector2, gear: int, col: Color) -> void:
 	draw_string(font, origin, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, col)
 
 
-func _draw_flame(center: Vector2, s: float, col: Color) -> void:
-	var pts := PackedVector2Array([
-		center + Vector2(0, -s),
-		center + Vector2(s * 0.55, s * 0.35),
-		center + Vector2(s * 0.2, s),
-		center + Vector2(-s * 0.2, s),
-		center + Vector2(-s * 0.55, s * 0.35),
-	])
-	draw_colored_polygon(pts, col)
+func _heat_icon_center(gear: int) -> Vector2:
+	return _notch_center(gear) + Vector2(SLOT_WIDTH * 0.5 + 11.0, 0.0)
+
+
+func _refresh_heat_tips() -> void:
+	for child in get_children():
+		if child is HeatTip:
+			child.queue_free()
+	if not editable or size.x <= 0.0 or size.y <= 0.0:
+		return
+	for gear in range(GEAR_MIN, GEAR_MAX + 1):
+		if not costs_heat(gear):
+			continue
+		var tip := HeatTip.new()
+		tip.gear = gear
+		tip.bbcode = HEAT_SHIFT_TOOLTIP
+		var px := HEAT_ICON_PX
+		var center := _heat_icon_center(gear)
+		tip.position = center - Vector2(px, px) * 0.5
+		tip.size = Vector2(px, px)
+		add_child(tip)
+
+
+class HeatTip extends Control:
+	var gear: int = 0
+	var bbcode: String = ""
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		tooltip_text = " "
+
+	func _make_custom_tooltip(_tooltip: String) -> Object:
+		return CardSymbolTooltip.make_control(bbcode)
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed \
+				and event.button_index == MOUSE_BUTTON_LEFT:
+			var gate := get_parent() as GearGate
+			if gate != null and gate.is_reachable(gear):
+				gate._select(gear)
+
+
+func _draw_heat_icon(center: Vector2, px: float) -> void:
+	var tex := CardSymbolVisual.texture(CardSymbol.Kind.HEAT, px)
+	var rect := Rect2(center - Vector2(px, px) * 0.5, Vector2(px, px))
+	draw_texture_rect(tex, rect, false, Palette.RACE_RED)
 
 
 func _draw_strike(center: Vector2, s: float, col: Color) -> void:

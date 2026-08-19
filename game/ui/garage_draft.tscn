@@ -59,11 +59,17 @@ text = "Choisis une amélioration"
 autowrap_mode = 3
 
 [node name="MarketScroll" type="ScrollContainer" parent="Margin/VBox"]
-custom_minimum_size = Vector2(0, 190)
+custom_minimum_size = Vector2(0, 210)
 layout_mode = 2
 size_flags_vertical = 3
+clip_contents = false
+vertical_scroll_mode = 0
 
-[node name="Market" type="HBoxContainer" parent="Margin/VBox/MarketScroll"]
+[node name="MarketPad" type="MarginContainer" parent="Margin/VBox/MarketScroll"]
+layout_mode = 2
+theme_override_constants/margin_top = 20
+
+[node name="Market" type="HBoxContainer" parent="Margin/VBox/MarketScroll/MarketPad"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8

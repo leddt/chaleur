@@ -80,7 +80,16 @@ func _rebuild_market(picker_id: int) -> void:
 
 func _on_market_clicked(card: Card) -> void:
 	_selected_id = str(card.get_meta("card_id", ""))
-	_refresh()
+	_sync_market_selection()
+	var picker := _engine.garage_picker_id()
+	var my_id := Game.local_player_id if Game.is_online() else picker
+	_continue.disabled = _selected_id.is_empty() or picker != my_id
+
+
+func _sync_market_selection() -> void:
+	for child in _market.get_children():
+		if child is Card:
+			child.selected = str(child.get_meta("card_id", "")) == _selected_id
 
 
 func _rebuild_picks() -> void:

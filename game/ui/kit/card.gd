@@ -153,12 +153,22 @@ func _fit_big_font(s: float, pad: float) -> void:
 func _layout_center_icon(s: float, pad: float, kerb_h: float, effect_h: float) -> void:
 	if _center_icon == null:
 		return
-	var show := face_up and data != null and data.shows_heat_center()
-	_center_icon.visible = show
-	if not show:
+	var heat := face_up and data != null and data.shows_heat_center()
+	var plus := (
+		face_up
+		and data != null
+		and data.shows_plus_center()
+		and _speed_override < 0
+		and not _speed_pick_active()
+	)
+	_center_icon.visible = heat or plus
+	if not _center_icon.visible:
 		return
 	var icon_px := maxf(36.0, roundf(72.0 * s))
-	_center_icon.texture = CardSymbolVisual.texture(CardSymbol.Kind.HEAT, icon_px)
+	if heat:
+		_center_icon.texture = CardSymbolVisual.texture(CardSymbol.Kind.HEAT, icon_px)
+	else:
+		_center_icon.texture = CardSymbolVisual.texture(CardSymbol.Kind.PLUS, icon_px)
 	_center_icon.modulate = data.ink()
 	var top := roundf(28.0 * s)
 	var bottom := kerb_h + effect_h + roundf(6.0 * s)
@@ -181,6 +191,7 @@ func _layout_symbols(icon_px: float, separation: int) -> void:
 func _build() -> void:
 	_title = Label.new()
 	_title.theme_type_variation = "Eyebrow"
+	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_title)
 
 	_big = Label.new()
@@ -190,6 +201,7 @@ func _build() -> void:
 	_big.clip_text = true
 	_big.anchor_right = 1.0
 	_big.anchor_bottom = 1.0
+	_big.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_big)
 
 	_speed_pick = GridContainer.new()
@@ -241,6 +253,7 @@ func _build() -> void:
 	_effect.anchor_right = 1.0
 	_effect.anchor_bottom = 1.0
 	_effect.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_effect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_effect)
 
 	_kerb = Kerb.new()
@@ -259,7 +272,13 @@ func _refresh() -> void:
 	var visible_face := face_up
 	_title.visible = visible_face
 	var show_pick := _speed_pick_active()
-	_big.visible = visible_face and data != null and not data.shows_heat_center() and not show_pick
+	_big.visible = (
+		visible_face
+		and data != null
+		and not data.shows_heat_center()
+		and not show_pick
+		and not (data.shows_plus_center() and _speed_override < 0)
+	)
 	if _speed_pick != null:
 		_speed_pick.visible = show_pick
 	_effect.visible = visible_face
@@ -276,10 +295,22 @@ func _refresh() -> void:
 		_kerb.color_a = data.accent()
 		_kerb.color_b = data.face()
 
+	var tip := data.tooltip_bbcode() if visible_face else ""
+	tooltip_text = " " if not tip.strip_edges().is_empty() else ""
+
 	_rebuild_symbols()
 	# La presence d'un texte d'effet change la hauteur reservee au gros chiffre.
 	_apply_size()
 	queue_redraw()
+
+
+func _make_custom_tooltip(_for_text: String) -> Object:
+	if data == null or not face_up or tooltip_text.is_empty():
+		return null
+	var bb := data.tooltip_bbcode().strip_edges()
+	if bb.is_empty():
+		return null
+	return CardSymbolTooltip.make_control(bb)
 
 
 func set_symbol_states(states: Dictionary) -> void:
@@ -465,7 +496,7 @@ func _symbol_row_count() -> int:
 
 func _all_symbol_entries() -> Array[CardSymbol]:
 	var out: Array[CardSymbol] = []
-	if data.shows_heat_center():
+	if data.shows_heat_center() or data.shows_plus_center():
 		return out
 	for entry in data.symbol_entries:
 		out.append(entry)

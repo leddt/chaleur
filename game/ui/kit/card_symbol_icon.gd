@@ -28,9 +28,9 @@ func kind() -> CardSymbol.Kind:
 
 
 func _ready() -> void:
-	tooltip_text = " "
 	if _icon == null:
 		_build()
+	_sync_tooltip()
 
 
 func _notification(what: int) -> void:
@@ -66,6 +66,7 @@ func setup(p_kind: CardSymbol.Kind, p_count: int = 1, extra: Dictionary = {}) ->
 	_extra = extra
 	var sym := CardSymbol.make(p_kind, p_count)
 	_tooltip_bbcode = sym.tooltip_bbcode(extra)
+	_sync_tooltip()
 	if _icon == null:
 		_build()
 	else:
@@ -159,15 +160,30 @@ func _apply_layout(icon_px: float) -> void:
 	_icon.custom_minimum_size = Vector2(icon_px, icon_px)
 	_icon.size = Vector2(icon_px, icon_px)
 	_icon.position = Vector2.ZERO
-	var count_w := 0.0
 	if _count_label.visible:
-		count_w = _count_label.get_minimum_size().x + 2.0
+		var fs := maxi(10, int(round(icon_px * 0.5)))
+		if icon_px >= 40.0:
+			_count_label.add_theme_font_override("font", ThemeBuilder.display_font())
+		_count_label.add_theme_font_size_override("font_size", fs)
+		var font := _count_label.get_theme_font("font")
+		if font == null:
+			font = ThemeBuilder.display_font()
+		var count_w := font.get_string_size(_count_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		count_w = maxf(count_w + 2.0, icon_px * 0.35)
 		_count_label.position = Vector2(icon_px + 2.0, 0.0)
 		_count_label.size = Vector2(count_w, icon_px)
-	custom_minimum_size = Vector2(icon_px + count_w, icon_px)
+		custom_minimum_size = Vector2(icon_px + count_w, icon_px)
+	else:
+		custom_minimum_size = Vector2(icon_px, icon_px)
 	size = custom_minimum_size
 	_apply_check()
 
 
 func _make_custom_tooltip(_tooltip: String) -> Object:
+	if tooltip_text.is_empty() or _tooltip_bbcode.strip_edges().is_empty():
+		return null
 	return CardSymbolTooltip.make_control(_tooltip_bbcode)
+
+
+func _sync_tooltip() -> void:
+	tooltip_text = " " if not _tooltip_bbcode.strip_edges().is_empty() else ""

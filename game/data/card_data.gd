@@ -27,9 +27,9 @@ enum Kind {
 func accent() -> Color:
 	if shows_heat_center():
 		return Palette.RACE_RED
+	if kind == Kind.STRESS:
+		return Palette.MUSTARD
 	match kind:
-		Kind.STRESS:
-			return Palette.MUSTARD
 		Kind.UPGRADE:
 			return Palette.FUEL_BLUE
 		Kind.SPONSOR:
@@ -39,16 +39,37 @@ func accent() -> Color:
 
 
 func face() -> Color:
-	return Palette.RACE_RED if shows_heat_center() else Palette.CARDBOARD
+	if shows_heat_center():
+		return Palette.RACE_RED
+	if kind == Kind.STRESS:
+		return Palette.MUSTARD
+	return Palette.CARDBOARD
 
 
 func ink() -> Color:
-	return Palette.CARDBOARD if shows_heat_center() else Palette.INK
+	if shows_heat_center():
+		return Palette.CARDBOARD
+	return Palette.INK
 
 
 ## Gros pictogramme feu à la place du « H ».
 func shows_heat_center() -> bool:
 	return kind == Kind.HEAT or center_text == "H"
+
+
+## Gros symbole Plus à la place du « ? ».
+func shows_plus_center() -> bool:
+	return kind == Kind.STRESS
+
+
+func tooltip_bbcode() -> String:
+	if kind != Kind.STRESS:
+		return ""
+	return (
+		"[b]Stress[/b]\n"
+		+ "À la révélation, retournez des cartes de la pioche jusqu'à obtenir "
+		+ "une carte Vitesse 1–4. Compte comme un symbole + pour Accélérer."
+	)
 
 
 ## Ce qui s'affiche en gros au centre.
@@ -129,5 +150,4 @@ static func stress() -> CardData:
 	c.kind = Kind.STRESS
 	c.value = 0
 	c.title = "STRESS"
-	c.effect = "Revele des cartes jusqu'a une vitesse."
 	return c

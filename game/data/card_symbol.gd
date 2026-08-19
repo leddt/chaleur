@@ -136,8 +136,14 @@ func _tooltip_body(extra: Dictionary = {}) -> String:
 			return "Cette carte retourne en haut de la pioche au lieu d'aller à la défausse."
 		Kind.SALVAGE:
 			if count == 1:
-				return "Remettez jusqu'à 1 carte de la défausse sous la pioche."
-			return "Remettez jusqu'à %d cartes de la défausse sous la pioche." % count
+				return (
+					"Choisissez jusqu'à 1 carte dans la défausse : elle rejoint la pioche, "
+					+ "qui est ensuite mélangée."
+				)
+			return (
+				"Choisissez jusqu'à %d cartes dans la défausse : elles rejoignent la pioche, "
+				+ "qui est ensuite mélangée."
+			) % count
 		Kind.DIRECT_PLAY:
 			return "Jouez cette carte depuis la main pendant la phase Réaction."
 		Kind.ACCELERATE:

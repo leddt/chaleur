@@ -28,6 +28,8 @@ static func encode(engine: HeatGameEngine, viewer_player_id: int = -1) -> Dictio
 		"garage_discard": _encode_pile(engine.garage_discard),
 		"garage_draft_round": engine.garage_draft_round,
 		"garage_pick_index": engine.garage_pick_index,
+		"garage_ready": engine.garage_ready.duplicate(),
+		"garage_claims": engine.garage_claims.duplicate(),
 	}
 
 
@@ -59,6 +61,19 @@ static func decode(data: Dictionary) -> HeatGameEngine:
 	engine.garage_discard = _decode_pile(data.get("garage_discard", []))
 	engine.garage_draft_round = int(data.get("garage_draft_round", 0))
 	engine.garage_pick_index = int(data.get("garage_pick_index", 0))
+	engine.garage_claims.clear()
+	var claims: Variant = data.get("garage_claims", {})
+	if claims is Dictionary:
+		for key in claims:
+			engine.garage_claims[str(key)] = int(claims[key])
+	engine.garage_ready.clear()
+	var ready_data: Variant = data.get("garage_ready", [])
+	if ready_data is Array and not ready_data.is_empty():
+		for v in ready_data:
+			engine.garage_ready.append(bool(v))
+	elif engine.phase == HeatGameEngine.Phase.GARAGE_SUMMARY:
+		for _p in engine.players:
+			engine.garage_ready.append(false)
 	return engine
 
 

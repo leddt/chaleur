@@ -488,15 +488,28 @@ static func _setup_item_lists(t: Theme, body: Font) -> void:
 
 static func _setup_scroll(t: Theme) -> void:
 	var grabber := StyleBoxFlat.new()
-	grabber.bg_color = Palette.SMOKE
-	grabber.set_corner_radius_all(2)
+	grabber.bg_color = Palette.CARDBOARD
+	grabber.set_corner_radius_all(3)
+	grabber.content_margin_left = 5
+	grabber.content_margin_right = 5
+	grabber.content_margin_top = 6
+	grabber.content_margin_bottom = 6
+	var grabber_hover := grabber.duplicate() as StyleBoxFlat
+	grabber_hover.bg_color = Palette.MUSTARD
 	t.set_stylebox("grabber", "VScrollBar", grabber)
-	t.set_stylebox("grabber_highlight", "VScrollBar", grabber)
-	t.set_stylebox("grabber_pressed", "VScrollBar", grabber)
+	t.set_stylebox("grabber_highlight", "VScrollBar", grabber_hover)
+	t.set_stylebox("grabber_pressed", "VScrollBar", grabber_hover)
 	var scroll := StyleBoxFlat.new()
-	scroll.bg_color = Palette.INK
+	scroll.bg_color = Palette.ASPHALT
+	scroll.border_color = Palette.SMOKE
+	scroll.set_border_width_all(1)
+	scroll.set_corner_radius_all(3)
+	scroll.content_margin_left = 2
+	scroll.content_margin_right = 2
 	t.set_stylebox("scroll", "VScrollBar", scroll)
 	t.set_stylebox("grabber", "HScrollBar", grabber)
+	t.set_stylebox("grabber_highlight", "HScrollBar", grabber_hover)
+	t.set_stylebox("grabber_pressed", "HScrollBar", grabber_hover)
 	t.set_stylebox("scroll", "HScrollBar", scroll)
 	t.set_stylebox("panel", "ScrollContainer", StyleBoxEmpty.new())
 

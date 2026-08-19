@@ -4,6 +4,7 @@ extends RefCounted
 enum Phase {
 	SETUP,
 	GARAGE_DRAFT,
+	GARAGE_SUMMARY,
 	SHIFT_GEARS,
 	PLAY_CARDS,
 	PLAYER_TURN,
@@ -39,6 +40,9 @@ var garage_market: CardPile = CardPile.new()
 var garage_discard: CardPile = CardPile.new()
 var garage_draft_round: int = 0
 var garage_pick_index: int = 0
+var garage_ready: Array[bool] = []
+## card_id -> player_id for picks still shown on this round's market.
+var garage_claims: Dictionary = {}
 
 
 func setup(
@@ -58,6 +62,8 @@ func setup(
 	garage_discard.clear()
 	garage_draft_round = 0
 	garage_pick_index = 0
+	garage_ready.clear()
+	garage_claims.clear()
 	stress_reserve = DeckFactory.build_stress_reserve()
 	started_player_count = player_names.size()
 	next_finish_rank = 1
@@ -100,6 +106,10 @@ func pending_actor_ids() -> Array[int]:
 			var picker := garage_picker_id()
 			if picker >= 0:
 				ids.append(picker)
+		Phase.GARAGE_SUMMARY:
+			for p in players:
+				if not is_garage_ready(p.id):
+					ids.append(p.id)
 		Phase.SHIFT_GEARS:
 			for p in players:
 				if not p.finished and not p.gear_locked:
@@ -177,6 +187,7 @@ func _garage_quick_start() -> void:
 
 func _deal_garage_market() -> void:
 	garage_market.clear()
+	garage_claims.clear()
 	var need := players.size() + 3
 	for _i in need:
 		var card := garage_deck.draw_top()
@@ -185,31 +196,52 @@ func _deal_garage_market() -> void:
 		garage_market.add(card)
 
 
+func garage_claim_player_id(card_id: String) -> int:
+	if not garage_claims.has(card_id):
+		return -1
+	return int(garage_claims[card_id])
+
+
 func pick_garage_card(player_id: int, card_id: String) -> ActionResult:
 	if phase != Phase.GARAGE_DRAFT:
 		return ActionResult.fail("Not in garage draft")
 	if player_id != garage_picker_id():
 		return ActionResult.fail("Not this player's pick")
-	var card := garage_market.remove_id(card_id)
+	if garage_claim_player_id(card_id) >= 0:
+		return ActionResult.fail("Card already drafted")
+	var card := garage_market.get_by_id(card_id)
 	if card == null:
 		return ActionResult.fail("Card not in market")
 	var p := _player(player_id)
 	if p == null:
 		return ActionResult.fail("Invalid player")
 	p.garage_upgrades.add(card)
+	garage_claims[card_id] = player_id
 	_log("%s drafts %s" % [p.display_name, card.def_id])
 	garage_pick_index += 1
-	if garage_pick_index >= players.size():
-		_advance_garage_round()
+	return ActionResult.success()
+
+
+func is_garage_round_complete() -> bool:
+	return phase == Phase.GARAGE_DRAFT and garage_pick_index >= players.size()
+
+
+func advance_garage_round() -> ActionResult:
+	if not is_garage_round_complete():
+		return ActionResult.fail("Garage round still in progress")
+	_advance_garage_round()
 	return ActionResult.success()
 
 
 func _advance_garage_round() -> void:
-	for leftover in garage_market.cards:
-		garage_discard.add(leftover)
+	for card in garage_market.cards:
+		if garage_claim_player_id(card.id) >= 0:
+			continue
+		garage_discard.add(card)
 	garage_market.clear()
+	garage_claims.clear()
 	if garage_draft_round >= 3:
-		_finish_garage_draft()
+		_enter_garage_summary()
 		return
 	garage_draft_round += 1
 	garage_pick_index = 0
@@ -217,7 +249,48 @@ func _advance_garage_round() -> void:
 	_log("Garage draft round %d" % garage_draft_round)
 
 
-func _finish_garage_draft() -> void:
+func is_garage_ready(player_id: int) -> bool:
+	return player_id >= 0 and player_id < garage_ready.size() and garage_ready[player_id]
+
+
+func ready_garage(player_id: int) -> ActionResult:
+	if phase != Phase.GARAGE_SUMMARY:
+		return ActionResult.fail("Not in garage summary")
+	if player_id < 0 or player_id >= players.size():
+		return ActionResult.fail("Invalid player")
+	if not is_garage_ready(player_id):
+		garage_ready[player_id] = true
+		_log("%s is ready" % players[player_id].display_name)
+	if _all_garage_ready():
+		_begin_race_from_garage()
+	return ActionResult.success()
+
+
+func begin_race_from_garage() -> ActionResult:
+	if phase != Phase.GARAGE_SUMMARY:
+		return ActionResult.fail("Not in garage summary")
+	_begin_race_from_garage()
+	return ActionResult.success()
+
+
+func _all_garage_ready() -> bool:
+	if garage_ready.size() != players.size():
+		return false
+	for v in garage_ready:
+		if not v:
+			return false
+	return true
+
+
+func _enter_garage_summary() -> void:
+	garage_ready.clear()
+	for _p in players:
+		garage_ready.append(false)
+	phase = Phase.GARAGE_SUMMARY
+	_log("Garage draft complete — review loadouts")
+
+
+func _begin_race_from_garage() -> void:
 	for p in players:
 		for card in p.garage_upgrades.cards:
 			p.draw_pile.add(card)

@@ -34,7 +34,17 @@ func test_garage_draft_market_size_and_order() -> void:
 	assert_eq(engine.garage_picker_id(), first_order[0])
 	var market_ids := engine.garage_market.ids()
 	assert_true(engine.pick_garage_card(first_order[0], market_ids[0]).ok)
+	assert_eq(engine.garage_market.size(), 5)
+	assert_eq(engine.garage_claim_player_id(market_ids[0]), first_order[0])
+	assert_false(engine.is_garage_round_complete())
+	assert_false(engine.advance_garage_round().ok)
+	assert_false(engine.pick_garage_card(first_order[0], market_ids[0]).ok)
 	assert_true(engine.pick_garage_card(first_order[1], market_ids[1]).ok)
+	assert_true(engine.is_garage_round_complete())
+	assert_eq(engine.garage_draft_round, 1)
+	assert_eq(engine.garage_market.size(), 5)
+	assert_eq(engine.garage_claim_player_id(market_ids[1]), first_order[1])
+	assert_true(engine.advance_garage_round().ok)
 	assert_eq(engine.garage_draft_round, 2)
 	assert_eq(engine.garage_market.size(), 5)
 	var second := engine.garage_pick_order()
@@ -42,12 +52,21 @@ func test_garage_draft_market_size_and_order() -> void:
 	var m2 := engine.garage_market.ids()
 	assert_true(engine.pick_garage_card(second[0], m2[0]).ok)
 	assert_true(engine.pick_garage_card(second[1], m2[1]).ok)
+	assert_true(engine.advance_garage_round().ok)
 	assert_eq(engine.garage_draft_round, 3)
 	var third := engine.garage_pick_order()
 	assert_eq(third[0], engine.grid_order[1])
 	var m3 := engine.garage_market.ids()
 	assert_true(engine.pick_garage_card(third[0], m3[0]).ok)
 	assert_true(engine.pick_garage_card(third[1], m3[1]).ok)
+	assert_eq(engine.phase, HeatGameEngine.Phase.GARAGE_DRAFT)
+	assert_true(engine.advance_garage_round().ok)
+	assert_eq(engine.phase, HeatGameEngine.Phase.GARAGE_SUMMARY)
+	assert_eq(engine.players[0].garage_upgrades.size(), 3)
+	assert_eq(engine.players[0].hand.size(), 0)
+	assert_true(engine.ready_garage(0).ok)
+	assert_eq(engine.phase, HeatGameEngine.Phase.GARAGE_SUMMARY)
+	assert_true(engine.ready_garage(1).ok)
 	assert_eq(engine.phase, HeatGameEngine.Phase.SHIFT_GEARS)
 	assert_eq(engine.players[0].hand.size(), 7)
 	assert_eq(engine.players[1].hand.size(), 7)
@@ -73,13 +92,48 @@ func test_garage_draft_codec_roundtrip() -> void:
 	opts.garage_enabled = true
 	opts.garage_include_basic = true
 	var engine := HeatTestHelpers.make_engine(2, 9, 1, opts)
+	var picker := engine.garage_picker_id()
+	var claimed := engine.garage_market.ids()[0]
+	assert_true(engine.pick_garage_card(picker, claimed).ok)
 	var snap := StateCodec.encode(engine, -1)
 	var restored := StateCodec.decode(snap)
 	assert_eq(restored.phase, HeatGameEngine.Phase.GARAGE_DRAFT)
 	assert_eq(restored.garage_market.size(), engine.garage_market.size())
+	assert_eq(restored.garage_claim_player_id(claimed), picker)
 	assert_eq(restored.garage_draft_round, 1)
 	assert_eq(restored.grid_order, engine.grid_order)
 	assert_true(restored.options.garage_enabled)
+
+
+func test_garage_summary_codec_preserves_ready_flags() -> void:
+	var opts := RaceOptions.new()
+	opts.garage_enabled = true
+	opts.garage_include_basic = true
+	var engine := HeatTestHelpers.make_engine(2, 11, 1, opts)
+	_complete_garage_draft(engine)
+	assert_eq(engine.phase, HeatGameEngine.Phase.GARAGE_SUMMARY)
+	assert_true(engine.ready_garage(0).ok)
+	var snap := StateCodec.encode(engine, 1)
+	var restored := StateCodec.decode(snap)
+	assert_eq(restored.phase, HeatGameEngine.Phase.GARAGE_SUMMARY)
+	assert_true(restored.is_garage_ready(0))
+	assert_false(restored.is_garage_ready(1))
+	assert_eq(restored.players[0].garage_upgrades.size(), 3)
+
+
+func _complete_garage_draft(engine: HeatGameEngine) -> void:
+	while engine.phase == HeatGameEngine.Phase.GARAGE_DRAFT:
+		if engine.is_garage_round_complete():
+			assert_true(engine.advance_garage_round().ok)
+			continue
+		var picker := engine.garage_picker_id()
+		var pick_id := ""
+		for cid in engine.garage_market.ids():
+			if engine.garage_claim_player_id(cid) < 0:
+				pick_id = cid
+				break
+		assert_true(not pick_id.is_empty())
+		assert_true(engine.pick_garage_card(picker, pick_id).ok)
 
 
 func _has_starter_upgrades(p: PlayerState) -> bool:

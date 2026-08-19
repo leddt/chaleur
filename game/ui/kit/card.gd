@@ -295,7 +295,9 @@ func _refresh() -> void:
 		_kerb.color_a = data.accent()
 		_kerb.color_b = data.face()
 
-	var tip := data.tooltip_bbcode() if visible_face else ""
+	var tip := ""
+	if visible_face and data != null and data.kind == CardData.Kind.STRESS:
+		tip = data.tooltip_bbcode()
 	tooltip_text = " " if not tip.strip_edges().is_empty() else ""
 
 	_rebuild_symbols()
@@ -305,7 +307,9 @@ func _refresh() -> void:
 
 
 func _make_custom_tooltip(_for_text: String) -> Object:
-	if data == null or not face_up or tooltip_text.is_empty():
+	if data == null or not face_up or data.kind != CardData.Kind.STRESS:
+		return null
+	if tooltip_text.is_empty():
 		return null
 	var bb := data.tooltip_bbcode().strip_edges()
 	if bb.is_empty():

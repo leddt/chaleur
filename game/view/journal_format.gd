@@ -115,9 +115,17 @@ static func _translate(line: String) -> String:
 	if m:
 		return "Draft garage — ronde %s" % m.get_string(1)
 
+	m = _re("^Garage draft complete — review loadouts$").search(line)
+	if m:
+		return "Draft garage terminé — vérifiez les voitures"
+
 	m = _re("^Garage draft complete — shift gears$").search(line)
 	if m:
 		return "Draft garage terminé — changez de rapport"
+
+	m = _re("^(.+) is ready$").search(line)
+	if m:
+		return "%s est prêt" % m.get_string(1)
 
 	m = _re("^(.+) drafts (.+)$").search(line)
 	if m:

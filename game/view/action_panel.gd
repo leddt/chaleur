@@ -94,6 +94,9 @@ func build_for(engine: HeatGameEngine, actor_id: int) -> void:
 		HeatGameEngine.Phase.GARAGE_DRAFT:
 			_sidebar.set_gear_editable(false, p)
 			_build_garage_ui()
+		HeatGameEngine.Phase.GARAGE_SUMMARY:
+			_sidebar.set_gear_editable(false, p)
+			_build_garage_ui()
 		HeatGameEngine.Phase.SHIFT_GEARS:
 			_build_shift_ui(p)
 		HeatGameEngine.Phase.PLAY_CARDS:
@@ -116,6 +119,9 @@ var _speed_choices: Dictionary = {}
 
 func _build_garage_ui() -> void:
 	_slot().add_child(_make_eyebrow("GARAGE"))
+	if _engine.phase == HeatGameEngine.Phase.GARAGE_SUMMARY:
+		_slot().add_child(_make_label("Résumé des voitures — confirmez quand vous êtes prêt."))
+		return
 	var picker := _engine.garage_picker_id()
 	var name := "?"
 	if picker >= 0 and picker < _engine.players.size():

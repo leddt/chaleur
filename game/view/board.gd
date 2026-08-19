@@ -433,6 +433,8 @@ func _phase_text() -> String:
 	match _engine.phase:
 		HeatGameEngine.Phase.GARAGE_DRAFT:
 			return "Draft garage"
+		HeatGameEngine.Phase.GARAGE_SUMMARY:
+			return "Garage"
 		HeatGameEngine.Phase.SHIFT_GEARS:
 			return "Choisis ton rapport"
 		HeatGameEngine.Phase.PLAY_CARDS:

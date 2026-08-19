@@ -545,6 +545,17 @@ func start_race(laps: int = 1, track_id: String = "") -> void:
 	state_updated.emit()
 
 
+func host_advance_garage_round() -> void:
+	if Game.engine == null or not is_server():
+		return
+	var result := Game.engine.advance_garage_round()
+	if not result.ok:
+		net_error.emit(result.error)
+		return
+	_broadcast_snapshots()
+	state_updated.emit()
+
+
 func submit_action(action: String, payload: Dictionary) -> void:
 	if Game.engine == null:
 		return
@@ -818,6 +829,8 @@ func _apply_action(player_id: int, action: String, payload: Dictionary) -> Actio
 			return Game.engine.discard_cards(player_id, dids)
 		"pick_garage":
 			return Game.engine.pick_garage_card(player_id, str(payload.get("card_id", "")))
+		"ready_garage":
+			return Game.engine.ready_garage(player_id)
 		"upgrade_symbol":
 			return Game.engine.use_upgrade_symbol(
 				player_id, str(payload.get("uid", "")), payload

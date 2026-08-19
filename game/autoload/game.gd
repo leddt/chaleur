@@ -44,7 +44,10 @@ func start_local_race(
 
 
 func race_scene_path() -> String:
-	if engine != null and engine.phase == HeatGameEngine.Phase.GARAGE_DRAFT:
+	if engine != null and (
+		engine.phase == HeatGameEngine.Phase.GARAGE_DRAFT
+		or engine.phase == HeatGameEngine.Phase.GARAGE_SUMMARY
+	):
 		return "res://ui/garage_draft.tscn"
 	return "res://view/board.tscn"
 

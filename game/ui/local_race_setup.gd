@@ -97,6 +97,11 @@ func _on_item_selected(index: int) -> void:
 	if index < 0 or index >= _paths.size():
 		_preview.clear_track()
 		return
+	_laps_spin.value = clampf(
+		float(SplineTrackFile.default_laps_for_path(_paths[index])),
+		_laps_spin.min_value,
+		_laps_spin.max_value,
+	)
 	_preview.set_from_path(_paths[index])
 
 

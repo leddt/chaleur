@@ -109,6 +109,7 @@ static func catalog() -> Array[Dictionary]:
 			"id": str(entry.get("path", "")),
 			"name": track_name,
 			"builtin": builtin,
+			"default_laps": int(entry.get("default_laps", SplineTrackFile.DEFAULT_LAPS)),
 		})
 	return out
 

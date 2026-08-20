@@ -48,6 +48,7 @@ const MAX_START_STRESS := 12
 @onready var _track_name_edit: LineEdit = %SidePanel/%TrackNameEdit
 @onready var _start_heat_spin: SpinBox = %SidePanel/%StartHeatSpin
 @onready var _start_stress_spin: SpinBox = %SidePanel/%StartStressSpin
+@onready var _default_laps_spin: SpinBox = %SidePanel/%DefaultLapsSpin
 @onready var _ground_theme_option: OptionButton = %SidePanel/%GroundThemeOption
 @onready var _decor_select: Button = %SidePanel/%DecorSelect
 @onready var _decor_tree: Button = %SidePanel/%DecorTree
@@ -108,6 +109,7 @@ var _spline: TrackSpline
 var _track_name: String = ""
 var _start_heat: int = DEFAULT_START_HEAT
 var _start_stress: int = DEFAULT_START_STRESS
+var _default_laps: int = SplineTrackFile.DEFAULT_LAPS
 ## Temporary draw target for paint layers (decor / handles).
 var _draw_target: CanvasItem
 var _ground_theme: String = TrackGround.DEFAULT_THEME
@@ -323,8 +325,13 @@ func _setup_name_ui() -> void:
 	_start_stress_spin.max_value = float(MAX_START_STRESS)
 	_start_stress_spin.step = 1.0
 	_start_stress_spin.rounded = true
+	_default_laps_spin.min_value = float(SplineTrackFile.MIN_LAPS)
+	_default_laps_spin.max_value = float(SplineTrackFile.MAX_LAPS)
+	_default_laps_spin.step = 1.0
+	_default_laps_spin.rounded = true
 	_start_heat_spin.value_changed.connect(_on_start_heat_changed)
 	_start_stress_spin.value_changed.connect(_on_start_stress_changed)
+	_default_laps_spin.value_changed.connect(_on_default_laps_changed)
 	_sync_track_name_field()
 	_sync_start_fields()
 	_sync_ground_theme_field()
@@ -352,6 +359,14 @@ func _on_start_stress_changed(value: float) -> void:
 	if stress == _start_stress:
 		return
 	_start_stress = stress
+	_dirty = true
+
+
+func _on_default_laps_changed(value: float) -> void:
+	var laps := clampi(int(value), SplineTrackFile.MIN_LAPS, SplineTrackFile.MAX_LAPS)
+	if laps == _default_laps:
+		return
+	_default_laps = laps
 	_dirty = true
 
 
@@ -391,6 +406,7 @@ func _sync_track_name_field() -> void:
 func _sync_start_fields() -> void:
 	_start_heat_spin.set_value_no_signal(float(_start_heat))
 	_start_stress_spin.set_value_no_signal(float(_start_stress))
+	_default_laps_spin.set_value_no_signal(float(_default_laps))
 
 
 func _sync_ground_theme_field() -> void:
@@ -1315,6 +1331,7 @@ func _build_save_document() -> Dictionary:
 		"start_space": _start_space_index,
 		"start_heat": _start_heat,
 		"start_stress": _start_stress,
+		"default_laps": _default_laps,
 		"corners": corners_data,
 		"kerbs": kerbs_data,
 		"sector_flip_race_line": flips_data,
@@ -1333,6 +1350,7 @@ func _reset_spline() -> void:
 	_start_space_index = 0
 	_start_heat = DEFAULT_START_HEAT
 	_start_stress = DEFAULT_START_STRESS
+	_default_laps = SplineTrackFile.DEFAULT_LAPS
 	_corners.clear()
 	_kerbs.clear()
 	_decorations.clear()
@@ -1397,6 +1415,7 @@ func _load_from_path(path: String) -> bool:
 	_track_name = str(data.get("name", "")).strip_edges()
 	_start_heat = clampi(int(data.get("start_heat", DEFAULT_START_HEAT)), 0, MAX_START_HEAT)
 	_start_stress = clampi(int(data.get("start_stress", DEFAULT_START_STRESS)), 0, MAX_START_STRESS)
+	_default_laps = SplineTrackFile.default_laps_from_document(data)
 	_ground_theme = TrackGround.from_document(data)
 	_sync_track_name_field()
 	_sync_start_fields()

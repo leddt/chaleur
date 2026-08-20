@@ -7,6 +7,9 @@ extends RefCounted
 const VERSION := 1
 const USER_DIR := "user://tracks"
 const BUILTIN_DIR := "res://tracks"
+const DEFAULT_LAPS := 2
+const MIN_LAPS := 1
+const MAX_LAPS := 6
 
 ## Path to open in the spline editor next scene change. Empty = new track.
 static var editor_pending_path: String = ""
@@ -99,6 +102,14 @@ static func load_document(path: String) -> Dictionary:
 	return {}
 
 
+static func default_laps_from_document(data: Dictionary) -> int:
+	return clampi(int(data.get("default_laps", DEFAULT_LAPS)), MIN_LAPS, MAX_LAPS)
+
+
+static func default_laps_for_path(path: String) -> int:
+	return default_laps_from_document(load_document(path))
+
+
 static func delete_document(path: String) -> Error:
 	if path.is_empty() or not FileAccess.file_exists(path):
 		return OK
@@ -165,6 +176,7 @@ static func _collect_dir_entries(dir_path: String, builtin: bool, out: Array) ->
 				"name": display_name,
 				"modified": int(FileAccess.get_modified_time(path)),
 				"builtin": builtin,
+				"default_laps": default_laps_from_document(data),
 			})
 		file_name = dir.get_next()
 	dir.list_dir_end()

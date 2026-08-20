@@ -350,12 +350,21 @@ func _refresh_share_row() -> void:
 		_share_code.text = Net.share_code()
 
 
+func _apply_track_default_laps(track_id: String) -> void:
+	_laps_spin.value = clampf(
+		float(SplineTrackFile.default_laps_for_path(track_id)),
+		_laps_spin.min_value,
+		_laps_spin.max_value,
+	)
+
+
 func _on_track_selected(_index: int) -> void:
 	if _syncing_race_ui:
 		return
 	if Game.mode != Game.Mode.HOST:
 		_refresh_race_display()
 		return
+	_apply_track_default_laps(_selected_track_id())
 	_refresh_track_preview()
 	_save_settings()
 	_publish_race_settings()

@@ -19,6 +19,8 @@ const DISC_SHADER := preload("res://shaders/dot_disc.gdshader")
 const CROWD_NODE := "_CrowdDots"
 const FOLIAGE_NODE := "_FoliageDots"
 const TRUNK_NODE := "_TrunkDots"
+## Au-dessus des meshes de décor (4–6) pour cadres et poignées de sélection.
+const DECOR_SELECTION_Z := 7
 
 const _TYPE_ORDER: Array[String] = [TYPE_TREE, TYPE_ROCK, TYPE_BLEACHERS]
 

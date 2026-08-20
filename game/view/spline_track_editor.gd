@@ -2127,12 +2127,40 @@ func _draw_track(baked: PackedVector2Array, font: Font, xform: Transform2D) -> v
 		_draw_target = c
 		TrackDecor.draw(c, _decorations, zoom_xform, _vegetation_a, _vegetation_b)
 		_draw_decor_ghost(zoom_xform)
-		_draw_decor_selection(zoom_xform)
 		if _edit_mode == EditMode.TRACE:
 			_draw_control_points(font, zoom_xform)
 		_draw_target = null
 	SplineTrackPainter.draw(_canvas, baked, ctx, opts, xform, after_asphalt, after_road)
+	_paint_decor_selection_layer(zoom_xform)
 	_sync_preview_cars()
+
+
+func _decor_selection_layer() -> SplineTrackPainter.PaintLayer:
+	var root := _canvas.get_node_or_null("_PaintRoot") as Node2D
+	if root == null:
+		return null
+	var layer := root.get_node_or_null("_PaintDecorSelection") as SplineTrackPainter.PaintLayer
+	if layer == null:
+		layer = SplineTrackPainter.PaintLayer.new()
+		layer.name = "_PaintDecorSelection"
+		layer.z_as_relative = true
+		layer.z_index = TrackDecor.DECOR_SELECTION_Z
+		root.add_child(layer)
+	return layer
+
+
+func _paint_decor_selection_layer(xform: Transform2D) -> void:
+	var layer := _decor_selection_layer()
+	if layer == null:
+		return
+	if _edit_mode != EditMode.DECOR:
+		layer.clear_paint()
+		return
+	layer.set_paint(func() -> void:
+		_draw_target = layer
+		_draw_decor_selection(xform)
+		_draw_target = null
+	)
 
 
 func _draw_decor_ghost(xform: Transform2D) -> void:

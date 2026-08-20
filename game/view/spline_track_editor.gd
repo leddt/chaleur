@@ -8,6 +8,7 @@ enum EditMode {
 	SECTORS, ## Select stretches between corners (may wrap past start).
 	DECOR, ## Track backdrop and scenery.
 	COLORS, ## Track colors (placeholder).
+	SETTINGS, ## Track name and starting heat/stress.
 }
 
 const CAR_SCENE := preload("res://view/car.tscn")
@@ -37,10 +38,17 @@ const MIN_VIEW_ZOOM := 0.25
 const MAX_VIEW_ZOOM := 4.0
 const VIEW_ZOOM_STEP := 1.12
 const FIT_MARGIN := 48.0
+const DEFAULT_START_HEAT := 6
+const DEFAULT_START_STRESS := 3
+const MAX_START_HEAT := 12
+const MAX_START_STRESS := 12
 
 @onready var _canvas: Control = %Canvas
 @onready var _summary: Label = %SidePanel/%SummaryLabel
 @onready var _track_name_edit: LineEdit = %SidePanel/%TrackNameEdit
+@onready var _start_heat_spin: SpinBox = %SidePanel/%StartHeatSpin
+@onready var _start_stress_spin: SpinBox = %SidePanel/%StartStressSpin
+@onready var _default_laps_spin: SpinBox = %SidePanel/%DefaultLapsSpin
 @onready var _ground_theme_option: OptionButton = %SidePanel/%GroundThemeOption
 @onready var _decor_select: Button = %SidePanel/%DecorSelect
 @onready var _decor_tree: Button = %SidePanel/%DecorTree
@@ -52,11 +60,13 @@ const FIT_MARGIN := 48.0
 @onready var _mode_sectors: Button = %SidePanel/%ModeSectors
 @onready var _mode_decor: Button = %SidePanel/%ModeDecor
 @onready var _mode_colors: Button = %SidePanel/%ModeColors
+@onready var _mode_settings: Button = %SidePanel/%ModeSettings
 @onready var _trace_section: Control = %SidePanel/%TraceSection
 @onready var _spaces_section: Control = %SidePanel/%SpacesSection
 @onready var _sectors_section: Control = %SidePanel/%SectorsSection
 @onready var _decor_section: Control = %SidePanel/%DecorSection
 @onready var _colors_section: Control = %SidePanel/%ColorsSection
+@onready var _settings_section: Control = %SidePanel/%SettingsSection
 @onready var _asphalt_color_picker: ColorPickerButton = %SidePanel/%AsphaltColorPicker
 @onready var _asphalt_light_picker: ColorPickerButton = %SidePanel/%AsphaltLightPicker
 @onready var _asphalt_dark_picker: ColorPickerButton = %SidePanel/%AsphaltDarkPicker
@@ -97,6 +107,9 @@ const FIT_MARGIN := 48.0
 
 var _spline: TrackSpline
 var _track_name: String = ""
+var _start_heat: int = DEFAULT_START_HEAT
+var _start_stress: int = DEFAULT_START_STRESS
+var _default_laps: int = SplineTrackFile.DEFAULT_LAPS
 ## Temporary draw target for paint layers (decor / handles).
 var _draw_target: CanvasItem
 var _ground_theme: String = TrackGround.DEFAULT_THEME
@@ -248,6 +261,7 @@ func _apply_kit_chrome() -> void:
 	_mode_sectors.theme_type_variation = &"Compact"
 	_mode_decor.theme_type_variation = &"Compact"
 	_mode_colors.theme_type_variation = &"Compact"
+	_mode_settings.theme_type_variation = &"Compact"
 	_style_decor_palette_button(_decor_select)
 	_style_decor_palette_button(_decor_tree)
 	_style_decor_palette_button(_decor_rock)
@@ -260,7 +274,7 @@ func _apply_kit_chrome() -> void:
 	if side != null:
 		side.theme_type_variation = &"Instrument"
 	for path in [
-		"Margin/PanelVBox/NameSection/NameTitle",
+		"Margin/PanelVBox/SettingsSection/NameTitle",
 		"Margin/PanelVBox/DecorSection/GroundTitle",
 		"Margin/PanelVBox/DecorSection/DecorItemsTitle",
 		"Margin/PanelVBox/PrioSection/PrioTitle",
@@ -303,7 +317,23 @@ func _setup_name_ui() -> void:
 		_ground_theme_option.add_item(TrackGround.display_name(theme_id))
 		_ground_theme_option.set_item_metadata(_ground_theme_option.item_count - 1, theme_id)
 	_ground_theme_option.item_selected.connect(_on_ground_theme_selected)
+	_start_heat_spin.min_value = 0.0
+	_start_heat_spin.max_value = float(MAX_START_HEAT)
+	_start_heat_spin.step = 1.0
+	_start_heat_spin.rounded = true
+	_start_stress_spin.min_value = 0.0
+	_start_stress_spin.max_value = float(MAX_START_STRESS)
+	_start_stress_spin.step = 1.0
+	_start_stress_spin.rounded = true
+	_default_laps_spin.min_value = float(SplineTrackFile.MIN_LAPS)
+	_default_laps_spin.max_value = float(SplineTrackFile.MAX_LAPS)
+	_default_laps_spin.step = 1.0
+	_default_laps_spin.rounded = true
+	_start_heat_spin.value_changed.connect(_on_start_heat_changed)
+	_start_stress_spin.value_changed.connect(_on_start_stress_changed)
+	_default_laps_spin.value_changed.connect(_on_default_laps_changed)
 	_sync_track_name_field()
+	_sync_start_fields()
 	_sync_ground_theme_field()
 	_sync_builtin_check()
 
@@ -314,6 +344,30 @@ func _on_track_name_changed(value: String) -> void:
 	_track_name = value.strip_edges()
 	_dirty = true
 	_refresh_window_title()
+
+
+func _on_start_heat_changed(value: float) -> void:
+	var heat := clampi(int(value), 0, MAX_START_HEAT)
+	if heat == _start_heat:
+		return
+	_start_heat = heat
+	_dirty = true
+
+
+func _on_start_stress_changed(value: float) -> void:
+	var stress := clampi(int(value), 0, MAX_START_STRESS)
+	if stress == _start_stress:
+		return
+	_start_stress = stress
+	_dirty = true
+
+
+func _on_default_laps_changed(value: float) -> void:
+	var laps := clampi(int(value), SplineTrackFile.MIN_LAPS, SplineTrackFile.MAX_LAPS)
+	if laps == _default_laps:
+		return
+	_default_laps = laps
+	_dirty = true
 
 
 func _on_ground_theme_selected(index: int) -> void:
@@ -347,6 +401,12 @@ func _sync_track_name_field() -> void:
 	_updating_name_ui = true
 	_track_name_edit.text = _track_name
 	_updating_name_ui = false
+
+
+func _sync_start_fields() -> void:
+	_start_heat_spin.set_value_no_signal(float(_start_heat))
+	_start_stress_spin.set_value_no_signal(float(_start_stress))
+	_default_laps_spin.set_value_no_signal(float(_default_laps))
 
 
 func _sync_ground_theme_field() -> void:
@@ -539,6 +599,7 @@ func _setup_mode_ui() -> void:
 	_mode_sectors.toggled.connect(_on_mode_sectors_toggled)
 	_mode_decor.toggled.connect(_on_mode_decor_toggled)
 	_mode_colors.toggled.connect(_on_mode_colors_toggled)
+	_mode_settings.toggled.connect(_on_mode_settings_toggled)
 	_sync_mode_buttons()
 
 
@@ -572,6 +633,12 @@ func _on_mode_colors_toggled(pressed: bool) -> void:
 	_set_edit_mode(EditMode.COLORS)
 
 
+func _on_mode_settings_toggled(pressed: bool) -> void:
+	if _updating_mode_ui or not pressed:
+		return
+	_set_edit_mode(EditMode.SETTINGS)
+
+
 func _sync_mode_buttons() -> void:
 	_updating_mode_ui = true
 	_mode_trace.button_pressed = _edit_mode == EditMode.TRACE
@@ -579,6 +646,7 @@ func _sync_mode_buttons() -> void:
 	_mode_sectors.button_pressed = _edit_mode == EditMode.SECTORS
 	_mode_decor.button_pressed = _edit_mode == EditMode.DECOR
 	_mode_colors.button_pressed = _edit_mode == EditMode.COLORS
+	_mode_settings.button_pressed = _edit_mode == EditMode.SETTINGS
 	_updating_mode_ui = false
 
 
@@ -838,6 +906,7 @@ func _apply_edit_mode() -> void:
 	_sectors_section.visible = _edit_mode == EditMode.SECTORS
 	_decor_section.visible = _edit_mode == EditMode.DECOR
 	_colors_section.visible = _edit_mode == EditMode.COLORS
+	_settings_section.visible = _edit_mode == EditMode.SETTINGS
 	_refresh_set_start_button()
 	_refresh_corner_ui()
 	_refresh_kerb_ui()
@@ -1260,6 +1329,9 @@ func _build_save_document() -> Dictionary:
 			"forced_space_count": int(_seg_params.forced_space_count),
 		},
 		"start_space": _start_space_index,
+		"start_heat": _start_heat,
+		"start_stress": _start_stress,
+		"default_laps": _default_laps,
 		"corners": corners_data,
 		"kerbs": kerbs_data,
 		"sector_flip_race_line": flips_data,
@@ -1276,6 +1348,9 @@ func _reset_spline() -> void:
 	_selected = 0
 	_selected_space = -1
 	_start_space_index = 0
+	_start_heat = DEFAULT_START_HEAT
+	_start_stress = DEFAULT_START_STRESS
+	_default_laps = SplineTrackFile.DEFAULT_LAPS
 	_corners.clear()
 	_kerbs.clear()
 	_decorations.clear()
@@ -1303,6 +1378,7 @@ func _reset_spline() -> void:
 	_file_path = ""
 	_seg_params.forced_space_count = 0
 	_sync_track_name_field()
+	_sync_start_fields()
 	_sync_ground_theme_field()
 	_sync_asphalt_color_fields()
 	_sync_builtin_check()
@@ -1337,8 +1413,12 @@ func _load_from_path(path: String) -> bool:
 	_spline = spline
 	_file_path = path
 	_track_name = str(data.get("name", "")).strip_edges()
+	_start_heat = clampi(int(data.get("start_heat", DEFAULT_START_HEAT)), 0, MAX_START_HEAT)
+	_start_stress = clampi(int(data.get("start_stress", DEFAULT_START_STRESS)), 0, MAX_START_STRESS)
+	_default_laps = SplineTrackFile.default_laps_from_document(data)
 	_ground_theme = TrackGround.from_document(data)
 	_sync_track_name_field()
+	_sync_start_fields()
 	_sync_ground_theme_field()
 	var colors := TrackColors.from_document(data)
 	var asphalt: Dictionary = colors.asphalt
@@ -1786,7 +1866,7 @@ func _refresh_info() -> void:
 	if _edit_mode == EditMode.DECOR:
 		_refresh_summary()
 		return
-	if _edit_mode == EditMode.COLORS:
+	if _edit_mode == EditMode.COLORS or _edit_mode == EditMode.SETTINGS:
 		_refresh_summary()
 		return
 	if _spline == null or _spline.point_count() == 0:
@@ -1992,7 +2072,8 @@ func _sync_preview_cars() -> void:
 				var sector: Dictionary = sectors[_selected_sector]
 				var count := _sector_space_count(sector)
 				var n := _seg_result.space_count()
-				space = posmod(int(sector.from) + int(count / 2), n)
+				@warning_ignore("integer_division")
+				space = posmod(int(sector.from) + count / 2, n)
 	var show := space >= 0
 	_cars_layer.visible = show
 	if not show:
@@ -2047,12 +2128,40 @@ func _draw_track(baked: PackedVector2Array, font: Font, xform: Transform2D) -> v
 		_draw_target = c
 		TrackDecor.draw(c, _decorations, zoom_xform, _vegetation_a, _vegetation_b)
 		_draw_decor_ghost(zoom_xform)
-		_draw_decor_selection(zoom_xform)
 		if _edit_mode == EditMode.TRACE:
 			_draw_control_points(font, zoom_xform)
 		_draw_target = null
 	SplineTrackPainter.draw(_canvas, baked, ctx, opts, xform, after_asphalt, after_road)
+	_paint_decor_selection_layer(zoom_xform)
 	_sync_preview_cars()
+
+
+func _decor_selection_layer() -> SplineTrackPainter.PaintLayer:
+	var root := _canvas.get_node_or_null("_PaintRoot") as Node2D
+	if root == null:
+		return null
+	var layer := root.get_node_or_null("_PaintDecorSelection") as SplineTrackPainter.PaintLayer
+	if layer == null:
+		layer = SplineTrackPainter.PaintLayer.new()
+		layer.name = "_PaintDecorSelection"
+		layer.z_as_relative = true
+		layer.z_index = TrackDecor.DECOR_SELECTION_Z
+		root.add_child(layer)
+	return layer
+
+
+func _paint_decor_selection_layer(xform: Transform2D) -> void:
+	var layer := _decor_selection_layer()
+	if layer == null:
+		return
+	if _edit_mode != EditMode.DECOR:
+		layer.clear_paint()
+		return
+	layer.set_paint(func() -> void:
+		_draw_target = layer
+		_draw_decor_selection(xform)
+		_draw_target = null
+	)
 
 
 func _draw_decor_ghost(xform: Transform2D) -> void:
@@ -2306,7 +2415,7 @@ func _on_canvas_gui_input(event: InputEvent) -> void:
 	if _edit_mode == EditMode.DECOR:
 		_on_decor_gui_input(event)
 		return
-	if _edit_mode == EditMode.COLORS:
+	if _edit_mode == EditMode.COLORS or _edit_mode == EditMode.SETTINGS:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton

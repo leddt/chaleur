@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="CardDefinition" format=3]
+
+[ext_resource type="Script" uid="uid://ws8nb5bj284y" path="res://data/card_definition.gd" id="1"]
+[ext_resource type="Script" uid="uid://csymheat01abc" path="res://data/card_symbol.gd" id="2"]
+
+[sub_resource type="Resource" id="sym_0"]
+script = ExtResource("2")
+kind = 10
+count = 2
+
+[sub_resource type="Resource" id="sym_1"]
+script = ExtResource("2")
+kind = 2
+count = 2
+
+[resource]
+script = ExtResource("1")
+id = "upg_41_tyres"
+kind = 3
+speed_value = 0
+contributes_speed = false
+discardable = true
+title = "PNEUS"
+speed_options = PackedInt32Array()
+symbols = Array[CardSymbol]([SubResource("sym_0"), SubResource("sym_1")])

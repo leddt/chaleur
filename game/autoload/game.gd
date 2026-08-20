@@ -23,6 +23,7 @@ func start_local_race(
 	laps: int = 1,
 	race_seed: int = 0,
 	track_id: String = "",
+	options: RaceOptions = null,
 ) -> bool:
 	mode = Mode.LOCAL
 	if player_names.is_empty():
@@ -36,10 +37,19 @@ func start_local_race(
 		push_error("Game.start_local_race: no playable spline track")
 		return false
 	engine = HeatGameEngine.new()
-	var seed := race_seed if race_seed != 0 else int(Time.get_unix_time_from_system())
-	engine.setup(player_names, track, seed)
+	var rng_seed := race_seed if race_seed != 0 else int(Time.get_unix_time_from_system())
+	engine.setup(player_names, track, rng_seed, options)
 	local_player_id = 0
 	return true
+
+
+func race_scene_path() -> String:
+	if engine != null and (
+		engine.phase == HeatGameEngine.Phase.GARAGE_DRAFT
+		or engine.phase == HeatGameEngine.Phase.GARAGE_SUMMARY
+	):
+		return "res://ui/garage_draft.tscn"
+	return "res://view/board.tscn"
 
 
 func clear_race() -> void:

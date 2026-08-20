@@ -21,6 +21,7 @@ UiTheme="*res://autoload/ui_theme.gd"
 Game="*res://autoload/game.gd"
 Net="*res://net/net.gd"
 Sfx="*res://autoload/sfx.gd"
+TooltipFollow="*res://autoload/tooltip_follow.gd"
 Noray="*res://addons/netfox.noray/noray.gd"
 PacketHandshake="*res://addons/netfox.noray/packet-handshake.gd"
 
@@ -34,6 +35,11 @@ window/stretch/aspect="expand"
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gut/plugin.cfg")
+
+[gui]
+
+timers/tooltip_delay_sec=0.0
+timers/tooltip_delay_sec.editor=0.5
 
 [physics]
 

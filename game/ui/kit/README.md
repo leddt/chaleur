@@ -63,13 +63,10 @@ jeu de table.
 
 ## Symboles
 
-`card.gd` dessine `flame`, `chevron` et `gear` à la main. Pour le reste, va
-chercher sur **game-icons.net** : 4000+ SVG en noir et blanc sous licence CC-BY,
-faits exactement pour ce genre de jeu. Godot 4 importe le SVG directement ; tu
-les recolories avec `modulate` plutôt que de rééditer le fichier.
+Les symboles de cartes utilisent les icônes **Phosphor** (MIT) dans `ui/kit/icons/`.
+Couleurs et chemins : `card_symbol_visual.gd`. Tooltips : `card_symbol.gd`.
 
-Attribution CC-BY : garde un écran de crédits avec le nom de l'auteur de chaque
-icône utilisée.
+Attribution : [Phosphor Icons](https://phosphoricons.com/) — MIT License.
 
 ## Prochaines briques, si ça te tente
 

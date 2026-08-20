@@ -1,0 +1,110 @@
+[gd_resource type="Resource" script_class="GarageDeckManifest" load_steps=37 format=3]
+
+[ext_resource type="Script" uid="uid://cgarman01abcd" path="res://data/garage_deck_manifest.gd" id="1"]
+[ext_resource type="Script" uid="uid://cgarentry01abc" path="res://data/garage_deck_entry.gd" id="2"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_01_4wd.tres" id="c1"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_02_4wd.tres" id="c2"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_03_4wd.tres" id="c3"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_04_bodywork.tres" id="c4"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_05_bodywork.tres" id="c5"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_06_bodywork.tres" id="c6"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_07_brakes.tres" id="c7"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_08_brakes.tres" id="c8"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_09_brakes.tres" id="c9"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_10_brakes.tres" id="c10"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_11_cooling.tres" id="c11"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_12_cooling.tres" id="c12"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_13_cooling.tres" id="c13"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_14_rpm.tres" id="c14"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_15_rpm.tres" id="c15"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_16_rpm.tres" id="c16"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_17_heat.tres" id="c17"]
+
+[sub_resource type="Resource" id="e1"]
+script = ExtResource("2")
+card = ExtResource("c1")
+count = 2
+
+[sub_resource type="Resource" id="e2"]
+script = ExtResource("2")
+card = ExtResource("c2")
+count = 2
+
+[sub_resource type="Resource" id="e3"]
+script = ExtResource("2")
+card = ExtResource("c3")
+count = 2
+
+[sub_resource type="Resource" id="e4"]
+script = ExtResource("2")
+card = ExtResource("c4")
+count = 2
+
+[sub_resource type="Resource" id="e5"]
+script = ExtResource("2")
+card = ExtResource("c5")
+count = 2
+
+[sub_resource type="Resource" id="e6"]
+script = ExtResource("2")
+card = ExtResource("c6")
+count = 2
+
+[sub_resource type="Resource" id="e7"]
+script = ExtResource("2")
+card = ExtResource("c7")
+count = 2
+
+[sub_resource type="Resource" id="e8"]
+script = ExtResource("2")
+card = ExtResource("c8")
+count = 2
+
+[sub_resource type="Resource" id="e9"]
+script = ExtResource("2")
+card = ExtResource("c9")
+count = 2
+
+[sub_resource type="Resource" id="e10"]
+script = ExtResource("2")
+card = ExtResource("c10")
+count = 2
+
+[sub_resource type="Resource" id="e11"]
+script = ExtResource("2")
+card = ExtResource("c11")
+count = 2
+
+[sub_resource type="Resource" id="e12"]
+script = ExtResource("2")
+card = ExtResource("c12")
+count = 2
+
+[sub_resource type="Resource" id="e13"]
+script = ExtResource("2")
+card = ExtResource("c13")
+count = 2
+
+[sub_resource type="Resource" id="e14"]
+script = ExtResource("2")
+card = ExtResource("c14")
+count = 2
+
+[sub_resource type="Resource" id="e15"]
+script = ExtResource("2")
+card = ExtResource("c15")
+count = 2
+
+[sub_resource type="Resource" id="e16"]
+script = ExtResource("2")
+card = ExtResource("c16")
+count = 2
+
+[sub_resource type="Resource" id="e17"]
+script = ExtResource("2")
+card = ExtResource("c17")
+count = 2
+
+[resource]
+script = ExtResource("1")
+entries = Array[GarageDeckEntry]([SubResource("e1"), SubResource("e2"), SubResource("e3"), SubResource("e4"), SubResource("e5"), SubResource("e6"), SubResource("e7"), SubResource("e8"), SubResource("e9"), SubResource("e10"), SubResource("e11"), SubResource("e12"), SubResource("e13"), SubResource("e14"), SubResource("e15"), SubResource("e16"), SubResource("e17")])

@@ -64,6 +64,10 @@ func _draw() -> void:
 		])
 		# On coupe la bande au rectangle plutot que de laisser deborder.
 		for piece in Geometry2D.intersect_polygons(quad, bounds):
+			if piece.size() < 3:
+				continue
+			if Geometry2D.triangulate_polygon(piece).is_empty():
+				continue
 			draw_colored_polygon(piece, color_a if i % 2 == 0 else color_b)
 		x += stripe_width
 		i += 1

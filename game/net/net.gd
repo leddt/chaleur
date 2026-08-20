@@ -3,6 +3,7 @@ extends Node
 const DEFAULT_PORT := 7777
 const DEFAULT_NORAY_PORT := 8890
 const MAX_CLIENTS := 6
+const JOIN_CONNECT_TIMEOUT := 30.0
 
 signal host_started(port: int)
 signal join_started(address: String, port: int)
@@ -21,6 +22,7 @@ var race_track_id: String = ""
 var race_laps: int = 1
 ## Host-selected spline document; broadcast to clients for preview + race start.
 var race_track_document: Dictionary = {}
+var race_options: RaceOptions = RaceOptions.new()
 
 var _port: int = DEFAULT_PORT
 var upnp_status: String = ""
@@ -63,6 +65,37 @@ func is_server() -> bool:
 
 func has_peer() -> bool:
 	return multiplayer.multiplayer_peer != null
+
+
+func _is_client_connected() -> bool:
+	if not has_peer() or is_server():
+		return false
+	return (
+		multiplayer.multiplayer_peer.get_connection_status()
+		== MultiplayerPeer.CONNECTION_CONNECTED
+	)
+
+
+func _peer_address_valid(address: String, port: int) -> bool:
+	address = address.strip_edges()
+	if address.is_empty() or port <= 0 or port > 65535:
+		return false
+	if address.is_valid_ip_address():
+		return true
+	# Hostnames are resolved by UDP; reject obvious garbage only.
+	return address.find(" ") < 0 and address.find("/") < 0
+
+
+func _await_client_connection(timeout_sec: float, session: int) -> Error:
+	var wait := timeout_sec
+	while wait > 0.0 and _session_alive(session) and not _is_client_connected():
+		await get_tree().process_frame
+		wait -= get_process_delta_time()
+	if not _session_alive(session):
+		return ERR_BUSY
+	if not _is_client_connected():
+		return ERR_TIMEOUT
+	return OK
 
 
 func my_peer_id() -> int:
@@ -109,18 +142,19 @@ static func parse_share_code(code: String) -> Dictionary:
 	var idx := text.rfind(":")
 	if idx <= 0 or idx >= text.length() - 1:
 		return {}
-	var host := text.substr(0, idx).strip_edges()
+	var relay_host := text.substr(0, idx).strip_edges()
 	var oid := text.substr(idx + 1).strip_edges()
-	if host.is_empty() or oid.is_empty():
+	if relay_host.is_empty() or oid.is_empty():
 		return {}
-	return {"host": host, "oid": oid}
+	return {"host": relay_host, "oid": oid}
 
 
 ## Host-facing share text (Game ID online, or IP:port for LAN direct).
 func host_share_text() -> String:
+	var lines: PackedStringArray = []
 	if using_noray:
 		var code := share_code()
-		var lines: PackedStringArray = [
+		lines = [
 			"Hôte en ligne",
 			"Game ID: %s" % (code if not code.is_empty() else "…"),
 		]
@@ -128,7 +162,7 @@ func host_share_text() -> String:
 			lines.append(connection_status)
 		return "\n".join(lines)
 
-	var lines: PackedStringArray = ["Hôte — port UDP %d" % _port]
+	lines = ["Hôte — port UDP %d" % _port]
 	var ext := external_ip()
 	if not ext.is_empty():
 		lines.append("Internet: %s:%d" % [ext, _port])
@@ -243,7 +277,6 @@ func join_noray(server: String, oid: String, server_port: int = DEFAULT_NORAY_PO
 	_ensure_noray_signals()
 	Game.set_mode(Game.Mode.CLIENT)
 	lobby.clear()
-	join_started.emit(game_id, _port)
 
 	err = Noray.connect_nat(_noray_join_oid)
 	if err != OK:
@@ -261,21 +294,18 @@ func join_noray(server: String, oid: String, server_port: int = DEFAULT_NORAY_PO
 		lobby_changed.emit()
 		Noray.connect_relay(_noray_join_oid)
 
-	# Wait until ENet connects or timeout
-	var wait := 12.0
-	while wait > 0.0 and _session_alive(session) and _noray_client_connecting and not has_peer():
-		await get_tree().process_frame
-		wait -= get_process_delta_time()
-
+	# Wait until ENet connects or timeout.
+	var conn_err := await _await_client_connection(JOIN_CONNECT_TIMEOUT, session)
 	if not _session_alive(session):
 		return ERR_BUSY
-	if not has_peer():
+	if conn_err != OK:
 		net_error.emit("Connexion échouée — Game ID invalide ou serveur injoignable")
 		leave()
 		return ERR_TIMEOUT
 
 	connection_status = "Connecté"
 	lobby_changed.emit()
+	join_started.emit(game_id, _port)
 	return OK
 
 
@@ -320,6 +350,33 @@ func join(address: String, port: int = DEFAULT_PORT) -> Error:
 	upnp_external_ip = ""
 	public_ip = ""
 	lan_ips.clear()
+	return OK
+
+
+## LAN join: wait until ENet connects or timeout before signaling the lobby UI.
+func join_and_wait(
+	address: String,
+	port: int = DEFAULT_PORT,
+	timeout_sec: float = JOIN_CONNECT_TIMEOUT,
+) -> Error:
+	var session := _session
+	var err := join(address, port)
+	if err != OK:
+		return err
+	connection_status = "Connexion à %s:%d…" % [address, port]
+	lobby_changed.emit()
+	err = await _await_client_connection(timeout_sec, session)
+	if not _session_alive(session):
+		return ERR_BUSY
+	if err != OK:
+		net_error.emit(
+			"Connexion échouée — vérifie l'IP, le port UDP %d, le firewall et que l'hôte est lancé"
+			% port
+		)
+		leave()
+		return err
+	connection_status = "Connecté"
+	lobby_changed.emit()
 	join_started.emit(address, port)
 	return OK
 
@@ -439,6 +496,8 @@ func _noray_host_handshake(address: String, port: int) -> void:
 func _noray_client_handshake(address: String, port: int, via_relay: bool, session: int) -> void:
 	if not _session_alive(session) or has_peer() or not _noray_client_connecting:
 		return
+	if not _peer_address_valid(address, port):
+		return
 
 	var udp := PacketPeerUDP.new()
 	var bind_err := udp.bind(Noray.local_port)
@@ -488,11 +547,13 @@ func set_ready(is_ready: bool) -> void:
 		rpc_set_ready.rpc_id(1, is_ready)
 
 
-func set_race_settings(track_id: String, laps: int) -> void:
+func set_race_settings(track_id: String, laps: int, options: RaceOptions = null) -> void:
 	if not is_server():
 		return
 	race_track_id = track_id
 	race_laps = maxi(1, laps)
+	if options != null:
+		race_options = options.duplicate_options()
 	race_track_document = {}
 	if not track_id.is_empty():
 		race_track_document = SplineTrackFile.load_document(track_id)
@@ -526,10 +587,10 @@ func start_race(laps: int = 1, track_id: String = "") -> void:
 	var names: Array[String] = []
 	for peer_id in _peers_by_seat():
 		names.append(str(lobby[peer_id]["name"]))
-	var seed := int(Time.get_unix_time_from_system())
+	var rng_seed := int(Time.get_unix_time_from_system())
 	race_laps = maxi(1, laps)
 	Game.engine = HeatGameEngine.new()
-	Game.engine.setup(names, track, seed)
+	Game.engine.setup(names, track, rng_seed, race_options.duplicate_options())
 	Game.local_player_id = my_seat()
 	_broadcast_lobby()
 	for peer_id in lobby:
@@ -539,6 +600,17 @@ func start_race(laps: int = 1, track_id: String = "") -> void:
 			continue
 		rpc_start_with_snapshot.rpc_id(peer_id, snap)
 	race_started.emit()
+	state_updated.emit()
+
+
+func host_advance_garage_round() -> void:
+	if Game.engine == null or not is_server():
+		return
+	var result := Game.engine.advance_garage_round()
+	if not result.ok:
+		net_error.emit(result.error)
+		return
+	_broadcast_snapshots()
 	state_updated.emit()
 
 
@@ -609,6 +681,7 @@ func rpc_lobby_sync(
 	track_id: String = "",
 	laps: int = 1,
 	track_document: Dictionary = {},
+	options_data: Dictionary = {},
 ) -> void:
 	lobby = lobby_data
 	race_track_id = track_id
@@ -617,6 +690,8 @@ func rpc_lobby_sync(
 		race_track_document = track_document
 	elif not track_id.is_empty() and race_track_document.is_empty():
 		race_track_document = SplineTrackFile.load_document(track_id)
+	if not options_data.is_empty():
+		race_options = RaceOptions.from_dict(options_data)
 	if Game.mode == Game.Mode.CLIENT:
 		Game.local_player_id = my_seat()
 	lobby_changed.emit()
@@ -752,7 +827,13 @@ func _peers_by_seat() -> Array:
 
 
 func _broadcast_lobby() -> void:
-	rpc_lobby_sync.rpc(lobby.duplicate(true), race_track_id, race_laps, race_track_document.duplicate(true))
+	rpc_lobby_sync.rpc(
+		lobby.duplicate(true),
+		race_track_id,
+		race_laps,
+		race_track_document.duplicate(true),
+		race_options.to_dict(),
+	)
 	lobby_changed.emit()
 
 
@@ -779,13 +860,22 @@ func _apply_action(player_id: int, action: String, payload: Dictionary) -> Actio
 			var ids: Array[String] = []
 			for id in payload.get("card_ids", []):
 				ids.append(str(id))
-			return Game.engine.play_cards(player_id, ids)
+			var choices: Dictionary = payload.get("speed_choices", {})
+			return Game.engine.play_cards(player_id, ids, choices)
 		"boost":
 			return Game.engine.use_boost(player_id)
 		"adrenaline":
 			return Game.engine.use_adrenaline(player_id)
 		"cooldown":
 			return Game.engine.use_cooldown(player_id)
+		"pay_heat_debt":
+			return Game.engine.pay_heat_debt(player_id, str(payload.get("uid", "")))
+		"settle_heat":
+			return Game.engine.finish_settle_heat(player_id)
+		"choose_speed":
+			return Game.engine.choose_speed(
+				player_id, str(payload.get("card_id", "")), int(payload.get("speed", 0))
+			)
 		"react":
 			return Game.engine.finish_react(player_id)
 		"slipstream":
@@ -795,6 +885,18 @@ func _apply_action(player_id: int, action: String, payload: Dictionary) -> Actio
 			for id in payload.get("card_ids", []):
 				dids.append(str(id))
 			return Game.engine.discard_cards(player_id, dids)
+		"pick_garage":
+			return Game.engine.pick_garage_card(player_id, str(payload.get("card_id", "")))
+		"ready_garage":
+			return Game.engine.ready_garage(player_id)
+		"upgrade_symbol":
+			return Game.engine.use_upgrade_symbol(
+				player_id, str(payload.get("uid", "")), payload
+			)
+		"direct_play":
+			return Game.engine.use_direct_play(
+				player_id, str(payload.get("card_id", "")), int(payload.get("speed_choice", -1))
+			)
 		_:
 			return ActionResult.fail("Unknown action")
 

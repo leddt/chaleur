@@ -26,6 +26,13 @@ func test_slugify_empty_fallback() -> void:
 	assert_true(slug.begins_with("trace_"), slug)
 
 
+func test_default_laps_from_document() -> void:
+	assert_eq(SplineTrackFile.default_laps_from_document({}), SplineTrackFile.DEFAULT_LAPS)
+	assert_eq(SplineTrackFile.default_laps_from_document({"default_laps": 3}), 3)
+	assert_eq(SplineTrackFile.default_laps_from_document({"default_laps": 0}), SplineTrackFile.MIN_LAPS)
+	assert_eq(SplineTrackFile.default_laps_from_document({"default_laps": 99}), SplineTrackFile.MAX_LAPS)
+
+
 func test_save_and_load_roundtrip() -> void:
 	var path := _temp_path("_test_spline_save.json")
 	var data := {
@@ -35,6 +42,9 @@ func test_save_and_load_roundtrip() -> void:
 		"spline": TrackSpline.make_default_triangle().to_dict(),
 		"segmentation": {"algorithm": 1, "car_length": 36.0, "target_space_len": 36.0},
 		"start_space": 2,
+		"start_heat": 4,
+		"start_stress": 1,
+		"default_laps": 2,
 		"corners": [{"space": 4, "speed_limit": 3, "outside": true, "offset": [1.0, 2.0]}],
 		"kerbs": [{"space": 4, "inside": true, "outside": false}],
 		"sector_flip_race_line": [{"key": 4}],
@@ -43,6 +53,9 @@ func test_save_and_load_roundtrip() -> void:
 	var loaded := SplineTrackFile.load_document(path)
 	assert_eq(str(loaded.get("name", "")), "Test")
 	assert_eq(int(loaded.get("start_space", -1)), 2)
+	assert_eq(int(loaded.get("start_heat", -1)), 4)
+	assert_eq(int(loaded.get("start_stress", -1)), 1)
+	assert_eq(int(loaded.get("default_laps", -1)), 2)
 	assert_eq(str(loaded.get("ground_theme", "")), "sand")
 	var corners: Array = loaded.get("corners", [])
 	assert_eq(corners.size(), 1)

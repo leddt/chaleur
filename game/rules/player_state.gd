@@ -28,7 +28,19 @@ var has_adrenaline: bool = false
 var boost_used: bool = false
 var adrenaline_speed_used: bool = false
 var cooldown_used: int = 0
+var cooldown_bonus: int = 0
 var turn_complete: bool = false
+var speed_limit_adjust: int = 0
+var slipstream_bonus: int = 0
+var plus_symbols_used: int = 0
+## Cards whose mandatory Plus has already been flipped (idempotent).
+var plus_resolved_card_ids: Array[String] = []
+var refresh_card_ids: Array[String] = []
+var accelerate_used: bool = false
+var pending_symbols: Array[Dictionary] = []
+## Mandatory Heat still owed for cards in play ({card_id, count, uid}).
+var pending_heat_debts: Array[Dictionary] = []
+var garage_upgrades: CardPile = CardPile.new()
 
 
 func reset_round_flags() -> void:
@@ -42,7 +54,16 @@ func reset_round_flags() -> void:
 	boost_used = false
 	adrenaline_speed_used = false
 	cooldown_used = 0
+	cooldown_bonus = 0
 	turn_complete = false
+	speed_limit_adjust = 0
+	slipstream_bonus = 0
+	plus_symbols_used = 0
+	plus_resolved_card_ids.clear()
+	refresh_card_ids.clear()
+	accelerate_used = false
+	pending_symbols.clear()
+	pending_heat_debts.clear()
 
 
 func engine_heat() -> int:
@@ -58,7 +79,11 @@ func playable_in_hand() -> Array[HeatCard]:
 
 
 func cooldown_from_gear() -> int:
-	match gear:
+	return cooldown_for_gear(gear)
+
+
+static func cooldown_for_gear(gear_value: int) -> int:
+	match gear_value:
 		1:
 			return 3
 		2:
@@ -68,7 +93,7 @@ func cooldown_from_gear() -> int:
 
 
 func max_cooldown() -> int:
-	var n := cooldown_from_gear()
+	var n := cooldown_from_gear() + cooldown_bonus
 	if has_adrenaline:
 		n += 1
 	return n
@@ -90,5 +115,29 @@ func can_use_cooldown() -> bool:
 	return cooldown_remaining() > 0 and hand.count_kind(HeatCard.Kind.HEAT) >= 1
 
 
+func has_pending_heat_debts() -> bool:
+	return not pending_heat_debts.is_empty()
+
+
+func can_pay_any_heat_debt() -> bool:
+	for debt in pending_heat_debts:
+		if engine_heat() >= int(debt.get("count", 0)):
+			return true
+	return false
+
+
 func has_pending_react_options() -> bool:
-	return can_use_boost() or can_use_adrenaline() or can_use_cooldown()
+	if has_unresolved_speeds():
+		return true
+	if has_pending_heat_debts() and can_pay_any_heat_debt():
+		return true
+	if can_use_boost() or can_use_adrenaline() or can_use_cooldown():
+		return true
+	return not pending_symbols.is_empty()
+
+
+func has_unresolved_speeds() -> bool:
+	for card in play_area.cards:
+		if card.needs_speed_choice():
+			return true
+	return false

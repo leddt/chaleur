@@ -16,17 +16,20 @@ enum Kind {
 @export var kind: Kind = Kind.SPEED
 @export var value: int = 1
 @export var title: String = ""
+## When set, overrides big_text() (e.g. upgrade Heat shows "H").
+@export var center_text: String = ""
 @export_multiline var effect: String = ""
-## Symbole optionnel : "flame", "gear", "chevron", "" (aucun)
-@export var symbol: String = ""
+@export var symbol_entries: Array[CardSymbol] = []
+@export var speed_options: PackedInt32Array = PackedInt32Array()
+@export var is_advanced: bool = false
 
 
 func accent() -> Color:
+	if shows_heat_center():
+		return Palette.RACE_RED
+	if kind == Kind.STRESS:
+		return Palette.MUSTARD
 	match kind:
-		Kind.HEAT:
-			return Palette.RACE_RED
-		Kind.STRESS:
-			return Palette.MUSTARD
 		Kind.UPGRADE:
 			return Palette.FUEL_BLUE
 		Kind.SPONSOR:
@@ -36,21 +39,54 @@ func accent() -> Color:
 
 
 func face() -> Color:
-	return Palette.RACE_RED if kind == Kind.HEAT else Palette.CARDBOARD
+	if shows_heat_center():
+		return Palette.RACE_RED
+	if kind == Kind.STRESS:
+		return Palette.MUSTARD
+	return Palette.CARDBOARD
 
 
 func ink() -> Color:
-	return Palette.CARDBOARD if kind == Kind.HEAT else Palette.INK
+	if shows_heat_center():
+		return Palette.CARDBOARD
+	return Palette.INK
+
+
+## Gros pictogramme feu à la place du « H ».
+func shows_heat_center() -> bool:
+	return kind == Kind.HEAT or center_text == "H"
+
+
+## Gros symbole Plus à la place du « ? ».
+func shows_plus_center() -> bool:
+	return kind == Kind.STRESS
+
+
+func tooltip_bbcode() -> String:
+	if kind != Kind.STRESS:
+		return ""
+	return (
+		"[b]Stress[/b]\n"
+		+ "À la révélation, retournez des cartes de la pioche jusqu'à obtenir "
+		+ "une carte Vitesse 1–4. Compte comme un symbole + pour Accélérer."
+	)
 
 
 ## Ce qui s'affiche en gros au centre.
 func big_text() -> String:
+	if not center_text.is_empty():
+		return center_text
 	match kind:
 		Kind.HEAT:
 			return "H"
 		Kind.STRESS:
 			return "?"
 		Kind.SPEED, Kind.UPGRADE:
+			if speed_options.size() > 1:
+				var parts: PackedStringArray = PackedStringArray()
+				for v in speed_options:
+					parts.append(str(v))
+				return "|".join(parts)
 			return str(value)
 		_:
 			return ""
@@ -70,7 +106,6 @@ static func heat() -> CardData:
 	c.value = 0
 	c.title = "CHALEUR"
 	c.effect = "Se defausse en refroidissant."
-	c.symbol = "flame"
 	return c
 
 
@@ -79,7 +114,34 @@ static func upgrade(v: int) -> CardData:
 	c.kind = Kind.UPGRADE
 	c.value = v
 	c.title = "AMÉLIORATION"
-	c.symbol = "gear"
+	return c
+
+
+static func upgrade_from_def(def: CardDefinition, advanced: bool) -> CardData:
+	var c := CardData.new()
+	c.kind = Kind.UPGRADE
+	c.value = def.speed_value
+	c.title = def.title if not def.title.is_empty() else "AMÉLIORATION"
+	c.speed_options = def.resolved_speed_options()
+	c.is_advanced = advanced
+	for s in def.symbols:
+		var copy := CardSymbol.new()
+		copy.kind = s.kind
+		copy.count = s.count
+		c.symbol_entries.append(copy)
+	return c
+
+
+static func upgrade_heat() -> CardData:
+	return upgrade_heat_named("AMÉLIORATION")
+
+
+static func upgrade_heat_named(display_title: String) -> CardData:
+	var c := CardData.new()
+	c.kind = Kind.UPGRADE
+	c.value = 0
+	c.center_text = "H"
+	c.title = display_title if not display_title.is_empty() else "AMÉLIORATION"
 	return c
 
 
@@ -88,5 +150,4 @@ static func stress() -> CardData:
 	c.kind = Kind.STRESS
 	c.value = 0
 	c.title = "STRESS"
-	c.effect = "Revele des cartes jusqu'a une vitesse."
 	return c

@@ -69,9 +69,9 @@ static func _translate(line: String) -> String:
 			m.get_string(1), m.get_string(2), m.get_string(3)
 		]
 
-	m = _re("^(.+) slipstreams \\+2$").search(line)
+	m = _re("^(.+) slipstreams \\+(\\d+)$").search(line)
 	if m:
-		return "%s prend l'aspiration (+2)" % m.get_string(1)
+		return "%s prend l'aspiration (+%s)" % [m.get_string(1), m.get_string(2)]
 
 	m = _re("^(.+) clears corner (.+) \\(speed (\\d+) <= (\\d+)\\)$").search(line)
 	if m:
@@ -110,6 +110,38 @@ static func _translate(line: String) -> String:
 	m = _re("^Race over$").search(line)
 	if m:
 		return "Course terminée"
+
+	m = _re("^Garage draft round (\\d+)$").search(line)
+	if m:
+		return "Draft garage — ronde %s" % m.get_string(1)
+
+	m = _re("^Garage draft complete — review loadouts$").search(line)
+	if m:
+		return "Draft garage terminé — vérifiez les voitures"
+
+	m = _re("^Garage draft complete — shift gears$").search(line)
+	if m:
+		return "Draft garage terminé — changez de rapport"
+
+	m = _re("^(.+) is ready$").search(line)
+	if m:
+		return "%s est prêt" % m.get_string(1)
+
+	m = _re("^(.+) drafts (.+)$").search(line)
+	if m:
+		return "%s choisit %s" % [m.get_string(1), m.get_string(2)]
+
+	m = _re("^(.+) quick-start upgrades$").search(line)
+	if m:
+		return "%s reçoit 3 améliorations (quick start)" % m.get_string(1)
+
+	m = _re("^(.+) Direct Play (.+) \\+(\\d+)$").search(line)
+	if m:
+		return "%s Direct Play %s +%s" % [m.get_string(1), m.get_string(2), m.get_string(3)]
+
+	m = _re("^(.+) accelerate \\+(\\d+)$").search(line)
+	if m:
+		return "%s accélère +%s" % [m.get_string(1), m.get_string(2)]
 
 	return line
 

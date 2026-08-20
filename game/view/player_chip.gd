@@ -124,13 +124,13 @@ class PlaceReel extends PanelContainer:
 		_clip.custom_minimum_size = PLATE_SIZE
 		_clip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_clip.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		_clip.resized.connect(_sync_rest_layout)
 		add_child(_clip)
 		_front = _make_place_label()
 		_back = _make_place_label()
 		_clip.add_child(_front)
 		_clip.add_child(_back)
 		_back.visible = false
+		_clip.resized.connect(_sync_rest_layout)
 		_sync_rest_layout()
 
 	func set_place(place: int, animate: bool) -> void:
@@ -184,6 +184,8 @@ class PlaceReel extends PanelContainer:
 		return sz
 
 	func _rest_pos(label: ShadedLabel) -> Vector2:
+		if label == null:
+			return Vector2.ZERO
 		var plate := _plate_size()
 		var glyph := label.get_glyph_size()
 		if glyph.x < 1.0 or glyph.y < 1.0:
@@ -194,6 +196,8 @@ class PlaceReel extends PanelContainer:
 		)
 
 	func _sync_rest_layout() -> void:
+		if _front == null or _back == null:
+			return
 		if _is_sliding():
 			return
 		_front.position = _rest_pos(_front)

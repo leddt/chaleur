@@ -9,6 +9,7 @@
 [node name="Binnacle" type="PanelContainer"]
 size_flags_horizontal = 0
 size_flags_vertical = 3
+clip_contents = true
 custom_minimum_size = Vector2(220, 0)
 theme_type_variation = &"Binnacle"
 
@@ -32,6 +33,7 @@ script = ExtResource("2_corner")
 
 [node name="HeatGearRow" type="HBoxContainer" parent="Sidebar"]
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 8
 
 [node name="HeatPanel" type="PanelContainer" parent="Sidebar/HeatGearRow"]
@@ -72,9 +74,10 @@ horizontal_alignment = 1
 
 [node name="GearGate" type="Control" parent="Sidebar/HeatGearRow/GearCol"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(88, 146)
+custom_minimum_size = Vector2(108, 72)
 layout_mode = 2
 size_flags_horizontal = 4
+size_flags_vertical = 3
 script = ExtResource("4_gate")
 
 [node name="PilesPanel" type="PanelContainer" parent="Sidebar"]
@@ -107,6 +110,8 @@ title = "DÉFAUSSE"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+max_lines_visible = 2
+text_overrun_behavior = 3
 autowrap_mode = 3
 theme_type_variation = &"Caption"
 text = "Status"

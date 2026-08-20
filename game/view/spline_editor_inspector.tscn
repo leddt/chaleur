@@ -27,20 +27,6 @@ theme_override_constants/margin_bottom = 10
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="NameSection" type="VBoxContainer" parent="Margin/PanelVBox" unique_id=1592202775]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="NameTitle" type="Label" parent="Margin/PanelVBox/NameSection" unique_id=1661997536]
-layout_mode = 2
-text = "Nom de la piste"
-
-[node name="TrackNameEdit" type="LineEdit" parent="Margin/PanelVBox/NameSection" unique_id=1612063296]
-unique_name_in_owner = true
-layout_mode = 2
-placeholder_text = "Nouvelle piste"
-caret_blink = true
-
 [node name="PrioSection" type="VBoxContainer" parent="Margin/PanelVBox" unique_id=1594486706]
 layout_mode = 2
 theme_override_constants/separation = 6
@@ -208,6 +194,81 @@ size_flags_horizontal = 3
 toggle_mode = true
 button_group = SubResource("ButtonGroup_mode")
 text = "Couleurs"
+
+[node name="ModeSettings" type="Button" parent="Margin/PanelVBox/EditSection/ModeRows/ModeRow2" unique_id=914100027]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_group = SubResource("ButtonGroup_mode")
+text = "Paramètres"
+
+[node name="SettingsSection" type="VBoxContainer" parent="Margin/PanelVBox" unique_id=1592202775]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="NameTitle" type="Label" parent="Margin/PanelVBox/SettingsSection" unique_id=1661997536]
+layout_mode = 2
+text = "Nom de la piste"
+
+[node name="TrackNameEdit" type="LineEdit" parent="Margin/PanelVBox/SettingsSection" unique_id=1612063296]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Nouvelle piste"
+caret_blink = true
+
+[node name="StartHeatRow" type="HBoxContainer" parent="Margin/PanelVBox/SettingsSection" unique_id=1847392011]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="StartHeatLabel" type="Label" parent="Margin/PanelVBox/SettingsSection/StartHeatRow" unique_id=1847392012]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Heat de départ"
+
+[node name="StartHeatSpin" type="SpinBox" parent="Margin/PanelVBox/SettingsSection/StartHeatRow" unique_id=1847392013]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 12.0
+value = 6.0
+rounded = true
+
+[node name="StartStressRow" type="HBoxContainer" parent="Margin/PanelVBox/SettingsSection" unique_id=1847392014]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="StartStressLabel" type="Label" parent="Margin/PanelVBox/SettingsSection/StartStressRow" unique_id=1847392015]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Stress de départ"
+
+[node name="StartStressSpin" type="SpinBox" parent="Margin/PanelVBox/SettingsSection/StartStressRow" unique_id=1847392016]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.0
+max_value = 12.0
+value = 3.0
+rounded = true
+
+[node name="DefaultLapsRow" type="HBoxContainer" parent="Margin/PanelVBox/SettingsSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="DefaultLapsLabel" type="Label" parent="Margin/PanelVBox/SettingsSection/DefaultLapsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Nb. tours (défaut)"
+
+[node name="DefaultLapsSpin" type="SpinBox" parent="Margin/PanelVBox/SettingsSection/DefaultLapsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 6.0
+value = 2.0
+rounded = true
 
 [node name="TraceSection" type="VBoxContainer" parent="Margin/PanelVBox" unique_id=584460077]
 unique_name_in_owner = true

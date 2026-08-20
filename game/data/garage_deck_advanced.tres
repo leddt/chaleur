@@ -1,0 +1,194 @@
+[gd_resource type="Resource" script_class="GarageDeckManifest" load_steps=65 format=3]
+
+[ext_resource type="Script" uid="uid://cgarman01abcd" path="res://data/garage_deck_manifest.gd" id="1"]
+[ext_resource type="Script" uid="uid://cgarentry01abc" path="res://data/garage_deck_entry.gd" id="2"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_18_bodywork.tres" id="c1"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_19_bodywork.tres" id="c2"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_20_bodywork.tres" id="c3"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_21_cooling.tres" id="c4"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_22_fuel.tres" id="c5"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_23_fuel.tres" id="c6"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_24_gas_pedal.tres" id="c7"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_25_gas_pedal.tres" id="c8"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_26_gas_pedal.tres" id="c9"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_27_gas_pedal.tres" id="c10"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_28_gas_pedal.tres" id="c11"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_29_rpm.tres" id="c12"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_30_rpm.tres" id="c13"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_31_rpm.tres" id="c14"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_32_suspension.tres" id="c15"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_33_suspension.tres" id="c16"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_34_suspension.tres" id="c17"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_35_suspension.tres" id="c18"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_36_tyres.tres" id="c19"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_37_tyres.tres" id="c20"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_38_tyres.tres" id="c21"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_39_tyres.tres" id="c22"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_40_tyres.tres" id="c23"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_41_tyres.tres" id="c24"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_42_turbo.tres" id="c25"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_43_turbo.tres" id="c26"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_44_wing.tres" id="c27"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_45_wing.tres" id="c28"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_46_wing.tres" id="c29"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_47_4wd.tres" id="c30"]
+[ext_resource type="Resource" path="res://data/cards/garage/upg_48_heat.tres" id="c31"]
+
+[sub_resource type="Resource" id="e1"]
+script = ExtResource("2")
+card = ExtResource("c1")
+count = 2
+
+[sub_resource type="Resource" id="e2"]
+script = ExtResource("2")
+card = ExtResource("c2")
+count = 2
+
+[sub_resource type="Resource" id="e3"]
+script = ExtResource("2")
+card = ExtResource("c3")
+count = 2
+
+[sub_resource type="Resource" id="e4"]
+script = ExtResource("2")
+card = ExtResource("c4")
+count = 2
+
+[sub_resource type="Resource" id="e5"]
+script = ExtResource("2")
+card = ExtResource("c5")
+count = 2
+
+[sub_resource type="Resource" id="e6"]
+script = ExtResource("2")
+card = ExtResource("c6")
+count = 2
+
+[sub_resource type="Resource" id="e7"]
+script = ExtResource("2")
+card = ExtResource("c7")
+count = 2
+
+[sub_resource type="Resource" id="e8"]
+script = ExtResource("2")
+card = ExtResource("c8")
+count = 2
+
+[sub_resource type="Resource" id="e9"]
+script = ExtResource("2")
+card = ExtResource("c9")
+count = 2
+
+[sub_resource type="Resource" id="e10"]
+script = ExtResource("2")
+card = ExtResource("c10")
+count = 2
+
+[sub_resource type="Resource" id="e11"]
+script = ExtResource("2")
+card = ExtResource("c11")
+count = 2
+
+[sub_resource type="Resource" id="e12"]
+script = ExtResource("2")
+card = ExtResource("c12")
+count = 2
+
+[sub_resource type="Resource" id="e13"]
+script = ExtResource("2")
+card = ExtResource("c13")
+count = 2
+
+[sub_resource type="Resource" id="e14"]
+script = ExtResource("2")
+card = ExtResource("c14")
+count = 2
+
+[sub_resource type="Resource" id="e15"]
+script = ExtResource("2")
+card = ExtResource("c15")
+count = 2
+
+[sub_resource type="Resource" id="e16"]
+script = ExtResource("2")
+card = ExtResource("c16")
+count = 2
+
+[sub_resource type="Resource" id="e17"]
+script = ExtResource("2")
+card = ExtResource("c17")
+count = 2
+
+[sub_resource type="Resource" id="e18"]
+script = ExtResource("2")
+card = ExtResource("c18")
+count = 2
+
+[sub_resource type="Resource" id="e19"]
+script = ExtResource("2")
+card = ExtResource("c19")
+count = 2
+
+[sub_resource type="Resource" id="e20"]
+script = ExtResource("2")
+card = ExtResource("c20")
+count = 2
+
+[sub_resource type="Resource" id="e21"]
+script = ExtResource("2")
+card = ExtResource("c21")
+count = 2
+
+[sub_resource type="Resource" id="e22"]
+script = ExtResource("2")
+card = ExtResource("c22")
+count = 2
+
+[sub_resource type="Resource" id="e23"]
+script = ExtResource("2")
+card = ExtResource("c23")
+count = 2
+
+[sub_resource type="Resource" id="e24"]
+script = ExtResource("2")
+card = ExtResource("c24")
+count = 2
+
+[sub_resource type="Resource" id="e25"]
+script = ExtResource("2")
+card = ExtResource("c25")
+count = 2
+
+[sub_resource type="Resource" id="e26"]
+script = ExtResource("2")
+card = ExtResource("c26")
+count = 2
+
+[sub_resource type="Resource" id="e27"]
+script = ExtResource("2")
+card = ExtResource("c27")
+count = 2
+
+[sub_resource type="Resource" id="e28"]
+script = ExtResource("2")
+card = ExtResource("c28")
+count = 2
+
+[sub_resource type="Resource" id="e29"]
+script = ExtResource("2")
+card = ExtResource("c29")
+count = 2
+
+[sub_resource type="Resource" id="e30"]
+script = ExtResource("2")
+card = ExtResource("c30")
+count = 2
+
+[sub_resource type="Resource" id="e31"]
+script = ExtResource("2")
+card = ExtResource("c31")
+count = 2
+
+[resource]
+script = ExtResource("1")
+entries = Array[GarageDeckEntry]([SubResource("e1"), SubResource("e2"), SubResource("e3"), SubResource("e4"), SubResource("e5"), SubResource("e6"), SubResource("e7"), SubResource("e8"), SubResource("e9"), SubResource("e10"), SubResource("e11"), SubResource("e12"), SubResource("e13"), SubResource("e14"), SubResource("e15"), SubResource("e16"), SubResource("e17"), SubResource("e18"), SubResource("e19"), SubResource("e20"), SubResource("e21"), SubResource("e22"), SubResource("e23"), SubResource("e24"), SubResource("e25"), SubResource("e26"), SubResource("e27"), SubResource("e28"), SubResource("e29"), SubResource("e30"), SubResource("e31")])

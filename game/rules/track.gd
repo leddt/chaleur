@@ -109,6 +109,7 @@ static func catalog() -> Array[Dictionary]:
 			"id": str(entry.get("path", "")),
 			"name": track_name,
 			"builtin": builtin,
+			"default_laps": int(entry.get("default_laps", SplineTrackFile.DEFAULT_LAPS)),
 		})
 	return out
 
@@ -123,8 +124,8 @@ static func from_id(track_id: String, p_laps: int = 1) -> HeatTrack:
 	return bind.to_heat_track(p_laps)
 
 
-static func from_document(data: Dictionary, p_laps: int = 1, path: String = "") -> HeatTrack:
-	var bind := SplineTrackBind.from_document(data, path)
+static func from_document(data: Dictionary, p_laps: int = 1, track_path: String = "") -> HeatTrack:
+	var bind := SplineTrackBind.from_document(data, track_path)
 	if bind == null:
 		return null
 	return bind.to_heat_track(p_laps)

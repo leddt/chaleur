@@ -7,6 +7,7 @@ extends Control
 ## hover, which a GridContainer would fight by re-placing them every frame.
 
 signal selection_changed(selected_ids: Array[String])
+signal card_activated(card_id: String)
 
 const CARD_SIZE := Vector2(118, 170)
 ## Radians between two neighbouring cards.
@@ -27,7 +28,7 @@ var _cards: Array[Card] = []
 
 func _ready() -> void:
 	if custom_minimum_size.y <= 0.0:
-		custom_minimum_size.y = 160.0
+		custom_minimum_size.y = 120.0
 	clip_contents = false
 	resized.connect(_layout_fan)
 
@@ -58,7 +59,8 @@ func set_cards(
 	enabled: bool = true,
 	multi_select: bool = true,
 	animate: bool = false,
-	can_select: Callable = Callable()
+	can_select: Callable = Callable(),
+	can_activate: Callable = Callable()
 ) -> void:
 	clear_hand()
 	_enabled = enabled
@@ -67,18 +69,20 @@ func set_cards(
 		var selectable := enabled
 		if selectable and can_select.is_valid():
 			selectable = bool(can_select.call(heat_card))
+		var activatable := enabled and can_activate.is_valid() and bool(can_activate.call(heat_card))
 
 		var card := Card.new()
-		card.card_size = CARD_SIZE
+		card.card_size = _fitted_card_size()
 		add_child(card)
 		card.data = _to_card_data(heat_card)
 		# Only veil a card the player could otherwise expect to pick. Outside a
 		# selection phase the whole hand is simply inert, and veiling all of it
 		# turned the cockpit into grey mush.
-		card.dimmed = enabled and not selectable
+		card.dimmed = enabled and not selectable and not activatable
 		card.set_meta("card_id", heat_card.id)
-		card.tooltip_text = heat_card.id if selectable else "%s (non jouable)" % heat_card.id
-		if selectable:
+		if activatable:
+			card.clicked.connect(_on_card_activated)
+		elif selectable:
 			card.clicked.connect(_on_card_clicked)
 		_cards.append(card)
 
@@ -110,40 +114,47 @@ func clear_selection() -> void:
 
 # --- Layout ---
 
+func _fitted_card_size() -> Vector2:
+	# Leave room to lift on hover without leaving the strip.
+	var hover_room := 22.0
+	var max_h := maxf(72.0, size.y - hover_room)
+	if CARD_SIZE.y <= max_h or size.y <= 1.0:
+		return CARD_SIZE
+	return CARD_SIZE * (max_h / CARD_SIZE.y)
+
+
 func _layout_fan() -> void:
 	if _cards.is_empty():
 		return
+	var cs := _fitted_card_size()
+	for card in _cards:
+		card.card_size = cs
 	var mid := float(_cards.size() - 1) * 0.5
 	var center_x := size.x * 0.5
-	# Tighten the step rather than overflow when the hand is large.
-	var step := FAN_STEP
-	var span := float(_cards.size() - 1) * step + CARD_SIZE.x
+	var step := FAN_STEP * (cs.x / CARD_SIZE.x)
+	var span := float(_cards.size() - 1) * step + cs.x
 	if span > size.x and _cards.size() > 1:
-		# Never tighter than the big number is wide, or the hand stops being readable.
-		step = maxf(44.0, (size.x - CARD_SIZE.x) / float(_cards.size() - 1))
-	# Cards pivot on their bottom centre, so tilting drops one bottom corner below
-	# the pivot. That overhang has to be budgeted or the outer cards get clipped.
-	var tilt_drop := CARD_SIZE.x * 0.5 * sin(absf(mid * FAN_SPREAD))
-	# The crest is raised by the full drop so the outermost cards still land on the
-	# bottom edge instead of hanging past it.
-	var crest := mid * FAN_LIFT * 0.5
-	var base_y := size.y - CARD_SIZE.y - crest - tilt_drop
+		step = maxf(cs.x * 0.35, (size.x - cs.x) / float(_cards.size() - 1))
+	var tilt_drop := cs.x * 0.5 * sin(absf(mid * FAN_SPREAD))
+	var crest := mid * FAN_LIFT * 0.5 * (cs.y / CARD_SIZE.y)
+	var base_y := size.y - cs.y - crest - tilt_drop - 4.0
 	if base_y < 0.0:
-		# Not enough height for the full arc: flatten it rather than clip cards.
 		crest = maxf(0.0, crest + base_y)
-		base_y = maxf(0.0, size.y - CARD_SIZE.y - crest - tilt_drop)
+		base_y = maxf(0.0, size.y - cs.y - crest - tilt_drop)
 
 	for i in _cards.size():
 		var card := _cards[i]
 		var offset := float(i) - mid
 		card.rotation = offset * FAN_SPREAD
-		card.position.x = center_x + offset * step - CARD_SIZE.x * 0.5
-		# Crest at the centre: the arc bulges up in the middle and the ends drop,
-		# the way a hand of cards actually sits when it is held.
-		card.set_rest_y(base_y + absf(offset) * FAN_LIFT * 0.5)
+		card.position.x = center_x + offset * step - cs.x * 0.5
+		card.set_rest_y(base_y + absf(offset) * FAN_LIFT * 0.5 * (cs.y / CARD_SIZE.y))
 
 
 # --- Selection ---
+
+func _on_card_activated(card: Card) -> void:
+	card_activated.emit(str(card.get_meta("card_id")))
+
 
 func _on_card_clicked(card: Card) -> void:
 	var card_id: String = card.get_meta("card_id")
@@ -174,12 +185,4 @@ func _card_by_id(card_id: String) -> Card:
 
 ## Rules-side HeatCard to the kit's presentation-side CardData.
 func _to_card_data(card: HeatCard) -> CardData:
-	match card.kind:
-		HeatCard.Kind.UPGRADE:
-			return CardData.upgrade(card.speed_value)
-		HeatCard.Kind.HEAT:
-			return CardData.heat()
-		HeatCard.Kind.STRESS:
-			return CardData.stress()
-		_:
-			return CardData.speed(card.speed_value)
+	return CardCatalog.to_card_data(card.def_id)

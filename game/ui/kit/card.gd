@@ -3,7 +3,7 @@ class_name Card
 extends Control
 
 ## Une carte de jeu, construite a partir d'un CardData. Aucune image :
-## StyleBoxFlat pour le carton, Label pour les chiffres, _draw pour les symboles.
+## StyleBoxFlat pour le carton, Label pour les chiffres, CardSymbolIcon pour les symboles.
 ##
 ## Consequences pratiques :
 ##  - le texte reste net a toutes les resolutions
@@ -11,6 +11,8 @@ extends Control
 ##  - le survol, la selection et le retournement sont des animations, pas des sprites
 
 signal clicked(card: Card)
+signal symbol_activated(kind: CardSymbol.Kind)
+signal speed_picked(speed: int)
 
 const SIZE_DEFAULT := Vector2(150, 220)
 
@@ -46,9 +48,21 @@ const SIZE_DEFAULT := Vector2(150, 220)
 
 var _hovered := false
 var _big: Label
+var _speed_pick: GridContainer
 var _title: Label
+var _center_icon: TextureRect
 var _effect: Label
 var _kerb: Kerb
+var _symbols_host: CenterContainer
+var _symbols_stack: VBoxContainer
+var _mandatory_row: HBoxContainer
+var _optional_row: HBoxContainer
+## kind int -> "inert" | "clickable" | "resolved"
+var _symbol_states: Dictionary = {}
+var _symbols_interactive := true
+var _speed_override := -1
+var _speed_pick_options: PackedInt32Array = PackedInt32Array()
+var _speed_pick_enabled := false
 
 
 func _ready() -> void:
@@ -77,9 +91,6 @@ func _apply_size() -> void:
 	_title.position = Vector2(pad, roundf(10.0 * s))
 	_title.add_theme_font_size_override("font_size", maxi(8, int(round(11.0 * s))))
 
-	_big.offset_bottom = -(kerb_h + effect_h + roundf(6.0 * s))
-	_big.add_theme_font_size_override("font_size", maxi(18, int(round(76.0 * s))))
-
 	_effect.offset_left = pad
 	_effect.offset_right = -pad
 	_effect.offset_top = -(kerb_h + effect_h + roundf(4.0 * s))
@@ -93,21 +104,145 @@ func _apply_size() -> void:
 	_kerb.offset_bottom = -roundf(6.0 * s)
 	_kerb.stripe_width = maxf(4.0, roundf(9.0 * s))
 	_kerb.slant = maxf(2.0, roundf(6.0 * s))
+
+	var icon_px := maxf(16.0, roundf(24.0 * s))
+	var row_sep := maxi(2, int(round(4.0 * s)))
+	_layout_symbols(icon_px, row_sep)
+	if _symbols_stack != null:
+		_symbols_stack.add_theme_constant_override("separation", maxi(2, int(round(4.0 * s))))
+	var title_h := roundf(24.0 * s)
+	var row_h := icon_px + roundf(4.0 * s)
+	var row_count := _symbol_row_count()
+	var stack_h := row_h * float(row_count)
+	if row_count > 1:
+		stack_h += roundf(4.0 * s)
+	var reserved_bottom := kerb_h + effect_h + roundf(6.0 * s)
+	if row_count > 0:
+		reserved_bottom += stack_h + roundf(4.0 * s)
+
+	_big.offset_left = pad
+	_big.offset_right = -pad
+	_big.offset_top = title_h
+	_big.offset_bottom = -reserved_bottom
+	_fit_big_font(s, pad, card_size.y - title_h - reserved_bottom)
+	_layout_speed_pick(s, pad, kerb_h, effect_h)
+	_layout_center_icon(s, pad, reserved_bottom)
+
+	if row_count > 0:
+		_symbols_host.offset_top = card_size.y - kerb_h - effect_h - stack_h - roundf(2.0 * s)
+		_symbols_host.offset_bottom = _symbols_host.offset_top + stack_h
 	queue_redraw()
+
+
+func _fit_big_font(s: float, pad: float, avail_h: float = -1.0) -> void:
+	var max_size := maxi(18, int(round(76.0 * s)))
+	var min_size := maxi(10, int(round(16.0 * s)))
+	var font := _big.get_theme_font("font")
+	if font == null:
+		font = ThemeBuilder.display_font()
+	var max_w := maxf(8.0, card_size.x - pad * 2.0)
+	var max_h := avail_h if avail_h > 0.0 else 9999.0
+	var font_size := max_size
+	while font_size > min_size:
+		var metrics := font.get_string_size(_big.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+		if metrics.x <= max_w and metrics.y <= max_h:
+			break
+		font_size -= 1
+	_big.add_theme_font_size_override("font_size", font_size)
+
+
+func _layout_center_icon(s: float, pad: float, reserved_bottom: float) -> void:
+	if _center_icon == null:
+		return
+	var heat := face_up and data != null and data.shows_heat_center()
+	var plus := (
+		face_up
+		and data != null
+		and data.shows_plus_center()
+		and _speed_override < 0
+		and not _speed_pick_active()
+	)
+	_center_icon.visible = heat or plus
+	if not _center_icon.visible:
+		return
+	var icon_px := maxf(36.0, roundf(72.0 * s))
+	if heat:
+		_center_icon.texture = CardSymbolVisual.texture(CardSymbol.Kind.HEAT, icon_px)
+	else:
+		_center_icon.texture = CardSymbolVisual.texture(CardSymbol.Kind.PLUS, icon_px)
+	_center_icon.modulate = data.ink()
+	_center_icon.offset_left = pad
+	_center_icon.offset_right = -pad
+	_center_icon.offset_top = roundf(28.0 * s)
+	_center_icon.offset_bottom = -reserved_bottom
+
+
+func _layout_symbols(icon_px: float, separation: int) -> void:
+	if _mandatory_row == null:
+		return
+	for row in [_mandatory_row, _optional_row]:
+		row.add_theme_constant_override("separation", separation)
+		for child in row.get_children():
+			if child is CardSymbolIcon:
+				child.set_icon_size(icon_px)
 
 
 func _build() -> void:
 	_title = Label.new()
 	_title.theme_type_variation = "Eyebrow"
+	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_title)
 
 	_big = Label.new()
 	_big.theme_type_variation = "BigNumber"
 	_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_big.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_big.clip_text = true
 	_big.anchor_right = 1.0
 	_big.anchor_bottom = 1.0
+	_big.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_big)
+
+	_speed_pick = GridContainer.new()
+	_speed_pick.columns = 2
+	_speed_pick.visible = false
+	_speed_pick.anchor_right = 1.0
+	_speed_pick.anchor_bottom = 1.0
+	_speed_pick.mouse_filter = Control.MOUSE_FILTER_STOP
+	_speed_pick.z_index = 3
+	add_child(_speed_pick)
+
+	_center_icon = TextureRect.new()
+	_center_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_center_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_center_icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_center_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_center_icon.anchor_right = 1.0
+	_center_icon.anchor_bottom = 1.0
+	_center_icon.visible = false
+	add_child(_center_icon)
+
+	_symbols_host = CenterContainer.new()
+	_symbols_host.anchor_left = 0.0
+	_symbols_host.anchor_right = 1.0
+	_symbols_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_symbols_host)
+
+	_symbols_stack = VBoxContainer.new()
+	_symbols_stack.alignment = BoxContainer.ALIGNMENT_CENTER
+	_symbols_stack.add_theme_constant_override("separation", 4)
+	_symbols_stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_symbols_host.add_child(_symbols_stack)
+
+	_mandatory_row = HBoxContainer.new()
+	_mandatory_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_mandatory_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_symbols_stack.add_child(_mandatory_row)
+
+	_optional_row = HBoxContainer.new()
+	_optional_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_optional_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_symbols_stack.add_child(_optional_row)
 
 	_effect = Label.new()
 	_effect.theme_type_variation = "Caption"
@@ -117,6 +252,7 @@ func _build() -> void:
 	_effect.anchor_right = 1.0
 	_effect.anchor_bottom = 1.0
 	_effect.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_effect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_effect)
 
 	_kerb = Kerb.new()
@@ -134,13 +270,22 @@ func _refresh() -> void:
 
 	var visible_face := face_up
 	_title.visible = visible_face
-	_big.visible = visible_face
+	var show_pick := _speed_pick_active()
+	_big.visible = (
+		visible_face
+		and data != null
+		and not data.shows_heat_center()
+		and not show_pick
+		and not (data.shows_plus_center() and _speed_override < 0)
+	)
+	if _speed_pick != null:
+		_speed_pick.visible = show_pick
 	_effect.visible = visible_face
 	_kerb.visible = visible_face
 
 	if visible_face:
 		_title.text = data.title
-		_big.text = data.big_text()
+		_big.text = str(_speed_override) if _speed_override >= 0 else data.big_text()
 		_effect.text = data.effect
 		var ink := data.ink()
 		_title.add_theme_color_override("font_color", ink * Color(1, 1, 1, 0.6))
@@ -149,9 +294,216 @@ func _refresh() -> void:
 		_kerb.color_a = data.accent()
 		_kerb.color_b = data.face()
 
+	var tip := ""
+	if visible_face and data != null and data.kind == CardData.Kind.STRESS:
+		tip = data.tooltip_bbcode()
+	tooltip_text = " " if not tip.strip_edges().is_empty() else ""
+
+	_rebuild_symbols()
 	# La presence d'un texte d'effet change la hauteur reservee au gros chiffre.
 	_apply_size()
 	queue_redraw()
+
+
+func _make_custom_tooltip(_for_text: String) -> Object:
+	if data == null or not face_up or data.kind != CardData.Kind.STRESS:
+		return null
+	if tooltip_text.is_empty():
+		return null
+	var bb := data.tooltip_bbcode().strip_edges()
+	if bb.is_empty():
+		return null
+	return CardSymbolTooltip.make_control(bb)
+
+
+func set_symbol_states(states: Dictionary) -> void:
+	_symbol_states = states
+	_apply_symbol_states()
+
+
+func set_symbols_interactive(enabled: bool) -> void:
+	_symbols_interactive = enabled
+	_apply_symbol_states()
+
+
+func set_resolved_speed(speed: int) -> void:
+	_speed_override = speed
+	_speed_pick_enabled = false
+	_refresh()
+
+
+func set_speed_pick(options: PackedInt32Array, enabled: bool) -> void:
+	_speed_pick_options = options
+	_speed_pick_enabled = enabled and options.size() > 1
+	_rebuild_speed_pick()
+	_refresh()
+
+
+func _speed_pick_active() -> bool:
+	return face_up and _speed_pick_enabled and _speed_pick_options.size() > 1
+
+
+func _rebuild_speed_pick() -> void:
+	if _speed_pick == null:
+		return
+	for child in _speed_pick.get_children():
+		child.queue_free()
+	if not _speed_pick_enabled:
+		return
+	for v in _speed_pick_options:
+		var btn := Button.new()
+		btn.text = str(v)
+		btn.clip_text = false
+		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		btn.add_theme_font_override("font", ThemeBuilder.display_font())
+		btn.add_theme_color_override("font_color", Palette.INK)
+		btn.add_theme_color_override("font_hover_color", Palette.INK)
+		btn.add_theme_color_override("font_pressed_color", Palette.INK)
+		btn.add_theme_color_override("font_focus_color", Palette.INK)
+		btn.add_theme_stylebox_override("normal", _speed_pick_box(Palette.CARDBOARD_DARK, Palette.INK))
+		btn.add_theme_stylebox_override("hover", _speed_pick_box(Palette.CARDBOARD, Palette.MUSTARD))
+		btn.add_theme_stylebox_override("pressed", _speed_pick_box(Palette.MUSTARD, Palette.INK))
+		btn.add_theme_stylebox_override("focus", _speed_pick_box(Palette.CARDBOARD_DARK, Palette.INK))
+		var speed := v
+		btn.pressed.connect(func() -> void:
+			speed_picked.emit(speed)
+		)
+		_speed_pick.add_child(btn)
+
+
+func _layout_speed_pick(s: float, pad: float, kerb_h: float, effect_h: float) -> void:
+	if _speed_pick == null:
+		return
+	if not _speed_pick_active():
+		return
+	var n := _speed_pick_options.size()
+	var rows := maxi(1, int(ceili(float(n) / 2.0)))
+	var gap := maxf(4.0, roundf(6.0 * s))
+	_speed_pick.add_theme_constant_override("h_separation", int(gap))
+	_speed_pick.add_theme_constant_override("v_separation", int(gap))
+	var title_h := roundf(24.0 * s)
+	var symbol_reserve := 0.0
+	if _symbol_row_count() > 0:
+		symbol_reserve = maxf(16.0, roundf(24.0 * s)) + roundf(6.0 * s)
+	var bottom := kerb_h + (effect_h if _effect.visible else 0.0) + symbol_reserve + roundf(4.0 * s)
+	var avail_w := card_size.x - pad * 2.0
+	var avail_h := card_size.y - title_h - bottom
+	var side := minf((avail_w - gap) * 0.5, (avail_h - gap * float(rows - 1)) / float(rows))
+	side = maxf(22.0, floorf(side))
+	var font_px := maxi(12, int(round(side * 0.48)))
+	for child in _speed_pick.get_children():
+		if child is Button:
+			var btn := child as Button
+			btn.custom_minimum_size = Vector2(side, side)
+			btn.size = Vector2(side, side)
+			btn.add_theme_font_size_override("font_size", font_px)
+	var grid_w := side * 2.0 + gap
+	var grid_h := side * float(rows) + gap * float(rows - 1)
+	var left := (card_size.x - grid_w) * 0.5
+	_speed_pick.offset_left = left
+	_speed_pick.offset_right = -(card_size.x - left - grid_w)
+	_speed_pick.offset_top = title_h + maxf(0.0, (avail_h - grid_h) * 0.5)
+	_speed_pick.offset_bottom = -(card_size.y - _speed_pick.offset_top - grid_h)
+
+
+func _speed_pick_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.border_color = border
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(4)
+	box.content_margin_left = 2
+	box.content_margin_right = 2
+	box.content_margin_top = 2
+	box.content_margin_bottom = 2
+	return box
+
+
+func _rebuild_symbols() -> void:
+	if _mandatory_row == null:
+		return
+	for child in _mandatory_row.get_children():
+		child.queue_free()
+	for child in _optional_row.get_children():
+		child.queue_free()
+	if data == null or not face_up:
+		_symbols_host.visible = false
+		return
+	var split_m := _mandatory_symbol_entries()
+	var split_o := _optional_symbol_entries()
+	var has_any: bool = not split_m.is_empty() or not split_o.is_empty()
+	_symbols_host.visible = has_any
+	if not has_any:
+		return
+	var s := card_size.y / SIZE_DEFAULT.y
+	var icon_px := maxf(16.0, roundf(24.0 * s))
+	_populate_symbol_row(_mandatory_row, split_m, icon_px)
+	_populate_symbol_row(_optional_row, split_o, icon_px)
+	_mandatory_row.visible = not split_m.is_empty()
+	_optional_row.visible = not split_o.is_empty()
+
+
+func _populate_symbol_row(row: HBoxContainer, entries: Array[CardSymbol], icon_px: float) -> void:
+	for entry in entries:
+		var icon := CardSymbolIcon.new()
+		icon.setup(entry.kind, entry.count)
+		icon.activated.connect(_on_symbol_activated)
+		row.add_child(icon)
+		icon.set_icon_size(icon_px)
+	_apply_symbol_states()
+
+
+func _on_symbol_activated(kind: CardSymbol.Kind) -> void:
+	symbol_activated.emit(kind)
+
+
+func _apply_symbol_states() -> void:
+	for row in [_mandatory_row, _optional_row]:
+		if row == null:
+			continue
+		for child in row.get_children():
+			if child is CardSymbolIcon:
+				var st := str(_symbol_states.get(int(child.kind()), CardSymbolIcon.STATE_INERT))
+				child.set_interaction_state(st)
+				if not _symbols_interactive:
+					child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					child.mouse_default_cursor_shape = Control.CURSOR_ARROW
+
+
+func _mandatory_symbol_entries() -> Array[CardSymbol]:
+	var out: Array[CardSymbol] = []
+	for entry in _all_symbol_entries():
+		if CardSymbol.is_mandatory(entry.kind):
+			out.append(entry)
+	return out
+
+
+func _optional_symbol_entries() -> Array[CardSymbol]:
+	var out: Array[CardSymbol] = []
+	for entry in _all_symbol_entries():
+		if not CardSymbol.is_mandatory(entry.kind):
+			out.append(entry)
+	return out
+
+
+func _symbol_row_count() -> int:
+	if data == null or not face_up:
+		return 0
+	var n := 0
+	if not _mandatory_symbol_entries().is_empty():
+		n += 1
+	if not _optional_symbol_entries().is_empty():
+		n += 1
+	return n
+
+
+func _all_symbol_entries() -> Array[CardSymbol]:
+	var out: Array[CardSymbol] = []
+	if data.shows_heat_center() or data.shows_plus_center():
+		return out
+	for entry in data.symbol_entries:
+		out.append(entry)
+	return out
 
 
 func _draw() -> void:
@@ -162,7 +514,6 @@ func _draw() -> void:
 	if face_up:
 		var box := ThemeBuilder.card_box(data.face(), data.accent(), _hovered or selected)
 		box.draw(get_canvas_item(), r)
-		_draw_symbol(data.symbol, data.accent())
 	else:
 		# Le verso : carton fonce + un seul chevron. Rien de plus.
 		var box := ThemeBuilder.card_box(Palette.CARDBOARD_DARK, Palette.INK, _hovered)
@@ -178,19 +529,6 @@ func _draw() -> void:
 		draw_rect(r, Palette.ASPHALT * Color(1, 1, 1, 0.55))
 
 
-func _draw_symbol(symbol: String, col: Color) -> void:
-	if symbol == "":
-		return
-	var center := Vector2(size.x - 30, 34)
-	match symbol:
-		"flame":
-			_draw_flame(center, 15.0, col)
-		"chevron":
-			_draw_chevron(center, 15.0, col)
-		"gear":
-			_draw_gear(center, 14.0, col)
-
-
 func _draw_chevron(center: Vector2, s: float, col: Color) -> void:
 	var pts := PackedVector2Array([
 		center + Vector2(-s, s * 0.5),
@@ -198,32 +536,6 @@ func _draw_chevron(center: Vector2, s: float, col: Color) -> void:
 		center + Vector2(s, s * 0.5),
 	])
 	draw_polyline(pts, col, maxf(2.0, s * 0.22), true)
-
-
-func _draw_flame(center: Vector2, s: float, col: Color) -> void:
-	# Une flamme lisible en 8 points. Pas besoin d'illustration.
-	var pts := PackedVector2Array([
-		center + Vector2(0, -s),
-		center + Vector2(s * 0.45, -s * 0.2),
-		center + Vector2(s * 0.55, s * 0.35),
-		center + Vector2(s * 0.2, s),
-		center + Vector2(-s * 0.2, s),
-		center + Vector2(-s * 0.55, s * 0.35),
-		center + Vector2(-s * 0.35, -s * 0.15),
-		center + Vector2(-s * 0.1, -s * 0.5),
-	])
-	draw_colored_polygon(pts, col)
-
-
-func _draw_gear(center: Vector2, s: float, col: Color) -> void:
-	var teeth := 8
-	var pts := PackedVector2Array()
-	for i in teeth * 2:
-		var a := TAU * float(i) / float(teeth * 2)
-		var rad := s if i % 2 == 0 else s * 0.68
-		pts.append(center + Vector2(cos(a), sin(a)) * rad)
-	draw_colored_polygon(pts, col)
-	draw_circle(center, s * 0.3, data.face() if data else Palette.CARDBOARD)
 
 
 # --- Interaction ---
@@ -238,27 +550,84 @@ func _gui_input(event: InputEvent) -> void:
 func _notification(what: int) -> void:
 	if dimmed:
 		return
-	if what == NOTIFICATION_MOUSE_ENTER:
-		_hovered = true
-		_lift(true)
-	elif what == NOTIFICATION_MOUSE_EXIT:
-		_hovered = false
-		_lift(false)
+	if what == NOTIFICATION_MOUSE_ENTER or what == NOTIFICATION_MOUSE_EXIT:
+		sync_pointer_hover()
+
+
+## Appelé aussi par les icônes : un enfant STOP vole le hover du parent.
+func sync_pointer_hover() -> void:
+	if _hover_sync_queued:
+		return
+	_hover_sync_queued = true
+	call_deferred("_apply_pointer_hover")
+
+
+func _apply_pointer_hover() -> void:
+	_hover_sync_queued = false
+	if not is_inside_tree() or dimmed:
+		return
+	var over := _pointer_is_on_self()
+	if not over and _hovered and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		over = true
+	if _hovered == over:
+		return
+	_hovered = over
+	z_index = 10 if over else 0
+	_lift(over)
+
+
+func _pointer_is_on_self() -> bool:
+	var hovered := get_viewport().gui_get_hovered_control()
+	if _is_self_or_descendant(hovered):
+		return true
+	var other := _card_ancestor(hovered)
+	if other != null and other != self:
+		return false
+	# Tooltip / popup : garder le hover si le curseur est encore sur la carte.
+	return _hovered and _contains_pointer()
+
+
+func _contains_pointer() -> bool:
+	var local := get_global_transform().affine_inverse() * get_global_mouse_position()
+	return Rect2(Vector2.ZERO, size).has_point(local)
+
+
+func _is_self_or_descendant(node: Node) -> bool:
+	while node != null:
+		if node == self:
+			return true
+		node = node.get_parent()
+	return false
+
+
+func _card_ancestor(node: Node) -> Card:
+	while node != null:
+		if node is Card:
+			return node
+		node = node.get_parent()
+	return null
 
 
 var _rest_offset := 0.0
+var _lift_tween: Tween
+var _hover_sync_queued := false
 
 func _lift(up: bool) -> void:
 	queue_redraw()
+	if _lift_tween != null and _lift_tween.is_valid():
+		_lift_tween.kill()
 	var target := _rest_offset - (18.0 if up else 0.0)
-	var tween := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(self, "position:y", target, 0.14)
+	_lift_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_lift_tween.tween_property(self, "position:y", target, 0.14)
 
 
 ## Enregistre la position de repos (a appeler apres avoir place la carte).
 func set_rest_y(y: float) -> void:
 	_rest_offset = y
-	position.y = y
+	if _hovered:
+		position.y = y - 18.0
+	else:
+		position.y = y
 
 
 ## Retourne la carte avec un scale sur X. Aucune texture de verso necessaire.

@@ -20,21 +20,21 @@ var half_width: float = SplineTrackPainter.HALF_WIDTH
 var spot_inset: float = 0.45
 
 
-static func from_path(path: String) -> SplineTrackBind:
-	var data := SplineTrackFile.load_document(path)
+static func from_path(track_path: String) -> SplineTrackBind:
+	var data := SplineTrackFile.load_document(track_path)
 	if data.is_empty():
 		return null
-	return from_document(data, path)
+	return from_document(data, track_path)
 
 
-static func from_document(data: Dictionary, path: String = "") -> SplineTrackBind:
+static func from_document(data: Dictionary, track_path: String = "") -> SplineTrackBind:
 	if not SplineTrackFile.is_valid_document(data):
 		return null
 	var spline_data: Variant = data.get("spline", {})
 	if not spline_data is Dictionary:
 		return null
 	var bind := SplineTrackBind.new()
-	bind.path = path
+	bind.path = track_path
 	bind.document = data.duplicate(true)
 	bind.spline = TrackSpline.from_dict(spline_data)
 	if bind.spline.point_count() < TrackSpline.MIN_POINTS:
@@ -152,8 +152,8 @@ func to_heat_track(laps: int = 1) -> HeatTrack:
 			speed = int(entry)
 		var play_from := geom_to_play(geom)
 		track.corners.append(HeatCorner.new(play_from, speed, "c%d" % play_from))
-	track.start_heat = 6
-	track.start_stress = 3
+	track.start_heat = int(document.get("start_heat", 6))
+	track.start_stress = int(document.get("start_stress", 3))
 	track.start_behind_finish_line = true
 	track.start_max_per_space = 2
 	track.spline_bind = self

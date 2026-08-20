@@ -123,10 +123,10 @@ func _build_garage_ui() -> void:
 		_slot().add_child(_make_label("Résumé des voitures — confirmez quand vous êtes prêt."))
 		return
 	var picker := _engine.garage_picker_id()
-	var name := "?"
+	var picker_name := "?"
 	if picker >= 0 and picker < _engine.players.size():
-		name = _engine.players[picker].display_name
-	_slot().add_child(_make_label("Ronde %d — à %s de choisir" % [_engine.garage_draft_round, name]))
+		picker_name = _engine.players[picker].display_name
+	_slot().add_child(_make_label("Ronde %d — à %s de choisir" % [_engine.garage_draft_round, picker_name]))
 	_slot().add_child(_make_label("Ouvre l'écran de draft si tu ne vois pas le marché."))
 
 

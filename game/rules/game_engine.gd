@@ -48,11 +48,11 @@ var garage_claims: Dictionary = {}
 func setup(
 	player_names: Array[String],
 	p_track: HeatTrack,
-	seed: int = 1,
+	rng_seed: int = 1,
 	p_options: RaceOptions = null,
 ) -> void:
 	track = p_track
-	rng.seed = seed
+	rng.seed = rng_seed
 	options = p_options if p_options != null else RaceOptions.new()
 	players.clear()
 	event_log.clear()
@@ -89,7 +89,7 @@ func setup(
 	for p in players:
 		_draw_up_to(p, 7)
 	phase = Phase.SHIFT_GEARS
-	_log("Race setup on %s (%d laps), seed=%d" % [track.display_name(), track.laps, seed])
+	_log("Race setup on %s (%d laps), seed=%d" % [track.display_name(), track.laps, rng_seed])
 
 
 func active_player() -> PlayerState:
@@ -635,7 +635,8 @@ func _assign_unique_start_spots() -> void:
 		var per_space := maxi(1, track.start_max_per_space)
 		for rank in grid.size():
 			var p := players[grid[rank]]
-			var row := int(rank / per_space)
+			@warning_ignore("integer_division")
+			var row := rank / per_space
 			var spot := rank % per_space
 			p.progress = -(row + 1)
 			var space := track.space_of_progress(p.progress)

@@ -131,8 +131,8 @@ static func _parse_size(raw: Variant) -> Vector2:
 	return BLEACHER_DEFAULT_SIZE
 
 
-static func make_item(type_id: String, position: Vector2, seed: int = -1) -> Dictionary:
-	var s := seed if seed >= 0 else int(randi())
+static func make_item(type_id: String, position: Vector2, item_seed: int = -1) -> Dictionary:
+	var s := item_seed if item_seed >= 0 else int(randi())
 	var id := normalize(type_id)
 	var item := {
 		"type": id,
@@ -305,14 +305,14 @@ static func draw_item(
 			_draw_tree(canvas, params_for(parsed), full, a, foliage_a, foliage_b, include_foliage)
 
 
-static func preview_texture(type_id: String, px: int = 48, seed: int = 1) -> Texture2D:
+static func preview_texture(type_id: String, px: int = 48, item_seed: int = 1) -> Texture2D:
 	## Miniature synchrone pour la palette (pas de SubViewport).
 	if normalize_brush(type_id) == TOOL_SELECT:
 		return SELECT_ICON
 	var size := maxi(px, 16)
 	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
-	var item := make_item(type_id, Vector2(size * 0.5, size * 0.5), seed)
+	var item := make_item(type_id, Vector2(size * 0.5, size * 0.5), item_seed)
 	var params := params_for(item)
 	match normalize(type_id):
 		TYPE_ROCK:

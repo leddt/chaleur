@@ -2072,7 +2072,8 @@ func _sync_preview_cars() -> void:
 				var sector: Dictionary = sectors[_selected_sector]
 				var count := _sector_space_count(sector)
 				var n := _seg_result.space_count()
-				space = posmod(int(sector.from) + int(count / 2), n)
+				@warning_ignore("integer_division")
+				space = posmod(int(sector.from) + count / 2, n)
 	var show := space >= 0
 	_cars_layer.visible = show
 	if not show:

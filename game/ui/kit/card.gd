@@ -142,13 +142,13 @@ func _fit_big_font(s: float, pad: float, avail_h: float = -1.0) -> void:
 		font = ThemeBuilder.display_font()
 	var max_w := maxf(8.0, card_size.x - pad * 2.0)
 	var max_h := avail_h if avail_h > 0.0 else 9999.0
-	var size := max_size
-	while size > min_size:
-		var metrics := font.get_string_size(_big.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size)
+	var font_size := max_size
+	while font_size > min_size:
+		var metrics := font.get_string_size(_big.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 		if metrics.x <= max_w and metrics.y <= max_h:
 			break
-		size -= 1
-	_big.add_theme_font_size_override("font_size", size)
+		font_size -= 1
+	_big.add_theme_font_size_override("font_size", font_size)
 
 
 func _layout_center_icon(s: float, pad: float, reserved_bottom: float) -> void:

@@ -50,8 +50,8 @@ func set_from_player(
 		return
 	visible = true
 	_ensure_caption()
-	var name := owner_name if not owner_name.is_empty() else p.display_name
-	_caption.text = "Cartes en jeu - %s" % name
+	var player_name := owner_name if not owner_name.is_empty() else p.display_name
+	_caption.text = "Cartes en jeu - %s" % player_name
 	_caption.visible = true
 	for heat_card in p.play_area.cards:
 		var card := Card.new()

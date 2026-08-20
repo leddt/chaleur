@@ -3,6 +3,7 @@ extends Node
 const DEFAULT_PORT := 7777
 const DEFAULT_NORAY_PORT := 8890
 const MAX_CLIENTS := 6
+const JOIN_CONNECT_TIMEOUT := 30.0
 
 signal host_started(port: int)
 signal join_started(address: String, port: int)
@@ -66,6 +67,37 @@ func has_peer() -> bool:
 	return multiplayer.multiplayer_peer != null
 
 
+func _is_client_connected() -> bool:
+	if not has_peer() or is_server():
+		return false
+	return (
+		multiplayer.multiplayer_peer.get_connection_status()
+		== MultiplayerPeer.CONNECTION_CONNECTED
+	)
+
+
+func _peer_address_valid(address: String, port: int) -> bool:
+	address = address.strip_edges()
+	if address.is_empty() or port <= 0 or port > 65535:
+		return false
+	if address.is_valid_ip_address():
+		return true
+	# Hostnames are resolved by UDP; reject obvious garbage only.
+	return address.find(" ") < 0 and address.find("/") < 0
+
+
+func _await_client_connection(timeout_sec: float, session: int) -> Error:
+	var wait := timeout_sec
+	while wait > 0.0 and _session_alive(session) and not _is_client_connected():
+		await get_tree().process_frame
+		wait -= get_process_delta_time()
+	if not _session_alive(session):
+		return ERR_BUSY
+	if not _is_client_connected():
+		return ERR_TIMEOUT
+	return OK
+
+
 func my_peer_id() -> int:
 	if not has_peer():
 		return 0
@@ -110,18 +142,19 @@ static func parse_share_code(code: String) -> Dictionary:
 	var idx := text.rfind(":")
 	if idx <= 0 or idx >= text.length() - 1:
 		return {}
-	var host := text.substr(0, idx).strip_edges()
+	var relay_host := text.substr(0, idx).strip_edges()
 	var oid := text.substr(idx + 1).strip_edges()
-	if host.is_empty() or oid.is_empty():
+	if relay_host.is_empty() or oid.is_empty():
 		return {}
-	return {"host": host, "oid": oid}
+	return {"host": relay_host, "oid": oid}
 
 
 ## Host-facing share text (Game ID online, or IP:port for LAN direct).
 func host_share_text() -> String:
+	var lines: PackedStringArray = []
 	if using_noray:
 		var code := share_code()
-		var lines: PackedStringArray = [
+		lines = [
 			"Hôte en ligne",
 			"Game ID: %s" % (code if not code.is_empty() else "…"),
 		]
@@ -129,7 +162,7 @@ func host_share_text() -> String:
 			lines.append(connection_status)
 		return "\n".join(lines)
 
-	var lines: PackedStringArray = ["Hôte — port UDP %d" % _port]
+	lines = ["Hôte — port UDP %d" % _port]
 	var ext := external_ip()
 	if not ext.is_empty():
 		lines.append("Internet: %s:%d" % [ext, _port])
@@ -244,7 +277,6 @@ func join_noray(server: String, oid: String, server_port: int = DEFAULT_NORAY_PO
 	_ensure_noray_signals()
 	Game.set_mode(Game.Mode.CLIENT)
 	lobby.clear()
-	join_started.emit(game_id, _port)
 
 	err = Noray.connect_nat(_noray_join_oid)
 	if err != OK:
@@ -262,21 +294,18 @@ func join_noray(server: String, oid: String, server_port: int = DEFAULT_NORAY_PO
 		lobby_changed.emit()
 		Noray.connect_relay(_noray_join_oid)
 
-	# Wait until ENet connects or timeout
-	var wait := 12.0
-	while wait > 0.0 and _session_alive(session) and _noray_client_connecting and not has_peer():
-		await get_tree().process_frame
-		wait -= get_process_delta_time()
-
+	# Wait until ENet connects or timeout.
+	var conn_err := await _await_client_connection(JOIN_CONNECT_TIMEOUT, session)
 	if not _session_alive(session):
 		return ERR_BUSY
-	if not has_peer():
+	if conn_err != OK:
 		net_error.emit("Connexion échouée — Game ID invalide ou serveur injoignable")
 		leave()
 		return ERR_TIMEOUT
 
 	connection_status = "Connecté"
 	lobby_changed.emit()
+	join_started.emit(game_id, _port)
 	return OK
 
 
@@ -321,6 +350,33 @@ func join(address: String, port: int = DEFAULT_PORT) -> Error:
 	upnp_external_ip = ""
 	public_ip = ""
 	lan_ips.clear()
+	return OK
+
+
+## LAN join: wait until ENet connects or timeout before signaling the lobby UI.
+func join_and_wait(
+	address: String,
+	port: int = DEFAULT_PORT,
+	timeout_sec: float = JOIN_CONNECT_TIMEOUT,
+) -> Error:
+	var session := _session
+	var err := join(address, port)
+	if err != OK:
+		return err
+	connection_status = "Connexion à %s:%d…" % [address, port]
+	lobby_changed.emit()
+	err = await _await_client_connection(timeout_sec, session)
+	if not _session_alive(session):
+		return ERR_BUSY
+	if err != OK:
+		net_error.emit(
+			"Connexion échouée — vérifie l'IP, le port UDP %d, le firewall et que l'hôte est lancé"
+			% port
+		)
+		leave()
+		return err
+	connection_status = "Connecté"
+	lobby_changed.emit()
 	join_started.emit(address, port)
 	return OK
 
@@ -440,6 +496,8 @@ func _noray_host_handshake(address: String, port: int) -> void:
 func _noray_client_handshake(address: String, port: int, via_relay: bool, session: int) -> void:
 	if not _session_alive(session) or has_peer() or not _noray_client_connecting:
 		return
+	if not _peer_address_valid(address, port):
+		return
 
 	var udp := PacketPeerUDP.new()
 	var bind_err := udp.bind(Noray.local_port)
@@ -529,10 +587,10 @@ func start_race(laps: int = 1, track_id: String = "") -> void:
 	var names: Array[String] = []
 	for peer_id in _peers_by_seat():
 		names.append(str(lobby[peer_id]["name"]))
-	var seed := int(Time.get_unix_time_from_system())
+	var rng_seed := int(Time.get_unix_time_from_system())
 	race_laps = maxi(1, laps)
 	Game.engine = HeatGameEngine.new()
-	Game.engine.setup(names, track, seed, race_options.duplicate_options())
+	Game.engine.setup(names, track, rng_seed, race_options.duplicate_options())
 	Game.local_player_id = my_seat()
 	_broadcast_lobby()
 	for peer_id in lobby:

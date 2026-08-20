@@ -82,8 +82,8 @@ func cooldown_from_gear() -> int:
 	return cooldown_for_gear(gear)
 
 
-static func cooldown_for_gear(gear: int) -> int:
-	match gear:
+static func cooldown_for_gear(gear_value: int) -> int:
+	match gear_value:
 		1:
 			return 3
 		2:

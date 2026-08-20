@@ -136,12 +136,12 @@ static func upgrade_heat() -> CardData:
 	return upgrade_heat_named("AMÉLIORATION")
 
 
-static func upgrade_heat_named(title: String) -> CardData:
+static func upgrade_heat_named(display_title: String) -> CardData:
 	var c := CardData.new()
 	c.kind = Kind.UPGRADE
 	c.value = 0
 	c.center_text = "H"
-	c.title = title if not title.is_empty() else "AMÉLIORATION"
+	c.title = display_title if not display_title.is_empty() else "AMÉLIORATION"
 	return c
 
 

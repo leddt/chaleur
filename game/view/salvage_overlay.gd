@@ -107,15 +107,15 @@ func open(cards: Array[HeatCard], max_count: int) -> void:
 		else "Choisis jusqu'à %d carte(s) dans la défausse." % _max_count
 	)
 	for heat_card in cards:
-		var wrap := Control.new()
-		wrap.custom_minimum_size = CARD_SIZE
+		var card_wrap := Control.new()
+		card_wrap.custom_minimum_size = CARD_SIZE
 		var card := Card.new()
 		card.card_size = CARD_SIZE
-		wrap.add_child(card)
+		card_wrap.add_child(card)
 		card.data = CardCatalog.to_card_data(heat_card.def_id)
 		card.set_meta("card_id", heat_card.id)
 		card.clicked.connect(_on_card_clicked)
-		_grid.add_child(wrap)
+		_grid.add_child(card_wrap)
 	_update_confirm()
 	visible = true
 
@@ -144,8 +144,8 @@ func _on_card_clicked(card: Card) -> void:
 
 
 func _card_by_id(card_id: String) -> Card:
-	for wrap in _grid.get_children():
-		for child in wrap.get_children():
+	for card_wrap in _grid.get_children():
+		for child in card_wrap.get_children():
 			if child is Card and str(child.get_meta("card_id")) == card_id:
 				return child
 	return null

@@ -145,9 +145,9 @@ func _apply_visual() -> void:
 func _apply_check() -> void:
 	if _check == null:
 		return
-	var show := _state == STATE_RESOLVED
-	_check.visible = show
-	if not show:
+	var show_check := _state == STATE_RESOLVED
+	_check.visible = show_check
+	if not show_check:
 		return
 	var check_px := maxf(10.0, _icon_px * 0.72)
 	_check.texture = CardSymbolVisual.check_texture(check_px)

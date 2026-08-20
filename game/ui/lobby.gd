@@ -3,6 +3,7 @@ extends Control
 enum Step { CHOICE, HOST_SETUP, JOIN_SETUP, SESSION }
 
 const SETTINGS_PATH := "user://chaleur_settings.cfg"
+const _NET_SCRIPT := preload("res://net/net.gd")
 
 @onready var _status: Label = %StatusLabel
 @onready var _name: LineEdit = %ChoicePanel/%NameEdit
@@ -41,10 +42,14 @@ var _syncing_race_ui: bool = false
 var _busy: bool = false
 var _host_mode_group: ButtonGroup
 var _join_mode_group: ButtonGroup
+var _connect_dialog: ConfirmationDialog
+var _connect_in_progress: bool = false
+var _connect_user_canceled: bool = false
 
 
 func _ready() -> void:
 	_apply_kit_chrome()
+	_setup_connect_dialog()
 	_setup_mode_toggles()
 	_setup_track_list()
 	_load_settings()
@@ -123,6 +128,66 @@ func _apply_kit_chrome() -> void:
 		if eyebrow != null:
 			eyebrow.theme_type_variation = &"Eyebrow"
 			eyebrow.text = eyebrow.text.to_upper()
+
+
+func _setup_connect_dialog() -> void:
+	_connect_dialog = ConfirmationDialog.new()
+	_connect_dialog.name = "ConnectDialog"
+	_connect_dialog.title = "Connexion"
+	_connect_dialog.dialog_autowrap = true
+	_connect_dialog.min_size = Vector2(340, 140)
+	_connect_dialog.exclusive = true
+	_connect_dialog.unresizable = true
+	_connect_dialog.confirmed.connect(_on_connect_dialog_confirmed)
+	_connect_dialog.canceled.connect(_on_connect_dialog_canceled)
+	_connect_dialog.close_requested.connect(_on_connect_dialog_canceled)
+	add_child(_connect_dialog)
+
+
+func _open_connect_modal(message: String = "Connexion en cours…") -> void:
+	_connect_in_progress = true
+	_connect_dialog.dialog_text = message
+	_connect_dialog.get_ok_button().hide()
+	_connect_dialog.get_cancel_button().show()
+	_connect_dialog.cancel_button_text = "Annuler"
+	_connect_dialog.popup_centered()
+
+
+func _finish_connect_error(message: String) -> void:
+	_connect_in_progress = false
+	_busy = false
+	_status.text = message
+	_connect_dialog.dialog_text = message
+	_connect_dialog.get_cancel_button().hide()
+	_connect_dialog.ok_button_text = "OK"
+	_connect_dialog.get_ok_button().show()
+	if Game.mode == Game.Mode.NONE:
+		_set_step(Step.CHOICE)
+	_refresh_players()
+
+
+func _close_connect_modal() -> void:
+	_connect_in_progress = false
+	_connect_dialog.hide()
+
+
+func _on_connect_dialog_confirmed() -> void:
+	_connect_in_progress = false
+	_connect_dialog.hide()
+
+
+func _on_connect_dialog_canceled() -> void:
+	if not _connect_in_progress:
+		_connect_dialog.hide()
+		return
+	_connect_user_canceled = true
+	_connect_in_progress = false
+	_busy = false
+	Net.leave()
+	_connect_dialog.hide()
+	_set_step(Step.CHOICE)
+	_refresh_status()
+	_refresh_players()
 
 
 func _setup_mode_toggles() -> void:
@@ -435,7 +500,14 @@ func _refresh_status() -> void:
 			_refresh_share_row()
 		Game.Mode.CLIENT:
 			_share_row.visible = false
-			if Net.using_noray:
+			if _step != Step.SESSION:
+				_status.text = (
+					Net.connection_status
+					if not Net.connection_status.is_empty()
+					else "Connexion…"
+				)
+				_upnp.text = ""
+			elif Net.using_noray:
 				_status.text = "En lobby — %s" % Net.share_code()
 				_upnp.text = Net.connection_status
 			else:
@@ -545,37 +617,42 @@ func _on_join_confirm() -> void:
 		return
 	_apply_display_name("Client")
 	_busy = true
+	_connect_user_canceled = false
+	_open_connect_modal()
+
+	var err: Error = OK
 	if not _join_internet_mode():
 		var address := _address.text.strip_edges()
 		if address.is_empty():
 			address = "127.0.0.1"
 		var port := _port_from(_join_port)
-		var err := Net.join(address, port)
-		_busy = false
-		if err != OK:
-			_status.text = "Échec join"
+		err = await Net.join_and_wait(address, port)
+	else:
+		var parsed := _NET_SCRIPT.parse_share_code(_game_id.text)
+		if parsed.is_empty():
+			_finish_connect_error("Game ID invalide — format attendu: serveur:code")
 			return
-		_status.text = "Connexion à %s:%d…" % [address, port]
-		_save_settings()
-		return
+		var relay_host := str(parsed["host"])
+		_maybe_remember_relay_host(relay_host)
+		err = await Net.join_noray(
+			relay_host,
+			str(parsed["oid"]),
+			Net.DEFAULT_NORAY_PORT
+		)
 
-	var parsed := Net.parse_share_code(_game_id.text)
-	if parsed.is_empty():
-		_busy = false
-		_status.text = "Game ID invalide — format attendu: serveur:code"
-		return
-	var relay_host := str(parsed["host"])
-	_maybe_remember_relay_host(relay_host)
-	_status.text = "Connexion via relay…"
-	var nerr: Error = await Net.join_noray(
-		relay_host,
-		str(parsed["oid"]),
-		Net.DEFAULT_NORAY_PORT
-	)
 	_busy = false
-	if nerr != OK:
-		_refresh_status()
+	if _connect_user_canceled:
 		return
+	if err != OK:
+		if _connect_in_progress:
+			var msg := _status.text.strip_edges()
+			_finish_connect_error(msg if not msg.is_empty() else "Connexion échouée")
+		else:
+			if Game.mode == Game.Mode.NONE:
+				_set_step(Step.CHOICE)
+			_refresh_status()
+		return
+	_close_connect_modal()
 	_save_settings()
 
 
@@ -635,7 +712,7 @@ func _on_host_started(_port: int) -> void:
 	_refresh_players()
 
 
-func _on_join_started(_address: String, _port: int) -> void:
+func _on_join_started(_remote_address: String, _port: int) -> void:
 	_set_step(Step.SESSION)
 	_refresh_race_display()
 	_refresh_status()
@@ -652,6 +729,9 @@ func _on_left() -> void:
 func _on_lobby_changed() -> void:
 	_refresh_players()
 	_refresh_status()
+	if _connect_in_progress and _connect_dialog.visible and not _connect_dialog.get_ok_button().visible:
+		if not Net.connection_status.is_empty():
+			_connect_dialog.dialog_text = Net.connection_status
 	if _step == Step.SESSION:
 		_refresh_race_display()
 		_refresh_share_row()
@@ -664,3 +744,9 @@ func _on_race_started() -> void:
 func _on_net_error(message: String) -> void:
 	_busy = false
 	_status.text = message
+	if _connect_in_progress:
+		_finish_connect_error(message)
+		return
+	if Game.mode == Game.Mode.NONE and _step in [Step.SESSION, Step.JOIN_SETUP]:
+		_set_step(Step.CHOICE)
+	_refresh_players()

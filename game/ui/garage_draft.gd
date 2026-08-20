@@ -205,20 +205,20 @@ func _make_summary_row(p: PlayerState) -> Control:
 	meta.custom_minimum_size.x = 120.0
 	meta.add_theme_constant_override("separation", 4)
 	meta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var name := Label.new()
-	name.theme_type_variation = &"Stat"
-	name.text = p.display_name
-	name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	meta.add_child(name)
+	var name_label := Label.new()
+	name_label.theme_type_variation = &"Stat"
+	name_label.text = p.display_name
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	meta.add_child(name_label)
 	if Game.is_online():
-		var ready := Label.new()
-		ready.theme_type_variation = &"Caption"
+		var ready_label := Label.new()
+		ready_label.theme_type_variation = &"Caption"
 		if _engine.is_garage_ready(p.id):
-			ready.text = "PRÊT"
-			ready.add_theme_color_override("font_color", Palette.MUSTARD)
+			ready_label.text = "PRÊT"
+			ready_label.add_theme_color_override("font_color", Palette.MUSTARD)
 		else:
-			ready.text = "En attente"
-		meta.add_child(ready)
+			ready_label.text = "En attente"
+		meta.add_child(ready_label)
 	row.add_child(meta)
 	var cards := HBoxContainer.new()
 	cards.add_theme_constant_override("separation", 8)

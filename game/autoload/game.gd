@@ -37,8 +37,8 @@ func start_local_race(
 		push_error("Game.start_local_race: no playable spline track")
 		return false
 	engine = HeatGameEngine.new()
-	var seed := race_seed if race_seed != 0 else int(Time.get_unix_time_from_system())
-	engine.setup(player_names, track, seed, options)
+	var rng_seed := race_seed if race_seed != 0 else int(Time.get_unix_time_from_system())
+	engine.setup(player_names, track, rng_seed, options)
 	local_player_id = 0
 	return true
 

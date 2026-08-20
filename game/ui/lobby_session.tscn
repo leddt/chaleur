@@ -34,80 +34,91 @@ layout_mode = 2
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="RacePanel" type="VBoxContainer" parent="." unique_id=547269531]
-unique_name_in_owner = true
-visible = false
+[node name="Body" type="HBoxContainer" parent="."]
 layout_mode = 2
-theme_override_constants/separation = 6
+size_flags_vertical = 3
+theme_override_constants/separation = 16
 
-[node name="TrackLabel" type="Label" parent="RacePanel" unique_id=404691882]
+[node name="ListCol" type="VBoxContainer" parent="Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="TrackLabel" type="Label" parent="Body/ListCol"]
 layout_mode = 2
 text = "Piste"
 
-[node name="TrackOption" type="OptionButton" parent="RacePanel" unique_id=1631060970]
+[node name="EmptyLabel" type="Label" parent="Body/ListCol"]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
+text = "Aucune piste pour l'instant."
+autowrap_mode = 3
 
-[node name="TrackPreview" type="Control" parent="RacePanel" unique_id=533607063]
+[node name="TrackList" type="ItemList" parent="Body/ListCol"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 160)
+custom_minimum_size = Vector2(0, 220)
 layout_mode = 2
-script = ExtResource("1_preview")
+size_flags_vertical = 3
 
-[node name="LapsRow" type="HBoxContainer" parent="RacePanel" unique_id=27676375]
+[node name="LapsRow" type="HBoxContainer" parent="Body/ListCol"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LapsLabel" type="Label" parent="RacePanel/LapsRow" unique_id=1016028379]
+[node name="LapsLabel" type="Label" parent="Body/ListCol/LapsRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Tours"
 
-[node name="LapsSpin" type="SpinBox" parent="RacePanel/LapsRow" unique_id=1003402771]
+[node name="LapsSpin" type="SpinBox" parent="Body/ListCol/LapsRow"]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 1.0
-max_value = 5.0
+max_value = 6.0
 value = 1.0
 rounded = true
 
-[node name="GarageCheck" type="CheckBox" parent="RacePanel"]
+[node name="GarageCheck" type="CheckBox" parent="Body/ListCol"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Module garage"
 
-[node name="GarageBasicCheck" type="CheckBox" parent="RacePanel"]
+[node name="GarageBasicCheck" type="CheckBox" parent="Body/ListCol"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 text = "Cartes régulières"
 
-[node name="GarageAdvancedCheck" type="CheckBox" parent="RacePanel"]
+[node name="GarageAdvancedCheck" type="CheckBox" parent="Body/ListCol"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Cartes avancées"
 
-[node name="GarageQuickCheck" type="CheckBox" parent="RacePanel"]
+[node name="GarageQuickCheck" type="CheckBox" parent="Body/ListCol"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Quick start"
+text = "Quick start (3 cartes au hasard)"
 
-[node name="RaceSummary" type="Label" parent="RacePanel" unique_id=1160342581]
-unique_name_in_owner = true
-visible = false
+[node name="PreviewCol" type="VBoxContainer" parent="Body"]
 layout_mode = 2
-text = "Piste 1 — 1 tour"
-horizontal_alignment = 1
-autowrap_mode = 3
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
 
-[node name="PlayersTitle" type="Label" parent="." unique_id=1240321913]
+[node name="TrackPreview" type="Control" parent="Body/PreviewCol" unique_id=533607063]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 280)
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("1_preview")
+
+[node name="PlayersTitle" type="Label" parent="Body/PreviewCol" unique_id=1240321913]
 layout_mode = 2
 text = "Joueurs"
 
-[node name="PlayersList" type="ItemList" parent="." unique_id=1895872245]
+[node name="PlayersList" type="ItemList" parent="Body/PreviewCol" unique_id=1895872245]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 140)
+custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
 size_flags_vertical = 3
 
@@ -125,4 +136,3 @@ text = "Démarrer la course"
 unique_name_in_owner = true
 layout_mode = 2
 text = "Quitter le lobby"
-

@@ -128,11 +128,12 @@ text = "Quick start (3 cartes au hasard)"
 
 [node name="PreviewCol" type="VBoxContainer" parent="Center/Panel/Margin/VBox/Body"]
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
 [node name="Preview" type="Control" parent="Center/Panel/Margin/VBox/Body/PreviewCol"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(300, 280)
+custom_minimum_size = Vector2(0, 280)
 layout_mode = 2
 size_flags_vertical = 3
 script = ExtResource("2_preview")

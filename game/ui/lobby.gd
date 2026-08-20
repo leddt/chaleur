@@ -26,12 +26,10 @@ const SETTINGS_PATH := "user://chaleur_settings.cfg"
 @onready var _host_panel: VBoxContainer = %HostPanel
 @onready var _join_panel: VBoxContainer = %JoinPanel
 @onready var _session_panel: VBoxContainer = %SessionPanel
-@onready var _race_panel: VBoxContainer = %SessionPanel/%RacePanel
-@onready var _track_option: OptionButton = %SessionPanel/%TrackOption
+@onready var _track_list: ItemList = %SessionPanel/%TrackList
+@onready var _empty_label: Label = %SessionPanel/%EmptyLabel
 @onready var _track_preview: SplineTrackPreview = %SessionPanel/%TrackPreview
 @onready var _laps_spin: SpinBox = %SessionPanel/%LapsSpin
-@onready var _laps_label: Label = %SessionPanel/%LapsLabel
-@onready var _race_summary: Label = %SessionPanel/%RaceSummary
 @onready var _ready_button: Button = %SessionPanel/%ReadyButton
 @onready var _start_button: Button = %SessionPanel/%StartButton
 @onready var _back_button: Button = %BackButton
@@ -48,7 +46,7 @@ var _join_mode_group: ButtonGroup
 func _ready() -> void:
 	_apply_kit_chrome()
 	_setup_mode_toggles()
-	_setup_track_options()
+	_setup_track_list()
 	_load_settings()
 	%ChoicePanel/%HostButton.pressed.connect(_on_choose_host)
 	%ChoicePanel/%JoinButton.pressed.connect(_on_choose_join)
@@ -69,12 +67,13 @@ func _ready() -> void:
 	_game_id.text_changed.connect(_on_game_id_changed)
 	_host_mode_group.pressed.connect(_on_host_mode_changed)
 	_join_mode_group.pressed.connect(_on_join_mode_changed)
-	_track_option.item_selected.connect(_on_track_selected)
+	_track_list.item_selected.connect(_on_track_selected)
 	_laps_spin.value_changed.connect(_on_laps_changed)
 	%SessionPanel/%GarageCheck.toggled.connect(_on_garage_toggled)
 	%SessionPanel/%GarageBasicCheck.toggled.connect(_on_garage_toggled)
 	%SessionPanel/%GarageAdvancedCheck.toggled.connect(_on_garage_toggled)
 	%SessionPanel/%GarageQuickCheck.toggled.connect(_on_garage_toggled)
+	_track_preview.set_placeholder("Sélectionne une piste")
 
 	Net.host_started.connect(_on_host_started)
 	Net.join_started.connect(_on_join_started)
@@ -106,7 +105,7 @@ func _apply_kit_chrome() -> void:
 	_join_hint.theme_type_variation = &"Caption"
 	_hint.theme_type_variation = &"Caption"
 	_upnp.theme_type_variation = &"Caption"
-	_race_summary.theme_type_variation = &"Caption"
+	_empty_label.theme_type_variation = &"Caption"
 	%ChoicePanel/%HostButton.theme_type_variation = &"Primary"
 	%HostPanel/%HostConfirmButton.theme_type_variation = &"Primary"
 	%JoinPanel/%JoinConfirmButton.theme_type_variation = &"Primary"
@@ -116,10 +115,9 @@ func _apply_kit_chrome() -> void:
 	%JoinPanel/%JoinCancelButton.theme_type_variation = &"Compact"
 	%SessionPanel/%LeaveButton.theme_type_variation = &"Compact"
 	_copy_share.theme_type_variation = &"Compact"
-	_track_option.theme_type_variation = &"CompactOption"
 	for path in [
-		"RacePanel/TrackLabel",
-		"PlayersTitle",
+		"Body/ListCol/TrackLabel",
+		"Body/PreviewCol/PlayersTitle",
 	]:
 		var eyebrow := %SessionPanel.get_node_or_null(path) as Label
 		if eyebrow != null:
@@ -136,8 +134,8 @@ func _setup_mode_toggles() -> void:
 	_join_direct.button_group = _join_mode_group
 
 
-func _setup_track_options() -> void:
-	_track_option.clear()
+func _setup_track_list() -> void:
+	_track_list.clear()
 	_track_ids.clear()
 	for entry in HeatTrack.catalog():
 		var track_id := str(entry.get("id", ""))
@@ -145,10 +143,13 @@ func _setup_track_options() -> void:
 		if bool(entry.get("builtin", false)):
 			track_name = "%s · intégrée" % track_name
 		_track_ids.append(track_id)
-		_track_option.add_item(track_name)
-		_track_option.set_item_metadata(_track_option.item_count - 1, track_id)
-	if _track_option.item_count > 0:
-		_track_option.select(0)
+		_track_list.add_item(track_name)
+	var has_tracks := not _track_ids.is_empty()
+	_track_list.visible = has_tracks
+	_empty_label.visible = not has_tracks
+	_start_button.disabled = not has_tracks
+	if has_tracks:
+		_track_list.select(0)
 	_refresh_track_preview()
 
 
@@ -163,7 +164,6 @@ func _set_step(step: Step) -> void:
 	if step == Step.SESSION:
 		var is_host := Game.mode == Game.Mode.HOST
 		_start_button.visible = is_host
-		_race_panel.visible = true
 		_apply_race_controls_editable(is_host)
 		_refresh_ready_button()
 		_refresh_race_display()
@@ -261,48 +261,27 @@ func _save_settings() -> void:
 func _select_track_id(track_id: String) -> void:
 	for i in _track_ids.size():
 		if _track_ids[i] == track_id:
-			_track_option.select(i)
+			_track_list.select(i)
 			return
-	if _track_option.item_count > 0:
-		_track_option.select(0)
+	if not _track_ids.is_empty():
+		_track_list.select(0)
 
 
 func _selected_track_id() -> String:
-	var idx := _track_option.selected
-	if idx < 0 or idx >= _track_ids.size():
+	var selected := _track_list.get_selected_items()
+	if selected.is_empty() or selected[0] >= _track_ids.size():
 		return ""
-	return _track_ids[idx]
+	return _track_ids[selected[0]]
 
 
 func _apply_race_controls_editable(is_host: bool) -> void:
-	_track_option.visible = is_host
-	_laps_spin.visible = is_host
-	_laps_label.visible = is_host
-	_race_summary.visible = not is_host
-	_track_option.disabled = not is_host
+	_track_list.mouse_filter = Control.MOUSE_FILTER_STOP if is_host else Control.MOUSE_FILTER_IGNORE
 	_laps_spin.editable = is_host
-	%SessionPanel/%GarageCheck.visible = is_host
-	%SessionPanel/%GarageBasicCheck.visible = is_host
-	%SessionPanel/%GarageAdvancedCheck.visible = is_host
-	%SessionPanel/%GarageQuickCheck.visible = is_host
 	%SessionPanel/%GarageCheck.disabled = not is_host
 	var garage_on: bool = %SessionPanel/%GarageCheck.button_pressed
 	%SessionPanel/%GarageBasicCheck.disabled = not is_host or not garage_on
 	%SessionPanel/%GarageAdvancedCheck.disabled = not is_host or not garage_on
 	%SessionPanel/%GarageQuickCheck.disabled = not is_host or not garage_on
-
-
-func _track_display_name(track_id: String) -> String:
-	for entry in HeatTrack.catalog():
-		if str(entry.get("id", "")) == track_id:
-			return str(entry.get("name", track_id))
-	return track_id
-
-
-func _laps_phrase(laps: int) -> String:
-	if laps <= 1:
-		return "1 tour"
-	return "%d tours" % laps
 
 
 func _refresh_race_display() -> void:
@@ -314,18 +293,14 @@ func _refresh_race_display() -> void:
 	_syncing_race_ui = true
 	_select_track_id(track_id)
 	_laps_spin.value = clampf(float(laps), _laps_spin.min_value, _laps_spin.max_value)
-	%SessionPanel/%GarageCheck.button_pressed = Net.race_options.garage_enabled
-	%SessionPanel/%GarageBasicCheck.button_pressed = Net.race_options.garage_include_basic
-	%SessionPanel/%GarageAdvancedCheck.button_pressed = Net.race_options.garage_include_advanced
-	%SessionPanel/%GarageQuickCheck.button_pressed = Net.race_options.garage_quick_start
+	if Game.mode != Game.Mode.HOST:
+		%SessionPanel/%GarageCheck.button_pressed = Net.race_options.garage_enabled
+		%SessionPanel/%GarageBasicCheck.button_pressed = Net.race_options.garage_include_basic
+		%SessionPanel/%GarageAdvancedCheck.button_pressed = Net.race_options.garage_include_advanced
+		%SessionPanel/%GarageQuickCheck.button_pressed = Net.race_options.garage_quick_start
 	_syncing_race_ui = false
+	_apply_race_controls_editable(Game.mode == Game.Mode.HOST)
 	_refresh_track_preview_for(track_id)
-	var name := _track_display_name(track_id)
-	if name.is_empty() and not Net.race_track_document.is_empty():
-		name = str(Net.race_track_document.get("name", "Piste"))
-	if name.is_empty():
-		name = "Piste"
-	_race_summary.text = "%s — %s" % [name, _laps_phrase(laps)]
 
 
 func _refresh_track_preview_for(track_id: String) -> void:
@@ -358,8 +333,10 @@ func _lobby_race_options() -> RaceOptions:
 func _on_garage_toggled(_on: bool = false) -> void:
 	if _syncing_race_ui:
 		return
-	_apply_race_controls_editable(Game.mode == Game.Mode.HOST)
-	_publish_race_settings()
+	var is_host := Game.mode == Game.Mode.HOST
+	_apply_race_controls_editable(is_host)
+	if is_host:
+		_publish_race_settings()
 
 
 func _refresh_track_preview() -> void:
@@ -376,18 +353,22 @@ func _refresh_share_row() -> void:
 func _on_track_selected(_index: int) -> void:
 	if _syncing_race_ui:
 		return
+	if Game.mode != Game.Mode.HOST:
+		_refresh_race_display()
+		return
 	_refresh_track_preview()
 	_save_settings()
 	_publish_race_settings()
-	_refresh_race_display()
 
 
 func _on_laps_changed(_value: float) -> void:
 	if _syncing_race_ui:
 		return
+	if Game.mode != Game.Mode.HOST:
+		_refresh_race_display()
+		return
 	_save_settings()
 	_publish_race_settings()
-	_refresh_race_display()
 
 
 func _on_name_changed(_new_text: String) -> void:
@@ -640,12 +621,14 @@ func _on_back_pressed() -> void:
 
 func _on_host_started(_port: int) -> void:
 	_set_step(Step.SESSION)
+	_publish_race_settings()
 	_refresh_status()
 	_refresh_players()
 
 
 func _on_join_started(_address: String, _port: int) -> void:
 	_set_step(Step.SESSION)
+	_refresh_race_display()
 	_refresh_status()
 
 

@@ -21,6 +21,5 @@ speed_value = 7
 contributes_speed = true
 discardable = true
 title = "TURBO"
-category = "Turbo"
 speed_options = PackedInt32Array(7)
 symbols = Array[CardSymbol]([SubResource("sym_0"), SubResource("sym_1")])

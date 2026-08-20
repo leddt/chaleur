@@ -16,6 +16,5 @@ speed_value = 2
 contributes_speed = true
 discardable = true
 title = "CARBURANT"
-category = "Fuel"
 speed_options = PackedInt32Array(2)
 symbols = Array[CardSymbol]([SubResource("sym_0")])

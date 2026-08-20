@@ -21,6 +21,5 @@ speed_value = 3
 contributes_speed = true
 discardable = true
 title = "PNEUS"
-category = "Tyres"
 speed_options = PackedInt32Array(3)
 symbols = Array[CardSymbol]([SubResource("sym_0"), SubResource("sym_1")])

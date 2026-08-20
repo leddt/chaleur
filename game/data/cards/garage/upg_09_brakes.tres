@@ -11,6 +11,5 @@ speed_value = 0
 contributes_speed = true
 discardable = true
 title = "FREINS"
-category = "Brakes"
 speed_options = PackedInt32Array(2, 4)
 symbols = Array[CardSymbol]([])

@@ -11,6 +11,5 @@ speed_value = 0
 contributes_speed = false
 discardable = false
 title = "CHALEUR"
-category = "Heat"
 speed_options = PackedInt32Array()
 symbols = Array[CardSymbol]([])

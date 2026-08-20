@@ -21,6 +21,5 @@ speed_value = 2
 contributes_speed = true
 discardable = true
 title = "SUSPENSION"
-category = "Suspension"
 speed_options = PackedInt32Array(2)
 symbols = Array[CardSymbol]([SubResource("sym_0"), SubResource("sym_1")])

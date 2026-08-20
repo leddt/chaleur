@@ -26,6 +26,5 @@ speed_value = 4
 contributes_speed = true
 discardable = true
 title = "ACCÉLÉRATEUR"
-category = "GasPedal"
 speed_options = PackedInt32Array(4)
 symbols = Array[CardSymbol]([SubResource("sym_0"), SubResource("sym_1"), SubResource("sym_2")])

@@ -11,7 +11,6 @@ enum Kind { SPEED, HEAT, STRESS, UPGRADE }
 @export var contributes_speed: bool = false
 @export var discardable: bool = true
 @export var title: String = ""
-@export var category: String = ""
 ## If more than one value, the player chooses at play / Direct Play time.
 @export var speed_options: PackedInt32Array = PackedInt32Array()
 @export var symbols: Array[CardSymbol] = []

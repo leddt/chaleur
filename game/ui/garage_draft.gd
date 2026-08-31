@@ -70,8 +70,14 @@ func _refresh() -> void:
 		return
 	if _engine.phase == HeatGameEngine.Phase.GARAGE_SUMMARY:
 		_show_summary()
+		Music.set_context(
+			MusicContextResolver.for_garage(_engine, Game.is_online(), Game.local_player_id)
+		)
 		return
 	_show_draft()
+	Music.set_context(
+		MusicContextResolver.for_garage(_engine, Game.is_online(), Game.local_player_id)
+	)
 
 
 func _show_draft() -> void:

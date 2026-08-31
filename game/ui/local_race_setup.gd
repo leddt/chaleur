@@ -13,6 +13,7 @@ var _paths: Array[String] = []
 
 
 func _ready() -> void:
+	Music.set_context(&"setup")
 	_apply_kit_chrome()
 	%StartButton.pressed.connect(_on_start_pressed)
 	%BackButton.pressed.connect(_on_back_pressed)

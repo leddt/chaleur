@@ -1,0 +1,88 @@
+[gd_resource type="Resource" load_steps=19 format=3]
+
+[ext_resource type="Script" path="res://audio/dynamic_music_song.gd" id="1_song"]
+[ext_resource type="Script" path="res://audio/dynamic_music_stem.gd" id="2_stem"]
+[ext_resource type="Script" path="res://audio/dynamic_music_mix.gd" id="3_mix"]
+[ext_resource type="AudioStream" path="res://assets/music/coop/drums.ogg" id="4_drums"]
+[ext_resource type="AudioStream" path="res://assets/music/coop/synth.ogg" id="5_synth"]
+[ext_resource type="AudioStream" path="res://assets/music/coop/rhodes-stabs.ogg" id="6_chords"]
+[ext_resource type="AudioStream" path="res://assets/music/coop/rhodes-line.ogg" id="7_lead"]
+[ext_resource type="AudioStream" path="res://assets/music/coop/pad.ogg" id="8_pad"]
+
+[sub_resource type="Resource" id="Stem_drums"]
+script = ExtResource("2_stem")
+id = &"drums"
+stream = ExtResource("4_drums")
+
+[sub_resource type="Resource" id="Stem_synth"]
+script = ExtResource("2_stem")
+id = &"synth"
+stream = ExtResource("5_synth")
+
+[sub_resource type="Resource" id="Stem_chords"]
+script = ExtResource("2_stem")
+id = &"chords"
+stream = ExtResource("6_chords")
+
+[sub_resource type="Resource" id="Stem_lead"]
+script = ExtResource("2_stem")
+id = &"lead"
+stream = ExtResource("7_lead")
+
+[sub_resource type="Resource" id="Stem_pad"]
+script = ExtResource("2_stem")
+id = &"pad"
+stream = ExtResource("8_pad")
+
+[sub_resource type="Resource" id="Mix_menu"]
+script = ExtResource("3_mix")
+context = &"menu"
+levels = {&"drums": 0.7, &"synth": 0.75, &"chords": 1.0, &"lead": 0.8, &"pad": 0.7}
+
+[sub_resource type="Resource" id="Mix_lobby"]
+script = ExtResource("3_mix")
+context = &"lobby"
+levels = {&"drums": 0.2, &"synth": 0.55, &"chords": 0.8, &"lead": 0.2, &"pad": 1.0}
+
+[sub_resource type="Resource" id="Mix_setup"]
+script = ExtResource("3_mix")
+context = &"setup"
+levels = {&"drums": 0.35, &"synth": 0.65, &"chords": 0.9, &"lead": 0.35, &"pad": 0.9}
+
+[sub_resource type="Resource" id="Mix_garage_active"]
+script = ExtResource("3_mix")
+context = &"garage_active"
+levels = {&"drums": 0.65, &"synth": 0.8, &"chords": 0.75, &"lead": 0.55, &"pad": 0.55}
+
+[sub_resource type="Resource" id="Mix_garage_waiting"]
+script = ExtResource("3_mix")
+context = &"garage_waiting"
+levels = {&"drums": 0.0, &"synth": 0.55, &"chords": 0.45, &"lead": 0.2, &"pad": 0.85}
+
+[sub_resource type="Resource" id="Mix_race_active"]
+script = ExtResource("3_mix")
+context = &"race_active"
+levels = {&"drums": 1.0, &"synth": 1.0, &"chords": 0.65, &"lead": 0.9, &"pad": 0.35}
+
+[sub_resource type="Resource" id="Mix_race_waiting"]
+script = ExtResource("3_mix")
+context = &"race_waiting"
+levels = {&"drums": 0.0, &"synth": 0.65, &"chords": 0.45, &"lead": 0.2, &"pad": 0.85}
+
+[sub_resource type="Resource" id="Mix_race_resolution"]
+script = ExtResource("3_mix")
+context = &"race_resolution"
+levels = {&"drums": 1.0, &"synth": 1.0, &"chords": 0.8, &"lead": 1.0, &"pad": 0.45}
+
+[sub_resource type="Resource" id="Mix_finish"]
+script = ExtResource("3_mix")
+context = &"finish"
+levels = {&"drums": 0.55, &"synth": 0.65, &"chords": 1.0, &"lead": 1.0, &"pad": 0.8}
+
+[resource]
+script = ExtResource("1_song")
+id = &"coop"
+default_context = &"menu"
+default_transition_seconds = 0.8
+stems = Array[ExtResource("2_stem")]([SubResource("Stem_drums"), SubResource("Stem_synth"), SubResource("Stem_chords"), SubResource("Stem_lead"), SubResource("Stem_pad")])
+mixes = Array[ExtResource("3_mix")]([SubResource("Mix_menu"), SubResource("Mix_lobby"), SubResource("Mix_setup"), SubResource("Mix_garage_active"), SubResource("Mix_garage_waiting"), SubResource("Mix_race_active"), SubResource("Mix_race_waiting"), SubResource("Mix_race_resolution"), SubResource("Mix_finish")])

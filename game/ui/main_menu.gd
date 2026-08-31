@@ -7,6 +7,7 @@ const NARROW_WIDTH := 900.0
 
 
 func _ready() -> void:
+	Music.request(&"coop", &"menu")
 	_apply_background()
 	_style_brand()
 	_apply_actions()

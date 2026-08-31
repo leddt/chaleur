@@ -48,6 +48,7 @@ var _connect_user_canceled: bool = false
 
 
 func _ready() -> void:
+	Music.set_context(&"lobby")
 	_apply_kit_chrome()
 	_setup_connect_dialog()
 	_setup_mode_toggles()

@@ -11,3 +11,5 @@ Sound effects from [Pixabay](https://pixabay.com/) authors:
 - StudioKolomna
 - Tunetank
 - Universfield
+
+Dynamic music loops from [Antronical on Looperman](game/assets/music/SOURCES.md).

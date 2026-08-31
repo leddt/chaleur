@@ -15,9 +15,9 @@ permissions:
   contents: write
 
 env:
-  GODOT_VERSION: "4.7.1"
-  GODOT_TAG: "4.7.1-stable"
-  GODOT_TEMPLATE_DIR: "4.7.1.stable"
+  GODOT_VERSION: "4.7.2"
+  GODOT_TAG: "4.7.2-stable"
+  GODOT_TEMPLATE_DIR: "4.7.2.stable"
   GAME_DIR: game
   EXPORT_NAME: Chaleur
 
